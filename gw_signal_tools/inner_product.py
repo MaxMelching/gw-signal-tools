@@ -1,15 +1,13 @@
 import numpy as np
 from scipy.integrate import simpson
-import os
-# from scipy.signal import resample
 
 from gwpy.timeseries.timeseries import TimeSeries
 from gwpy.frequencyseries.frequencyseries import FrequencySeries
 import astropy.units as u
 
 
-__doc__ = ('Implementation of noise-weighted inner product that is common'
-           'in GW data analysis and helpers for computation.')
+__doc__ = ('Implementation of noise-weighted inner product that is '
+           'common in GW data analysis and helpers for computation.')
 
 
 
@@ -31,6 +29,11 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     -------
     out : FrequencySeries
         Transformed signal.
+
+    See also
+    --------
+    `numpy.fft.rfft`
+        Fourier transformation used here.
     """
 
     # Get discrete Fourier coefficients and corresponding frequencies
@@ -60,17 +63,28 @@ def restrict_f_range(
     Parameters
     ----------
     signal : FrequencySeries
-        _description_
+        Signal to be restricted.
     f_range : list[float] | list[u.quantity.Quantity]
-        _description_
+        Two-tuple specifying lower and upper frequency bounds that will
+        be used as cutoffs.
     fill_val : float, optional, default = 0.0
-        _description_
+        Value that will be used to fill `signal` outside of `f_range`.
 
     Returns
     -------
     FrequencySeries
-        _description_
+        Version of signal where values outside of `f_range` have been
+        changed. If the interval defined by `f_range` is larger than
+        the one spanned by signal.frequencies, no entry will be changed.
+
+    Raises
+    ------
+    ValueError
+        If `f_range` does not contain exactly two elements.
     """
+
+    if len(f_range) != 2:
+        raise ValueError('f_range must contain lower and upper frequency bounds.')
 
     f_lower = f_range[0] if f_range[0] is not None else 0.0
     f_upper = f_range[1] if f_range[1] is not None else signal.frequencies[-1]
@@ -114,7 +128,12 @@ def fd_to_td_waveform(
     Raises
     ------
     ValueError
-        _description_
+        If `f_range` does not contain exactly two elements.
+
+    See also
+    --------
+    `numpy.fft.irfft`
+        Inverse Fourier transformation used here.
     """
 
     if f_range is not None:
@@ -123,42 +142,41 @@ def fd_to_td_waveform(
 
         signal = restrict_f_range(signal, f_range)
         
-    # TODO: check if 2n or 2(n-1)!!! Would also change dt slightly -> from numpy doc I would say 2(n-1)
-    # Makes hardly any difference in how things look. But difference plot
-    # in sanity checks look much worse, so maybe leave 2n? Ah no, actually
-    # error got smaller now. Perhaps because dt was not changed before
-    # out = TimeSeries(
-    #     # np.fft.irfft(signal * (2 * signal.size) * signal.df.value),
-        # np.fft.irfft(signal * (2 * (signal.size - 1) * signal.df.value)),
-    #     unit=u.dimensionless_unscaled,
-    #     t0=0.0 * u.s,
-    #     dt=1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
-    # )
-    # Note: in irfft, we have to ccount for numpy normalization, where
-    # multiplication with sample size is done. The factor of two occurs
-    # because rfft has only half size -> better (but equivalent) explanation below
 
     # dt = 1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
     dt = 1 / (2 * (signal.size - 1) * signal.df)
     # Note: 2*(n-1) follows normalization that happens according to the docs:
     # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
     out = TimeSeries(
-        np.fft.irfft(signal / dt.value),  # Continuous Fourier components to discrete
+        np.fft.irfft(signal / dt.value),
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
         dt=dt
     )
+    # Note: dividing by dt is necessary because irfft uses discrete
+    # Fourier coefficients, but the input is expected to be continuous
+    # (as this is true for the output of waveform generators in lal).
+    # Equivalently, one could say that we first revert the numpy
+    # normalization and then make the transition from continuous to
+    # discrete Fourier coefficients by approximating the corresponding
+    # integral (df comes in)
 
     # Handle wrap-around of signal
     number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
     out = np.roll(out, shift=number_to_roll)
 
-    out.times -= out.times[number_to_roll]
+    out.times -= out.times[number_to_roll]  # Use .shift(7 / 8 * out.duration) or so?
+
+    # TODO: make optional argument taper? TimeSeries has built-in function
+    # .taper() to handle this
 
     return out
 
 
-def pad_to_get_target_df(signal: TimeSeries, df: float | u.quantity.Quantity) -> TimeSeries:
+def pad_to_get_target_df(
+    signal: TimeSeries,
+    df: float | u.quantity.Quantity
+) -> TimeSeries:
     """
     Pads `signal` with zeros after its end until a fft of it has desired
     resolution of `df`.
@@ -255,13 +273,13 @@ def psd_from_file_to_FreqSeries(
     is_asd : bool, optional, default = False
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
-    kw_args
+    **kw_args
         Other keyword arguments that will be passed to FrequencySeries
         constructor. Can be used to assign name to series and more.
 
     Returns
     -------
-    out : FrequencySeries
+    FrequencySeries
         PSD as a FrequencySeries.
     """
 
@@ -273,15 +291,19 @@ def psd_from_file_to_FreqSeries(
 
     freqs, psd = psd_from_file(fname, is_asd=is_asd)
 
-    out = FrequencySeries(psd, frequencies=freqs, unit=1 / u.Hz, **kw_args)
-
-    return out
+    return FrequencySeries(
+        psd,
+        frequencies=freqs,
+        unit=1 / u.Hz,
+        **kw_args
+    )
 
 
 def get_FreqSeries_from_dict(
     psd: dict,
     psd_vals_key: str,
-    is_asd: bool = False
+    is_asd: bool = False,
+    **kw_args
 ) -> FrequencySeries:
     """
     Converts dictionary with Power spectral density (PSD) values into a
@@ -297,19 +319,23 @@ def get_FreqSeries_from_dict(
     is_asd : bool, optional, default = False
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
+    **kw_args
+        Other keyword arguments that will be passed to FrequencySeries
+        constructor. Can be used to assign name to series and more.
 
     Returns
     -------
     FrequencySeries
-        _description_
+        Data from input dict in a GWpy FrequencySeries.
     """
 
     return FrequencySeries(
         psd[psd_vals_key]**2 if is_asd else psd[psd_vals_key],
-        frequencies=psd['frequencies']
+        frequencies=psd['frequencies'],
+        **kw_args
     )
 
-# Move to psd folder? E.g. given into __init__ file?
+# TODO (potentially): move to psd folder, e.g. given into __init__ file?
 
 
 
@@ -321,7 +347,7 @@ def inner_product(
     psd: FrequencySeries,
     f_range: list[float] | list[u.quantity.Quantity] = None,
     df: float | u.quantity.Quantity = None,
-    optimize_time_and_phase: bool = False  # Call 'compute_match'?
+    optimize_time_and_phase: bool = False  # Call it 'compute_match'?
 ) -> float:
     """
     Calculates the noise-weighted inner product of two signals.
@@ -336,12 +362,12 @@ def inner_product(
         Power spectral density to use in inner product.
     f_range : list[float] | list[u.quantity.Quantity], optional, default = None
         Frequency range
-        Mention that f_range is potentially cropped, depending on frequency
-        range of input
+        Mention that f_range is potentially cropped, depending on
+        frequency range of input
     df : float | u.quantity.Quantity, optional, default = None
         Distance df between samples in frequency domain to use in
         integration. Must not be too large, otherwise results of inner
-        product may be erroneous. If chosen very small (e.g. in the range
+        product may be erroneous. If chosen very small (e.g. in range
         of 0.001Hz), you should consider selecting only powers of two
         like 2**-10 because these work best with certain function calls
         that utilize the Fourier transform of the involved signals. An
@@ -361,7 +387,7 @@ def inner_product(
     Raises
     ------
     TypeError
-        In case either one of `signal1`, `signal2`, `psd` has wrong format.
+        In case either one of `signal1`, `signal2`, `psd` has wrong type.
     ValueError
         In case format of `f_range` parameter is not correct.
     """
@@ -428,7 +454,7 @@ def inner_product(
 
         # New lower bound must be greater than current lower bound,
         # otherwise no values for the range are available in signals
-        if f_lower_new > f_lower:
+        if f_lower_new >= f_lower:
             f_lower = f_lower_new
         else:
             # Leave lower bound at f_lower, no update
@@ -438,7 +464,7 @@ def inner_product(
 
         # New upper bound must be smaller than current upper bound,
         # otherwise no values for the range are available in signals
-        if f_upper_new < f_upper:
+        if f_upper_new <= f_upper:
             f_upper = f_upper_new
         else:
             # Leave upper bound at f_upper, no update
@@ -449,13 +475,11 @@ def inner_product(
 
     # Get signals to same frequencies, i.e. make df equal and then restrict range
     df_float = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
-    # TODO: check if interpolate does something if df is correct
+    # TODO: check if interpolate does something if df is the one of signal
     # -> if yes, replace lines with something like signal = signal.interpolate() if signal.df != df else signal
     signal1 = signal1.interpolate(df_float)
     signal2 = signal2.interpolate(df_float)
     psd = psd.interpolate(df_float)
-    # frequencies = np.arange(float(f_lower / u.Hz), float(f_upper / u.Hz) + df, step=df)
-    # frequencies really needed? On the other hand, we would have to choose other array otherwise...
 
 
     signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
@@ -463,20 +487,44 @@ def inner_product(
     psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
     # Note: frequencies may not be changed by that, but is not needed
 
-    # TODO: maybe use restrict_f_range here? Fill with zeros for signals and
-    # ones for psd? Then no awkward refilling is needed later on with optimize
+    # signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper])
+    # signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper])
+    # psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0)
+    # Note: we fill with ones for psd to avoid division by zero
+
+    # -> ah this does not work because we have unequal length in that case
+    # So maybe use restrict_f_range for lower limit and cut off upper?
+
+    # -> haha, next problem: they may not start at same frequency...
+    # So initial solution might be best. Or we pad to f=0 here already...
+    # But this would mean more operations in norm... Maybe do handling
+    # separately for optimize and not
+    
 
     if optimize_time_and_phase:
         # Shit, problem: we cut f_range... But need start at zero for ifft -> maybe do correcction in optimized_inner_product function?
+        # -> should be solved now by use of restrict_f_range beforehand
+        # -> nope, is not; doing that in optimized seems to be good idea and
+        # also there is not other way I think since we absolutely need padding
+        # to f=0 for ifft
 
-        number_to_append = int((float(f_lower / f_lower.unit) - 0.0) / df_float)  # Symbolic -0.0 to make it clear what happens
+        # signal1 = signal1[signal1.frequencies <= f_upper]
+        # signal1 = restrict_f_range(signal1, f_range=[f_lower, None])
+
+        # signal2 = signal2[signal2.frequencies <= f_upper]
+        # signal2 = restrict_f_range(signal2, f_range=[f_lower, None])
+
+        # psd = psd[psd.frequencies <= f_upper]
+        # psd = restrict_f_range(psd, f_range=[f_lower, None], fill_val=1.0)
+
+        number_to_append = int((f_lower.value - 0.0) / df_float)  # Symbolic -0.0 to make it clear what happens
         
         f_series_to_pad = FrequencySeries(
             np.zeros(number_to_append),
             unit=u.dimensionless_unscaled,
             f0=0.0,
             df=df,
-            dtype=complex
+            dtype=complex  # Use signal1.dtype?
         )
 
         signal1 = f_series_to_pad.append(signal1, inplace=False)
@@ -486,11 +534,16 @@ def inner_product(
         f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
         psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
 
-        # return optimized_inner_product(signal1, signal2, psd)
-        return signal1, signal2, psd
+        return optimized_inner_product(signal1, signal2, psd)
+        # return signal1, signal2, psd
         # TODO: decide if we divide by norm here? Or in overlap? Maybe do in
         # separate match function that always sets optimize_time_and_phase=True?
+        # -> use overlap function for that?
     else:
+        # signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
+        # signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
+        # psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
+        
         return inner_product_computation(signal1, signal2, psd)
 
 
@@ -520,205 +573,111 @@ def inner_product_computation(
     """
 
     # First step: assure same distance of samples
-    # assert signal1.df == signal2.df == psd.df
     assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df),\
            'Signals must have equal frequency spacing.'
     
     # Second step: assure frequencies are sufficiently equal.
     # Maximum deviation allowed between the is given df, which
     # determines accuracy the signals have been sampled with.
-    # assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies, atol=0.96 * signal1.df))
-    #         and np.all(np.isclose(signal1.frequencies, psd.frequencies, atol=0.96 * signal1.df))),\
-    custom_error_msg = ('Frequency samples of input signals are not equal. This might be '
-             'due to `df` being too large. If `df` is very small, consider '
-             'choosing a (negative) power of two as these seem to work best.')
+    custom_error_msg = (
+        'Frequency samples of input signals are not equal. This might be '
+        'due to `df` being too large. If `df` is very small, consider '
+        'choosing a (negative) power of two as these seem to work best.'
+    )
     # Is perhaps because interpolate uses fft, which works best with powers of two
     try:
         assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies, rtol=0.01))
                 and np.all(np.isclose(signal1.frequencies, psd.frequencies, rtol=0.01))),\
                 custom_error_msg
     except ValueError:
+        # Due to unequal sample size. Since this is automatically checked by
+        # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
-                
     
-    # TODO: why is this not printed? Rather change to ValueError or so?
 
-    # TODO: change to 0.96 * df? Because this right here may allow difference of df
-
-    return 4 * np.real(simpson(y=np.multiply(signal1, signal2.conjugate()) / psd,
-                               x=signal1.frequencies))
+    return 4.0 * np.real(simpson(y=np.multiply(signal1, signal2.conjugate()) / psd,
+                                 x=signal1.frequencies))
 
 
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
     psd: FrequencySeries,
-    use_irfft: bool = False
+    # use_irfft: bool = False  # Results for False are usually a bit better
 ) -> float:
 
     # First step: assure same distance of samples
-    # assert signal1.df == signal2.df == psd.df
     assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df),\
            'Signals must have equal frequency spacing.'
 
     # Second step: assure frequencies are sufficiently equal.
     # Maximum deviation allowed between the is given df, which
     # determines accuracy the signals have been sampled with.
-    # assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies, atol=signal1.df))
-    #         and np.all(np.isclose(signal1.frequencies, psd.frequencies, atol=signal1.df))),\
-    #         ('Frequency samples of input signals are not equal. This might be '
-    #          'due to `df` being too large. If `df` is very small, consider '
-    #          'choosing a (negative) power of two as these seem to work best.')
-    custom_error_msg = ('Frequency samples of input signals are not equal. This might be '
-             'due to `df` being too large. If `df` is very small, consider '
-             'choosing a (negative) power of two as these seem to work best.')
+    custom_error_msg = (
+        'Frequency samples of input signals are not equal. This might be '
+        'due to `df` being too large. If `df` is very small, consider '
+        'choosing a (negative) power of two as these seem to work best.'
+    )
     # Is perhaps because interpolate uses fft, which works best with powers of two
     try:
         assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies, rtol=0.01))
                 and np.all(np.isclose(signal1.frequencies, psd.frequencies, rtol=0.01))),\
                 custom_error_msg
     except ValueError:
+        # Due to unequal sample size. Since this is automatically checked by
+        # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
     
-    # Note that this already checks for equal sample size, so we can be sure
-    # that signal1.size = signal2.size = psd.size
+    
+    dft_series = signal1 * signal2.conjugate() / psd
     
 
-    # match_series = fd_to_td_waveform(signal1 * signal2 / psd)  # Does not work (also not expected to)
-
-
-    # Not correcting for wrap-around now -> or do roll with 50% here?
-    dft_series = signal1 * signal2.conjugate() / psd
-
-    # dt = 1 / (2 * signal1.size * signal1.df)
-    dt = 1 / (2 * (signal1.size - 1) * signal1.df)
-    old_size = signal1.size
-    # ft_series = dft_series * (2 * signal1.size)  # Continuous version
-    # ft_series = dft_series * (2 * (signal1.size - 1))  # Continuous version
-    # Two because rfft has only half size. In principle, all dft signals would
-    # have to be multiplied with that, but factors cancel and only one remains
-    # -> changed value to fit what is in numpy docs
-
     negative_freq_terms = FrequencySeries(
-        np.conjugate(np.flip(dft_series[1:])),
+        np.zeros(dft_series.size - 1),
         unit=u.dimensionless_unscaled,
-        # f0=-dft_series.frequencies[-2],
         f0=-dft_series.frequencies[-1],
-        df=dft_series.df
+        df=dft_series.df,
+        dtype=complex
     )
 
     full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
     # Get correct ordering for numpy ifft (f=0 component first, then positive
     # terms, then negative terms)
-    # Results get better with this shift, seems to be correct thing to do (also
-    # makes sense to apply it, but if results confirm it's even better)
-
-    # full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series[:-1]))
-    # From testing with np.fft.fftfreq it looks like positive frequencies has to be cut off
-    # -> nevermind, depends on input odd/even; we give odd, no cutoff there
 
 
-
-    # print(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies))
-    # print(np.fft.fftshift(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies)))
-    # print(np.fft.ifftshift(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies)))
-    # print(np.roll(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies), signal1.size))
-    # Works as expected. Ifftshift does rolling
-
-
-
-    # TODO: find out where inconsistency is. We assume real signal to get
-    # negative Fourier components here, but why couldn't we just use irfft then?
-    # -> ahhh, maybe conjugating each series beforehand makes more sense
-    # -> nope, even better: setting them to zero
-
-    signal1 = FrequencySeries(
-        # np.conjugate(np.flip(signal1[1:])),
-        # np.conjugate(np.flip(signal1[1:-1])),
-        # np.conjugate(signal1[1:-1]),
-        # np.zeros(signal1[1:-1].size, dtype=complex),
-        np.zeros(signal1[1:].size, dtype=complex),
-        unit=u.dimensionless_unscaled,
-        # f0=-signal1.frequencies[-2],
-        f0=-signal1.frequencies[-1],
-        df=signal1.df
-    ).append(signal1)
-    # signal1 *= signal1.size #* signal1.df / u.Hz  # Now without 2 because we padded
-
-    signal2 = FrequencySeries(
-        # np.conjugate(np.flip(signal2[1:])),
-        # np.conjugate(np.flip(signal2[1:-1])),
-        # np.conjugate(signal2[1:-1]),
-        # np.zeros(signal2[1:-1].size, dtype=complex),
-        np.zeros(signal2[1:].size, dtype=complex),
-        unit=u.dimensionless_unscaled,
-        # f0=-signal2.frequencies[-2],
-        f0=-signal2.frequencies[-1],
-        df=signal2.df
-    ).append(signal2)
-    # signal2 *= signal2.size #* signal2.df / u.Hz  # Now without 2 because we padded
-
-    psd = FrequencySeries(
-        # np.conjugate(np.flip(psd[1:])),
-        # np.conjugate(np.flip(psd[1:-1])),
-        # np.conjugate(psd[1:-1]),
-        # np.ones(psd[1:-1].size, dtype=complex),
-        np.ones(psd[1:].size, dtype=complex),
-        unit=u.dimensionless_unscaled,
-        # f0=-psd.frequencies[-2],
-        f0=-psd.frequencies[-1],
-        df=psd.df
-    ).append(psd)
-    # psd *= psd.size #* psd.df / u.Hz  # Now without 2 because we padded
-
-
-    # dt = 1 / (signal1.size * signal1.df)
-    # Equal to the one before -> wait, is not apparently?
-
-    # print(1 / (signal1.size * signal1.df), dt)
-    # print(signal1.size, 2 * (old_size - 1))
-
-    full_dft_series = np.fft.ifftshift(signal1 * signal2.conjugate() / psd)
-    # Get correct ordering for numpy ifft (f=0 component first, then positive
-    # terms, then negative terms)
-    # Results with this one are pretty much equal to no_rfft_signal above, first three digits usually
-
+    dt = 1.0 / (full_dft_series.size * signal1.df)
 
     match_series = TimeSeries(
-        np.fft.irfft(dft_series / dt.value) if use_irfft\
-        else np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
+        np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
         dt=dt
-    )
+    ).abs()
 
-    # match_series *= 2.0 * signal1.df  # 2 from inner product definition
-    # match_series *= 2.0  # 2 from inner product definition
-    # match_series *= 4.0  # 2 from inner product definition
-    match_series *= 2.0 if use_irfft else 4.0
+    match_series *= 4.0
 
-    # Not 4.0 because we also integrate over negative frequencies here (?)
-    # Factor of 2 difference also occurs for rfft results... -> ahh, but this
-    # also makes sense because rfft does normal fft (i.e. also uses negative
-    # frequencies), but they are just automatically calculated from positive
-    # ones and thus irfft only has different input (not different algorithm
-    # when thinking about Fourier components that are used or so)
+    match_result = match_series.max()
 
-    # With correct conjugating etc, ifft does better job than irfft (as it should)
-    # But the factor of 2 is still strange
 
-    match_result = np.max(match_series)
+    number_to_roll = match_series.size // 2  # Value chosen, no deep meaning
+    match_series = np.roll(match_series, shift=number_to_roll)
 
-    # TODO: add absolute value, i.e. phase maximization -> not been done yet to see pure results coming out
+    match_series.times -= match_series.times[number_to_roll]  # Use .shift()?
+
+    # Compute peak time
+    peak_index = np.argmax(match_series)
+    # t_zero_index = match_series[match_series.times <= 0].size
+    # peak_time = (peak_index - t_zero_index) * match_series.dt.value
+    peak_time = match_series.times[peak_index]
     
     # return match_result
-    return match_series, match_result
+    return match_series, match_result, peak_time
 
 
 def norm(
     signal: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
-    **kwargs
+    **kw_args
 ) -> float:
     """
     Calculates the norm (i.e. SNR) of a given `signal` as measured by
@@ -730,6 +689,8 @@ def norm(
         Signal to compute norm for.
     psd : FrequencySeries
         Power spectral density to use in inner product.
+    **kw_args
+        Additional arguments, will be passed to `inner_product` function.
 
     Returns
     -------
@@ -737,14 +698,21 @@ def norm(
         Norm of `signal`.
     """
 
-    return np.sqrt(inner_product(signal, signal, psd, **kwargs))
+    # return np.sqrt(inner_product(signal, signal, psd, **kw_args))
+    if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
+        return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
+    else:
+        return np.sqrt(inner_product(signal, signal, psd, **kw_args))
+    
+    # TODO: handle case where much stuff is returned by inner_product better
 
 
 def overlap(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
-    **kwargs
+    # optimize_time_and_phase: bool = True,
+    **kw_args
 ) -> float:
     """
     Calculates the overlap of two given signals as measured by the
@@ -759,6 +727,8 @@ def overlap(
         Second signal.
     psd : FrequencySeries
         Power spectral density to use in inner product.
+    **kw_args
+        Additional arguments, will be passed to `inner_product` function.
 
     Returns
     -------
@@ -769,6 +739,18 @@ def overlap(
     # TODO: use keyword is_normalized to indicate that both signals
     # already have unit norm? Would save some operations sometimes
     
-    return inner_product(signal1, signal2, psd, **kwargs)\
-           / norm(signal1, psd, **kwargs)\
-           / norm(signal2, psd, **kwargs)
+    # out = inner_product(signal1, signal2, psd, optimize_time_and_phase=optimize_time_and_phase, **kwargs)
+    out = inner_product(signal1, signal2, psd, **kw_args)
+    
+    normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
+    # No need to give optimization to norm function, right? Because
+    # Simpson rule is more accurate
+
+    # if optimize_time_and_phase:
+    # if 'optimize_time_and_phase' in kw_args:# and optimize_time_and_phase:
+    if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
+        return out[0] / normalization, out[1] / normalization, out[2]
+    else:
+        return out / normalization
+    
+    # TODO: handle case where much stuff is returned by inner_product better

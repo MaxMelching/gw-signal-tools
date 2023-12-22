@@ -51,21 +51,24 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
 
 def restrict_f_range(
     signal: FrequencySeries,
-    f_range: list[float] | list[u.quantity.Quantity]
+    f_range: list[float] | list[u.quantity.Quantity],
+    fill_val: float = 0.0
 ) -> FrequencySeries:
     """
-    Set frequency components of signal outside of f_range to zero.
+    Set frequency components of signal outside of f_range to fill_val.
 
     Parameters
     ----------
-    signal : _type_
+    signal : FrequencySeries
         _description_
-    f_range : _type_
+    f_range : list[float] | list[u.quantity.Quantity]
+        _description_
+    fill_val : float, optional, default = 0.0
         _description_
 
     Returns
     -------
-    _type_
+    FrequencySeries
         _description_
     """
 
@@ -80,8 +83,8 @@ def restrict_f_range(
     upper_filter = signal.frequencies > f_upper
     upper_number_to_discard = upper_filter[upper_filter == True].size
 
-    signal[:lower_number_to_discard].fill(0.0)
-    signal[signal.size - upper_number_to_discard:].fill(0.0)
+    signal[:lower_number_to_discard].fill(fill_val)
+    signal[signal.size - upper_number_to_discard:].fill(fill_val)
 
     return signal
 
@@ -120,16 +123,31 @@ def fd_to_td_waveform(
 
         signal = restrict_f_range(signal, f_range)
         
+    # TODO: check if 2n or 2(n-1)!!! Would also change dt slightly -> from numpy doc I would say 2(n-1)
+    # Makes hardly any difference in how things look. But difference plot
+    # in sanity checks look much worse, so maybe leave 2n? Ah no, actually
+    # error got smaller now. Perhaps because dt was not changed before
+    # out = TimeSeries(
+    #     # np.fft.irfft(signal * (2 * signal.size) * signal.df.value),
+        # np.fft.irfft(signal * (2 * (signal.size - 1) * signal.df.value)),
+    #     unit=u.dimensionless_unscaled,
+    #     t0=0.0 * u.s,
+    #     dt=1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
+    # )
+    # Note: in irfft, we have to ccount for numpy normalization, where
+    # multiplication with sample size is done. The factor of two occurs
+    # because rfft has only half size -> better (but equivalent) explanation below
 
+    # dt = 1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
+    dt = 1 / (2 * (signal.size - 1) * signal.df)
+    # Note: 2*(n-1) follows normalization that happens according to the docs:
+    # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
     out = TimeSeries(
-        np.fft.irfft(signal * (2 * signal.size)),  # Two because rfft has only half size
+        np.fft.irfft(signal / dt.value),  # Continuous Fourier components to discrete
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
-        dt=1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
+        dt=dt
     )
-
-    # Convert discrete Fourier components to continuous
-    out *= signal.df / u.Hz
 
     # Handle wrap-around of signal
     number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
@@ -162,7 +180,6 @@ def pad_to_get_target_df(signal: TimeSeries, df: float | u.quantity.Quantity) ->
 
     # Compute what would be current df
     df_current = 1.0 / (signal.size * signal.dt)
-    # print(df_current)
 
     if df_current > df:
         target_sample_number = int(1.0 / (signal.dt * df))
@@ -413,18 +430,27 @@ def inner_product(
         # otherwise no values for the range are available in signals
         if f_lower_new > f_lower:
             f_lower = f_lower_new
-        # Else we leave lower bound at f_lower, no update
+        else:
+            # Leave lower bound at f_lower, no update
+            print((f'Given lower bound of {f_lower_new} is smaller than '
+                   f'values available from given signals. Taking a lower '
+                   f'bound of {f_lower} instead.'))
 
         # New upper bound must be smaller than current upper bound,
         # otherwise no values for the range are available in signals
         if f_upper_new < f_upper:
             f_upper = f_upper_new
-        # Else we leave upper bound at f_upper, no update
+        else:
+            # Leave upper bound at f_upper, no update
+            print((f'Given upper bound of {f_upper_new} is larger than '
+                   f'values available from given signals. Taking an upper '
+                   f'bound of {f_upper} instead.'))
 
 
     # Get signals to same frequencies, i.e. make df equal and then restrict range
-    # df_float = float(df / df.unit) if type(df) == u.Quantity else df  # interpolate wants dimensionless df
     df_float = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
+    # TODO: check if interpolate does something if df is correct
+    # -> if yes, replace lines with something like signal = signal.interpolate() if signal.df != df else signal
     signal1 = signal1.interpolate(df_float)
     signal2 = signal2.interpolate(df_float)
     psd = psd.interpolate(df_float)
@@ -436,6 +462,9 @@ def inner_product(
     signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
     psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
     # Note: frequencies may not be changed by that, but is not needed
+
+    # TODO: maybe use restrict_f_range here? Fill with zeros for signals and
+    # ones for psd? Then no awkward refilling is needed later on with optimize
 
     if optimize_time_and_phase:
         # Shit, problem: we cut f_range... But need start at zero for ifft -> maybe do correcction in optimized_inner_product function?
@@ -523,7 +552,8 @@ def inner_product_computation(
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
-    psd: FrequencySeries
+    psd: FrequencySeries,
+    use_irfft: bool = False
 ) -> float:
 
     # First step: assure same distance of samples
@@ -550,93 +580,136 @@ def optimized_inner_product(
     except ValueError:
         raise ValueError(custom_error_msg)
     
-    # match_series = fd_to_td_waveform(signal1 * signal2 / psd)
+    # Note that this already checks for equal sample size, so we can be sure
+    # that signal1.size = signal2.size = psd.size
+    
+
+    # match_series = fd_to_td_waveform(signal1 * signal2 / psd)  # Does not work (also not expected to)
+
 
     # Not correcting for wrap-around now -> or do roll with 50% here?
-    dft_signal = signal1 * signal2.conjugate() / psd
+    dft_series = signal1 * signal2.conjugate() / psd
 
-    # rfft_signal = dft_signal * (2 * signal1.size * signal1.df / u.Hz)  # Continuous version
-    rfft_signal = dft_signal * (2 * signal1.size)  # Continuous version
+    # dt = 1 / (2 * signal1.size * signal1.df)
+    dt = 1 / (2 * (signal1.size - 1) * signal1.df)
+    old_size = signal1.size
+    # ft_series = dft_series * (2 * signal1.size)  # Continuous version
+    # ft_series = dft_series * (2 * (signal1.size - 1))  # Continuous version
     # Two because rfft has only half size. In principle, all dft signals would
     # have to be multiplied with that, but factors cancel and only one remains
-
-    # Ok, this is strange... Following seems to be more accurate
-    # rfft_signal = dft_signal * (signal1.size * signal1.df / u.Hz)  # Continuous version
+    # -> changed value to fit what is in numpy docs
 
     negative_freq_terms = FrequencySeries(
-        # np.flip(rfft_signal[1:]),
-        np.conjugate(np.flip(rfft_signal[1:])),
+        np.conjugate(np.flip(dft_series[1:])),
         unit=u.dimensionless_unscaled,
-        # frequencies=-np.flip(ft_signal.frequencies[1:])  # Does not work...
-        # frequencies=-np.flip(ft_signal.frequencies)
-        f0=-rfft_signal.frequencies[-1],
-        df=rfft_signal.df
+        # f0=-dft_series.frequencies[-2],
+        f0=-dft_series.frequencies[-1],
+        df=dft_series.df
     )
 
-    # TODO: find out where inconsistency is. We assume real signal to get
-    # negative Fourier components here, but why couldn't we just use irfft then?
-    # -> ahhh, maybe conjugating beforehand makes more sense
-
-    # no_rfft_signal = frft_signal.append(negative_freq_terms)
-    # no_rfft_signal = negative_freq_terms.append(rfft_signal)
-    no_rfft_signal = np.fft.ifftshift(negative_freq_terms.append(rfft_signal))
+    full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
+    # Get correct ordering for numpy ifft (f=0 component first, then positive
+    # terms, then negative terms)
     # Results get better with this shift, seems to be correct thing to do (also
     # makes sense to apply it, but if results confirm it's even better)
 
+    # full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series[:-1]))
+    # From testing with np.fft.fftfreq it looks like positive frequencies has to be cut off
+    # -> nevermind, depends on input odd/even; we give odd, no cutoff there
 
+
+
+    # print(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies))
+    # print(np.fft.fftshift(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies)))
+    # print(np.fft.ifftshift(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies)))
+    # print(np.roll(np.append(np.flip(-signal1.frequencies[1:]), signal1.frequencies), signal1.size))
+    # Works as expected. Ifftshift does rolling
+
+
+
+    # TODO: find out where inconsistency is. We assume real signal to get
+    # negative Fourier components here, but why couldn't we just use irfft then?
+    # -> ahhh, maybe conjugating each series beforehand makes more sense
+    # -> nope, even better: setting them to zero
 
     signal1 = FrequencySeries(
-        np.conjugate(np.flip(signal1[1:])),
+        # np.conjugate(np.flip(signal1[1:])),
+        # np.conjugate(np.flip(signal1[1:-1])),
+        # np.conjugate(signal1[1:-1]),
+        # np.zeros(signal1[1:-1].size, dtype=complex),
+        np.zeros(signal1[1:].size, dtype=complex),
         unit=u.dimensionless_unscaled,
+        # f0=-signal1.frequencies[-2],
         f0=-signal1.frequencies[-1],
         df=signal1.df
     ).append(signal1)
-    signal1 *= signal1.size #* signal1.df / u.Hz  # Now without 2 because we padded
+    # signal1 *= signal1.size #* signal1.df / u.Hz  # Now without 2 because we padded
 
     signal2 = FrequencySeries(
-        np.conjugate(np.flip(signal2[1:])),
+        # np.conjugate(np.flip(signal2[1:])),
+        # np.conjugate(np.flip(signal2[1:-1])),
+        # np.conjugate(signal2[1:-1]),
+        # np.zeros(signal2[1:-1].size, dtype=complex),
+        np.zeros(signal2[1:].size, dtype=complex),
         unit=u.dimensionless_unscaled,
+        # f0=-signal2.frequencies[-2],
         f0=-signal2.frequencies[-1],
         df=signal2.df
     ).append(signal2)
-    signal2 *= signal2.size #* signal2.df / u.Hz  # Now without 2 because we padded
+    # signal2 *= signal2.size #* signal2.df / u.Hz  # Now without 2 because we padded
 
     psd = FrequencySeries(
-        np.conjugate(np.flip(psd[1:])),
+        # np.conjugate(np.flip(psd[1:])),
+        # np.conjugate(np.flip(psd[1:-1])),
+        # np.conjugate(psd[1:-1]),
+        # np.ones(psd[1:-1].size, dtype=complex),
+        np.ones(psd[1:].size, dtype=complex),
         unit=u.dimensionless_unscaled,
+        # f0=-psd.frequencies[-2],
         f0=-psd.frequencies[-1],
         df=psd.df
     ).append(psd)
-    psd *= psd.size #* psd.df / u.Hz  # Now without 2 because we padded
+    # psd *= psd.size #* psd.df / u.Hz  # Now without 2 because we padded
 
 
-    # no_rfft_signal = signal1 * signal2.conjugate() / psd
-    # no_rfft_signal = np.fft.ifftshift(signal1 * signal2.conjugate() / psd)  # numpy expects different order of Fourier coefficients
+    # dt = 1 / (signal1.size * signal1.df)
+    # Equal to the one before -> wait, is not apparently?
+
+    # print(1 / (signal1.size * signal1.df), dt)
+    # print(signal1.size, 2 * (old_size - 1))
+
+    full_dft_series = np.fft.ifftshift(signal1 * signal2.conjugate() / psd)
+    # Get correct ordering for numpy ifft (f=0 component first, then positive
+    # terms, then negative terms)
     # Results with this one are pretty much equal to no_rfft_signal above, first three digits usually
 
 
     match_series = TimeSeries(
-        # 2.0 * np.fft.irfft(rfft_signal),
-        # 4.0 * np.fft.irfft(rfft_signal),
-        # 2.0 * np.fft.ifft(no_rfft_signal),  # Not 4.0 because we also integrate over negative frequencies here (?)
-        # 4.0 * np.fft.ifft(no_rfft_signal),  # Factor of 2 difference also occurs for rfft results...
-        #
-        np.fft.irfft(rfft_signal),
-        # np.fft.ifft(no_rfft_signal),
+        np.fft.irfft(dft_series / dt.value) if use_irfft\
+        else np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
-        dt=1 / (2 * signal1.size * signal1.df)  # Two because rfft has only half size
-        # dt=1 / (signal1.size * signal1.df)  # In case ifft is used (i.e. padded signals)
+        dt=dt
     )
 
-    match_series *= 2.0 * signal1.df  # 2 from inner product definition
+    # match_series *= 2.0 * signal1.df  # 2 from inner product definition
+    # match_series *= 2.0  # 2 from inner product definition
+    # match_series *= 4.0  # 2 from inner product definition
+    match_series *= 2.0 if use_irfft else 4.0
+
+    # Not 4.0 because we also integrate over negative frequencies here (?)
+    # Factor of 2 difference also occurs for rfft results... -> ahh, but this
+    # also makes sense because rfft does normal fft (i.e. also uses negative
+    # frequencies), but they are just automatically calculated from positive
+    # ones and thus irfft only has different input (not different algorithm
+    # when thinking about Fourier components that are used or so)
 
     # With correct conjugating etc, ifft does better job than irfft (as it should)
     # But the factor of 2 is still strange
 
     match_result = np.max(match_series)
 
-    # TODO: add absolute value
+    # TODO: add absolute value, i.e. phase maximization -> not been done yet to see pure results coming out
     
     # return match_result
     return match_series, match_result

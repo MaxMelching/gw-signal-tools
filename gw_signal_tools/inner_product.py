@@ -55,7 +55,10 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
 def restrict_f_range(
     signal: FrequencySeries,
     f_range: list[float] | list[u.quantity.Quantity],
-    fill_val: float = 0.0
+    fill_val: float = 0.0,
+    pad_to_f_zero: bool = False,
+    cut_upper: bool = False,
+    copy: bool = True
 ) -> FrequencySeries:
     """
     Set frequency components of signal outside of f_range to fill_val.
@@ -69,11 +72,21 @@ def restrict_f_range(
         be used as cutoffs.
     fill_val : float, optional, default = 0.0
         Value that will be used to fill `signal` outside of `f_range`.
+    pad_to_f_zero : boolean, optional, default = False
+        If true, signal is padded with `fill_val` to start at f=0.
+
+        Convenient option if signal shall be prepared for inverse
+        Fourier transformation, where start at f=0 is usually expected.
+    cut_upper : bool, optional, default = False
+        If true, signal will be cut off at upper frequency limit.
+
+        Convenient in preparation for computations with multiple signals
+        where equal frequency ranges might be needed.
 
     Returns
     -------
     FrequencySeries
-        Version of signal where values outside of `f_range` have been
+        Copy of signal where values outside of `f_range` have been
         changed. If the interval defined by `f_range` is larger than
         the one spanned by signal.frequencies, no entry will be changed.
 
@@ -92,13 +105,42 @@ def restrict_f_range(
     f_lower = u.Quantity(f_lower, unit=u.Hz)
     f_upper = u.Quantity(f_upper, unit=u.Hz)
 
+
+    if pad_to_f_zero:# and (signal.f0 > signal.df):
+        # Padding to zero frequency component shall be done and is needed
+        number_to_append = int(signal.f0.value / signal.df.value)
+
+        signal = FrequencySeries(
+            np.zeros(number_to_append),
+            unit=signal.unit,
+            f0=0.0,
+            df=signal.df,
+            dtype=signal.dtype
+        ).append(signal)
+    else:
+        # Otherwise filling is inplace
+        signal = signal.copy()
+
     lower_filter = signal.frequencies < f_lower
     lower_number_to_discard = lower_filter[lower_filter == True].size
-    upper_filter = signal.frequencies > f_upper
-    upper_number_to_discard = upper_filter[upper_filter == True].size
-
+    # lower_number_to_discard = int((f_lower.value - signal.f0.value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
     signal[:lower_number_to_discard].fill(fill_val)
-    signal[signal.size - upper_number_to_discard:].fill(fill_val)
+    # signal[:lower_number_to_discard] = np.full(lower_number_to_discard, fill_val)  # Still inplace
+    # signal = np.append(np.full(lower_number_to_discard, fill_val), (signal[lower_number_to_discard:]))  # Does not modify frequencies, problem
+
+    # upper_filter = signal.frequencies > f_upper
+    if cut_upper:
+        # signal = signal[np.logical_not(upper_filter)]
+
+        upper_filter = signal.frequencies <= f_upper
+        signal = signal[upper_filter]
+    else:
+        upper_filter = signal.frequencies > f_upper
+        upper_number_to_discard = upper_filter[upper_filter == True].size
+        # upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons
+        signal[signal.size - upper_number_to_discard:].fill(fill_val)
+        # signal[signal.size - upper_number_to_discard:] = np.full(upper_number_to_discard, fill_val)  # Still inplace
+        # signal = np.append(signal[upper_number_to_discard:], np.full(upper_number_to_discard, fill_val))  # Does not modify frequencies, problem
 
     return signal
 
@@ -482,6 +524,28 @@ def inner_product(
     psd = psd.interpolate(df_float)
 
 
+    # signal1 = restrict_f_range(signal1, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True)
+    # # signal1 = signal1[signal1.frequencies <= f_upper]
+
+    # signal2 = restrict_f_range(signal2, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True)
+    # # signal2 = signal2[signal2.frequencies <= f_upper]
+
+    # psd = restrict_f_range(psd, [f_lower, f_upper], fill_val=1.0, pad_to_f_zero=True, cut_upper=True)
+    # # psd = psd[psd.frequencies <= f_upper]
+
+    # # print(signal1.frequencies)
+    # # print(signal2.frequencies)
+    # # print(psd.frequencies)
+
+    # if optimize_time_and_phase:
+    #     return optimized_inner_product(signal1, signal2, psd)
+    # else:
+    #     return inner_product_computation(signal1, signal2, psd)
+    
+    # Wow, this is actually less efficient... Roughly 1ms slower...
+
+
+    # Older versions, new one should be more efficient
     signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
     signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
     psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]

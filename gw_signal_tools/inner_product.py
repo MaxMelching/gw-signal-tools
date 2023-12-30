@@ -58,7 +58,7 @@ def restrict_f_range(
     fill_val: float = 0.0,
     pad_to_f_zero: bool = False,
     cut_upper: bool = False,
-    copy: bool = True
+    inplace: bool = False
 ) -> FrequencySeries:
     """
     Set frequency components of signal outside of f_range to fill_val.
@@ -106,24 +106,48 @@ def restrict_f_range(
     f_upper = u.Quantity(f_upper, unit=u.Hz)
 
 
+    # if pad_to_f_zero:# and (signal.f0 > signal.df):
+    #     # Padding to zero frequency component shall be done and is needed
+    #     number_to_append = int(signal.f0.value / signal.df.value)
+
+    #     signal = FrequencySeries(
+    #         np.zeros(number_to_append),
+    #         unit=signal.unit,
+    #         f0=0.0,
+    #         df=signal.df,
+    #         dtype=signal.dtype
+    #     ).append(signal)
+    # else:
+    #     # Otherwise filling is inplace
+    #     signal = signal.copy()
+    
+    # TODO: check if argument inplace is needed, does not work the way
+    # it was intended originally -> implementation does not seem to make difference
+
     if pad_to_f_zero:# and (signal.f0 > signal.df):
         # Padding to zero frequency component shall be done and is needed
         number_to_append = int(signal.f0.value / signal.df.value)
 
-        signal = FrequencySeries(
-            np.zeros(number_to_append),
-            unit=signal.unit,
-            f0=0.0,
-            df=signal.df,
-            dtype=signal.dtype
-        ).append(signal)
-    else:
+        signal = signal.prepend(
+            FrequencySeries(
+                np.zeros(number_to_append),
+                unit=signal.unit,
+                f0=0.0,
+                df=signal.df,
+                dtype=signal.dtype
+            ),
+            inplace=inplace
+        )
+    elif not inplace:
         # Otherwise filling is inplace
         signal = signal.copy()
 
-    lower_filter = signal.frequencies < f_lower
-    lower_number_to_discard = lower_filter[lower_filter == True].size
-    # lower_number_to_discard = int((f_lower.value - signal.f0.value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
+
+    fill_val = u.Quantity(fill_val, unit=signal.unit)
+
+    # lower_filter = signal.frequencies < f_lower
+    # lower_number_to_discard = lower_filter[lower_filter == True].size
+    lower_number_to_discard = int((f_lower.value - signal.f0.value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
     signal[:lower_number_to_discard].fill(fill_val)
     # signal[:lower_number_to_discard] = np.full(lower_number_to_discard, fill_val)  # Still inplace
     # signal = np.append(np.full(lower_number_to_discard, fill_val), (signal[lower_number_to_discard:]))  # Does not modify frequencies, problem
@@ -132,15 +156,22 @@ def restrict_f_range(
     if cut_upper:
         # signal = signal[np.logical_not(upper_filter)]
 
-        upper_filter = signal.frequencies <= f_upper
-        signal = signal[upper_filter]
+        # upper_filter = signal.frequencies <= f_upper
+        # signal = signal[upper_filter]
+        signal = signal.crop(end=f_upper)
     else:
-        upper_filter = signal.frequencies > f_upper
-        upper_number_to_discard = upper_filter[upper_filter == True].size
-        # upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons
-        signal[signal.size - upper_number_to_discard:].fill(fill_val)
-        # signal[signal.size - upper_number_to_discard:] = np.full(upper_number_to_discard, fill_val)  # Still inplace
-        # signal = np.append(signal[upper_number_to_discard:], np.full(upper_number_to_discard, fill_val))  # Does not modify frequencies, problem
+        # upper_filter = signal.frequencies > f_upper
+        # upper_number_to_discard = upper_filter[upper_filter == True].size
+        # # upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons
+        # signal[signal.size - upper_number_to_discard:].fill(fill_val)
+        # # signal[signal.size - upper_number_to_discard:] = np.full(upper_number_to_discard, fill_val)  # Still inplace
+        # # signal = np.append(signal[upper_number_to_discard:], np.full(upper_number_to_discard, fill_val))  # Does not modify frequencies, problem
+
+        # TODO: replace with upper_filter = signal.frequencies <= and signal[upper_number_to_discard:].dill(fill_val)? -> works
+        # upper_filter = signal.frequencies <= f_upper
+        # upper_number_to_discard = upper_filter[upper_filter == True].size
+        upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)
+        signal[upper_number_to_discard:].fill(fill_val)
 
     return signal
 
@@ -467,8 +498,8 @@ def inner_product(
 
     # Set default values
     f_lower, f_upper =[
-            max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
-                min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
+        max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
+        min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
     ]
 
     # If bounds are given, check that they fit the input data
@@ -515,24 +546,38 @@ def inner_product(
                    f'bound of {f_upper} instead.'))
 
 
-    # Get signals to same frequencies, i.e. make df equal and then restrict range
-    df_float = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
+    # Get signals to same frequencies, i.e. make df equal (if necessary)
+    # and then restrict range
+    df_val = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
     # TODO: check if interpolate does something if df is the one of signal
-    # -> if yes, replace lines with something like signal = signal.interpolate() if signal.df != df else signal
-    signal1 = signal1.interpolate(df_float)
-    signal2 = signal2.interpolate(df_float)
-    psd = psd.interpolate(df_float)
+    # -> if no, replace lines with something like signal = signal.interpolate() if signal.df != df else signal
+    # -> is NOT the case, so manual checking is important
+    # signal1 = signal1.interpolate(df_val) if signal1.df != df else signal1
+    # signal2 = signal2.interpolate(df_val) if signal2.df != df else signal2
+    # psd = psd.interpolate(df_val) if psd.df != df else psd
+    signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, rtol=0.01) else signal1
+    signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, rtol=0.01) else signal2
+    psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, rtol=0.01) else psd
 
+    # print(np.isclose(signal1.df, df, rtol=0.01), np.isclose(signal2.df, df, rtol=0.01), np.isclose(psd.df, df, rtol=0.01))
+    
 
-    # signal1 = restrict_f_range(signal1, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True)
+    # signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, rtol=0.01) else signal1.copy()
+    # signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, rtol=0.01) else signal2.copy()
+    # psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, rtol=0.01) else psd.copy()
+    # Build in argument inplace where no copy is made?
+
+    # interpolate already copies, no need to copy again
+    # signal1 = restrict_f_range(signal1, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
     # # signal1 = signal1[signal1.frequencies <= f_upper]
 
-    # signal2 = restrict_f_range(signal2, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True)
+    # signal2 = restrict_f_range(signal2, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
     # # signal2 = signal2[signal2.frequencies <= f_upper]
 
-    # psd = restrict_f_range(psd, [f_lower, f_upper], fill_val=1.0, pad_to_f_zero=True, cut_upper=True)
+    # psd = restrict_f_range(psd, [f_lower, f_upper], fill_val=1.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
     # # psd = psd[psd.frequencies <= f_upper]
 
+    # # print(f_upper)
     # # print(signal1.frequencies)
     # # print(signal2.frequencies)
     # # print(psd.frequencies)
@@ -543,13 +588,30 @@ def inner_product(
     #     return inner_product_computation(signal1, signal2, psd)
     
     # Wow, this is actually less efficient... Roughly 1ms slower...
+    # We are now at 6.8 ms (with optimized)
+    # or around 7.7 with use of array method in restrict_f_range,
+    # while older one takes 6.6
+    # -> idea: use crop and append/pad in restrict? Actualy, without
+    # restrict might be blueprint... Or just use function one? And have
+    # less functionality in restrict_f_range?
+    # -> might be best to crop first, finding correct frequencies etc is
+    # not too easy as well and also not very efficient, right?
+    # -> yeah and replacing array version is also complicated... And
+    # maybe not even necessary. Because we do same in inner_product
+    # -> another advantage of this: cropping is more efficient for
+    # non-optimized version because less entries in array
 
 
     # Older versions, new one should be more efficient
-    signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
-    signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
-    psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
+    # signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
+    # signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
+    # psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
     # Note: frequencies may not be changed by that, but is not needed
+
+    # TODO: use built-in function to do that -> see following
+    signal1 = signal1.crop(start=f_lower, end=f_upper)
+    signal2 = signal2.crop(start=f_lower, end=f_upper)
+    psd = psd.crop(start=f_lower, end=f_upper)
 
     # signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper])
     # signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper])
@@ -581,7 +643,8 @@ def inner_product(
         # psd = psd[psd.frequencies <= f_upper]
         # psd = restrict_f_range(psd, f_range=[f_lower, None], fill_val=1.0)
 
-        number_to_append = int((f_lower.value - 0.0) / df_float)  # Symbolic -0.0 to make it clear what happens
+        number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0 to make it clear what happens
+        
         
         f_series_to_pad = FrequencySeries(
             np.zeros(number_to_append),
@@ -596,6 +659,9 @@ def inner_product(
 
         # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
         f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
+        # f_series_to_pad.unit = psd.unit   # May be Hz
+        # f_series_to_pad.to(psd.unit)   # May be Hz
+        f_series_to_pad *= psd.unit   # Conver unit, may be Hz
         psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
 
         return optimized_inner_product(signal1, signal2, psd)
@@ -637,7 +703,7 @@ def inner_product_computation(
     """
 
     # First step: assure same distance of samples
-    assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df),\
+    assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df, rtol=0.01),\
            'Signals must have equal frequency spacing.'
     
     # Second step: assure frequencies are sufficiently equal.
@@ -671,7 +737,7 @@ def optimized_inner_product(
 ) -> float:
 
     # First step: assure same distance of samples
-    assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df),\
+    assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df, rtol=0.01),\
            'Signals must have equal frequency spacing.'
 
     # Second step: assure frequencies are sufficiently equal.
@@ -698,10 +764,10 @@ def optimized_inner_product(
 
     negative_freq_terms = FrequencySeries(
         np.zeros(dft_series.size - 1),
-        unit=u.dimensionless_unscaled,
+        unit=dft_series.unit,
         f0=-dft_series.frequencies[-1],
         df=dft_series.df,
-        dtype=complex
+        dtype=dft_series.dtype
     )
 
     full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
@@ -712,7 +778,7 @@ def optimized_inner_product(
     dt = 1.0 / (full_dft_series.size * signal1.df)
 
     match_series = TimeSeries(
-        np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
+        np.fft.ifft(full_dft_series.value / dt.value),  # Discrete -> continuous
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
         dt=dt
@@ -726,7 +792,9 @@ def optimized_inner_product(
     number_to_roll = match_series.size // 2  # Value chosen, no deep meaning
     match_series = np.roll(match_series, shift=number_to_roll)
 
-    match_series.times -= match_series.times[number_to_roll]  # Use .shift()?
+    match_series.times -= match_series.times[number_to_roll]  # Use .shift()? Shouldn't it be sufficient to substract from t0?
+
+    # TODO: check if t0=0 and then shifting is correct...
 
     # Compute peak time
     peak_index = np.argmax(match_series)
@@ -735,7 +803,7 @@ def optimized_inner_product(
     peak_time = match_series.times[peak_index]
     
     # return match_result
-    return match_series, match_result, peak_time
+    return match_series, match_result, peak_time  # match_result.value?
 
 
 def norm(
@@ -764,11 +832,14 @@ def norm(
 
     # return np.sqrt(inner_product(signal, signal, psd, **kw_args))
     if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
-        return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
+        # return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
+        out = inner_product(signal, signal, psd, **kw_args)
+        return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
     else:
         return np.sqrt(inner_product(signal, signal, psd, **kw_args))
     
     # TODO: handle case where much stuff is returned by inner_product better
+    # -> rather do this when needed in function -> uh, no, needed here as well since no sqrt for time!
 
 
 def overlap(
@@ -806,15 +877,17 @@ def overlap(
     # out = inner_product(signal1, signal2, psd, optimize_time_and_phase=optimize_time_and_phase, **kwargs)
     out = inner_product(signal1, signal2, psd, **kw_args)
     
-    normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
+    # normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
     # No need to give optimization to norm function, right? Because
-    # Simpson rule is more accurate
+    # Simpson rule is more accurate -> but results get slightly inconsistent in some cases, thus change
 
     # if optimize_time_and_phase:
     # if 'optimize_time_and_phase' in kw_args:# and optimize_time_and_phase:
     if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
+        normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
         return out[0] / normalization, out[1] / normalization, out[2]
     else:
+        normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
         return out / normalization
     
     # TODO: handle case where much stuff is returned by inner_product better

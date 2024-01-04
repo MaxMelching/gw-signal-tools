@@ -1,13 +1,16 @@
 import numpy as np
 from scipy.integrate import simpson
 
-from gwpy.timeseries.timeseries import TimeSeries
-from gwpy.frequencyseries.frequencyseries import FrequencySeries
+from gwpy.timeseries import TimeSeries
+from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+from typing import Optional
 
 
-__doc__ = ('Implementation of noise-weighted inner product that is '
-           'common in GW data analysis and helpers for computation.')
+__doc__ = """
+Implementation of noise-weighted inner product that is\n
+common in GW data analysis and helpers for computation.
+"""
 
 
 
@@ -22,29 +25,31 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
 
     Parameters
     ----------
-    signal : TimeSeries
+    signal : gwpy.timeseries.TimeSeries
         Signal to be transformed.
 
     Returns
     -------
-    out : FrequencySeries
+    out : gwpy.frequencyseries.FrequencySeries
         Transformed signal.
 
     See also
     --------
     `numpy.fft.rfft`
-        Fourier transformation used here.
+        Fourier transformation routine used here.
     """
 
     # Get discrete Fourier coefficients and corresponding frequencies
     out = FrequencySeries(
         np.fft.rfft(signal),
         frequencies=np.fft.rfftfreq(signal.size, d=signal.dx),
-        unit=u.dimensionless_unscaled
+        # unit=u.dimensionless_unscaled
+        unit=signal.unit
     )
 
     # Convert discrete Fourier components to continuous
     out *= signal.dx / u.s
+    # out *= signal.dx #/ u.s
     
     # Account for non-zero starting time
     out *= np.exp(-1.j * 2 * np.pi * out.frequencies * signal.t0)
@@ -54,7 +59,7 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
 
 def restrict_f_range(
     signal: FrequencySeries,
-    f_range: list[float] | list[u.quantity.Quantity],
+    f_range: list[float] | list[u.Quantity],
     fill_val: float = 0.0,
     pad_to_f_zero: bool = False,
     cut_upper: bool = False,
@@ -65,9 +70,9 @@ def restrict_f_range(
 
     Parameters
     ----------
-    signal : FrequencySeries
+    signal : gwpy.frequencyseries.FrequencySeries
         Signal to be restricted.
-    f_range : list[float] | list[u.quantity.Quantity]
+    f_range : list[float] | list[astropy.units.Quantity]
         Two-tuple specifying lower and upper frequency bounds that will
         be used as cutoffs.
     fill_val : float, optional, default = 0.0
@@ -85,7 +90,7 @@ def restrict_f_range(
 
     Returns
     -------
-    FrequencySeries
+    gwpy.frequencyseries.FrequencySeries
         Copy of signal where values outside of `f_range` have been
         changed. If the interval defined by `f_range` is larger than
         the one spanned by signal.frequencies, no entry will be changed.
@@ -101,54 +106,58 @@ def restrict_f_range(
 
     f_lower = f_range[0] if f_range[0] is not None else 0.0
     f_upper = f_range[1] if f_range[1] is not None else signal.frequencies[-1]
+    # TODO: better handling if f_range[1] > signal.frequencies[-1], should give error
 
     f_lower = u.Quantity(f_lower, unit=u.Hz)
     f_upper = u.Quantity(f_upper, unit=u.Hz)
 
 
-    # if pad_to_f_zero:# and (signal.f0 > signal.df):
-    #     # Padding to zero frequency component shall be done and is needed
-    #     number_to_append = int(signal.f0.value / signal.df.value)
-
-    #     signal = FrequencySeries(
-    #         np.zeros(number_to_append),
-    #         unit=signal.unit,
-    #         f0=0.0,
-    #         df=signal.df,
-    #         dtype=signal.dtype
-    #     ).append(signal)
-    # else:
-    #     # Otherwise filling is inplace
-    #     signal = signal.copy()
-    
-    # TODO: check if argument inplace is needed, does not work the way
-    # it was intended originally -> implementation does not seem to make difference
-
     if pad_to_f_zero:# and (signal.f0 > signal.df):
         # Padding to zero frequency component shall be done and is needed
         number_to_append = int(signal.f0.value / signal.df.value)
 
-        signal = signal.prepend(
-            FrequencySeries(
-                np.zeros(number_to_append),
-                unit=signal.unit,
-                f0=0.0,
-                df=signal.df,
-                dtype=signal.dtype
-            ),
-            inplace=inplace
-        )
-    elif not inplace:
+        signal = FrequencySeries(
+            np.zeros(number_to_append),
+            unit=signal.unit,  # TODO: check if this is rigorous
+            f0=0.0,
+            df=signal.df.to(u.Hz),
+            dtype=signal.dtype
+        ).append(signal)
+    else:
         # Otherwise filling is inplace
         signal = signal.copy()
+    
+    # TODO: check if argument inplace is needed, does not work the way
+    # it was intended originally -> implementation does not seem to make difference
+
+    # if pad_to_f_zero:# and (signal.f0 > signal.df):
+    #     # Padding to zero frequency component shall be done and is needed
+    #     number_to_append = int(signal.f0.value / signal.df.value)
+
+    #     signal = signal.prepend(
+    #         FrequencySeries(
+    #             np.zeros(number_to_append),
+    #             unit=signal.unit,
+    #             f0=0.0,
+    #             df=signal.df,
+    #             dtype=signal.dtype
+    #         ),
+    #         inplace=inplace
+    #     )
+    # elif not inplace:
+    #     # Otherwise filling is inplace
+    #     signal = signal.copy()
 
 
     fill_val = u.Quantity(fill_val, unit=signal.unit)
 
     # lower_filter = signal.frequencies < f_lower
     # lower_number_to_discard = lower_filter[lower_filter == True].size
-    lower_number_to_discard = int((f_lower.value - signal.f0.value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
+    # signal[:lower_number_to_discard].fill(fill_val)
+    # V2
+    lower_number_to_discard = int(np.ceil((f_lower.value - signal.f0.value) / signal.df.value))  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
     signal[:lower_number_to_discard].fill(fill_val)
+    # Another version
     # signal[:lower_number_to_discard] = np.full(lower_number_to_discard, fill_val)  # Still inplace
     # signal = np.append(np.full(lower_number_to_discard, fill_val), (signal[lower_number_to_discard:]))  # Does not modify frequencies, problem
 
@@ -170,15 +179,20 @@ def restrict_f_range(
         # TODO: replace with upper_filter = signal.frequencies <= and signal[upper_number_to_discard:].dill(fill_val)? -> works
         # upper_filter = signal.frequencies <= f_upper
         # upper_number_to_discard = upper_filter[upper_filter == True].size
-        upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)
-        signal[upper_number_to_discard:].fill(fill_val)
+        # signal[upper_number_to_discard:].fill(fill_val)
+        # V2
+        upper_number_to_discard = int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
+        signal[signal.size - upper_number_to_discard:].fill(fill_val)
+
+        # print((f_lower.value - signal.f0.value) / signal.df.value, lower_number_to_discard,\
+        #       signal.size - (signal.frequencies[-1].value - f_upper.value) / signal.df.value, signal.size - upper_number_to_discard)
 
     return signal
 
 
 def fd_to_td_waveform(
     signal: FrequencySeries,
-    f_range: list[float] | list[u.quantity.Quantity] = None
+    f_range: Optional[list[float] | list[u.Quantity]] = None
 ) -> TimeSeries:
     """
     Transform given `signal` to time domain. Note that the input is
@@ -187,15 +201,15 @@ def fd_to_td_waveform(
 
     Parameters
     ----------
-    signal : FrequencySeries
+    signal : gwpy.frequencyseries.FrequencySeries
         Signal to be transformed
-    f_range : list[float] | list[u.quantity.Quantity], optional, default = None
+    f_range : list[float] | list[astropy.units.Quantity], optional, default = None
         Range of frequency components to take into account. Is used as
         input for `restrict_f_range` function.
 
     Returns
     -------
-    out : TimeSeries
+    out : gwpy.timeseries.TimeSeries
         Transformed signal.
 
     Raises
@@ -206,7 +220,7 @@ def fd_to_td_waveform(
     See also
     --------
     `numpy.fft.irfft`
-        Inverse Fourier transformation used here.
+        Inverse Fourier transformation routine used here.
     """
 
     if f_range is not None:
@@ -222,9 +236,12 @@ def fd_to_td_waveform(
     # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
     out = TimeSeries(
         np.fft.irfft(signal / dt.value),
-        unit=u.dimensionless_unscaled,
+        # unit=u.dimensionless_unscaled,
+        unit=signal.unit,  # TODO: check if this is rigorous
+        # np.fft.irfft(signal / dt),
+        # unit=signal.unit / dt.unit,
         t0=0.0 * u.s,
-        dt=dt
+        dt=dt.to(u.s)  # Ensure unit is displayed in seconds, not 1/Hz
     )
     # Note: dividing by dt is necessary because irfft uses discrete
     # Fourier coefficients, but the input is expected to be continuous
@@ -235,10 +252,13 @@ def fd_to_td_waveform(
     # integral (df comes in)
 
     # Handle wrap-around of signal
+    # TODO: put this in separate function cyclic_shift?
     number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
     out = np.roll(out, shift=number_to_roll)
+    # print(out.times[number_to_roll], out.duration * 7 / 8)
 
-    out.times -= out.times[number_to_roll]  # Use .shift(7 / 8 * out.duration) or so?
+    # out.times -= out.times[number_to_roll]  # Equivalent to following
+    out.shift(-7 / 8 * out.duration)  # Note: 7 / 8 * out.duration = out.times[number_to_roll]
 
     # TODO: make optional argument taper? TimeSeries has built-in function
     # .taper() to handle this
@@ -248,7 +268,7 @@ def fd_to_td_waveform(
 
 def pad_to_get_target_df(
     signal: TimeSeries,
-    df: float | u.quantity.Quantity
+    df: float | u.Quantity
 ) -> TimeSeries:
     """
     Pads `signal` with zeros after its end until a fft of it has desired
@@ -256,18 +276,18 @@ def pad_to_get_target_df(
 
     Parameters
     ----------
-    signal : TimeSeries
+    signal : gwpy.timeseries.TimeSeries
         Signal that will be padded.
-    df : float | u.quantity.Quantity
+    df : float | astropy.units.Quantity
         Desired resolution in frequency domain.
 
     Returns
     -------
-    padded_signal : TimeSeries
+    padded_signal : gwpy.timeseries.TimeSeries
         Padded signal, still in time domain.
     """
 
-    df = u.quantity.Quantity(df, unit=u.Hz)
+    df = u.Quantity(df, unit=u.Hz)
 
     # Compute what would be current df
     df_current = 1.0 / (signal.size * signal.dt)
@@ -295,7 +315,10 @@ def pad_to_get_target_df(
 
 # ---------- PSD Handling ----------
 
-def psd_from_file(fname: str, is_asd: bool = False) -> tuple[np.array]:
+def psd_from_file(
+    fname: str,
+    is_asd: bool = False
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Read Power spectral density (PSD) values from a file into numpy
     arrays. The file must be readable by `numpy.loadtxt`.
@@ -311,7 +334,7 @@ def psd_from_file(fname: str, is_asd: bool = False) -> tuple[np.array]:
 
     Returns
     -------
-    freqs, psd : tuple[np.array]
+    freqs, psd : tuple[numpy.array]
         Frequencies and PSD values as numpy arrays.
 
     See also
@@ -352,7 +375,7 @@ def psd_from_file_to_FreqSeries(
 
     Returns
     -------
-    FrequencySeries
+    gwpy.frequencyseries.FrequencySeries
         PSD as a FrequencySeries.
     """
 
@@ -398,7 +421,7 @@ def get_FreqSeries_from_dict(
 
     Returns
     -------
-    FrequencySeries
+    gwpy.frequencyseries.FrequencySeries
         Data from input dict in a GWpy FrequencySeries.
     """
 
@@ -418,26 +441,30 @@ def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
-    f_range: list[float] | list[u.quantity.Quantity] = None,
-    df: float | u.quantity.Quantity = None,
+    f_range: Optional[list[float] | list[u.Quantity]] = None,
+    df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False  # Call it 'compute_match'?
-) -> float:
+) -> float | tuple[TimeSeries, float, float]:
     """
     Calculates the noise-weighted inner product of two signals.
 
     Parameters
     ----------
-    signal1 : TimeSeries | FrequencySeries
+    signal1 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
         First signal
-    signal2 : TimeSeries | FrequencySeries
+    signal2 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
         Second signal
-    psd : FrequencySeries
+    psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
-    f_range : list[float] | list[u.quantity.Quantity], optional, default = None
-        Frequency range
-        Mention that f_range is potentially cropped, depending on
-        frequency range of input
-    df : float | u.quantity.Quantity, optional, default = None
+    f_range : list[float] | list[astropy.units.Quantity], optional, default = None
+        Frequency range to compute inner product over. Is potentially
+        cropped if bounds are greater than frequency range of one of the
+        input signals.
+
+        The whole argument can be None, otherwise it must have length 2.
+        However, one of the bounds (or both) can be None, which
+        indicates that no boundary shall be set.
+    df : float | astropy.units.Quantity, optional, default = None
         Distance df between samples in frequency domain to use in
         integration. Must not be too large, otherwise results of inner
         product may be erroneous. If chosen very small (e.g. in range
@@ -477,14 +504,15 @@ def inner_product(
     if df is None:
         df = 0.0625 * u.Hz  # Default value of output of FDWaveform
     else:
-        df = u.Quantity(df, unit=u.Hz)  # Default value of output of FDWaveform
+        # Set default value of output of lal function FDWaveform
+        df = u.Quantity(df, unit=u.Hz)
 
 
     # If necessary, do fft. We apply padding to ensure sufficient
     # resolution in frequency domain.
     if type(signal1) == TimeSeries:
         signal1 = pad_to_get_target_df(signal1, df)
-        # Do if part from padding function here? Would avoid function call
+        # TODO: do if part from padding function here? Would avoid function call
         signal1 = td_to_fd_waveform(signal1)
     elif type(signal1) != FrequencySeries:
         raise TypeError('`signal1` has to be a GWpy TimeSeries or FrequencySeries')
@@ -513,12 +541,12 @@ def inner_product(
         
         # Check if both lower and upper are given or one of them is None
         if f_range[0] is not None:
-            f_lower_new = u.Quantity(f_range[0], unit='Hz')
+            f_lower_new = u.Quantity(f_range[0], unit=u.Hz)
         else:
             f_lower_new = f_lower
         
         if f_range[1] is not None:
-            f_upper_new = u.Quantity(f_range[1], unit='Hz')
+            f_upper_new = u.Quantity(f_range[1], unit=u.Hz)
 
             # TODO: implement check of f_max with Nyquist of signals
         else:
@@ -648,10 +676,10 @@ def inner_product(
         
         f_series_to_pad = FrequencySeries(
             np.zeros(number_to_append),
-            unit=u.dimensionless_unscaled,
+            unit=u.dimensionless_unscaled,  # TODO: use signal1.unit?
             f0=0.0,
             df=df,
-            dtype=complex  # Use signal1.dtype?
+            dtype=complex  # TODO: use signal1.dtype?
         )
 
         signal1 = f_series_to_pad.append(signal1, inplace=False)
@@ -663,6 +691,12 @@ def inner_product(
         # f_series_to_pad.to(psd.unit)   # May be Hz
         f_series_to_pad *= psd.unit   # Conver unit, may be Hz
         psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
+
+        # TODO: implementation using built-in function -> done; but for some reason this seems to be less efficient...
+        # signal1 = signal1.pad(number_to_append, mode='constant', constant_values=0.0)
+        # signal2 = signal2.pad(number_to_append, mode='constant', constant_values=0.0)
+        # psd = psd.pad(number_to_append, mode='constant', constant_values=1.0)
+
 
         return optimized_inner_product(signal1, signal2, psd)
         # return signal1, signal2, psd
@@ -689,11 +723,11 @@ def inner_product_computation(
 
     Parameters
     ----------
-    signal1 : FrequencySeries
-        First signal.
-    signal2 : FrequencySeries
-        Second signal.
-    psd : FrequencySeries
+    signal1 : gwpy.frequencyseries.FrequencySeries
+        First signal to put into inner product.
+    signal2 : gwpy.frequencyseries.FrequencySeries
+        Second signal to put into inner product.
+    psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
 
     Returns
@@ -710,8 +744,8 @@ def inner_product_computation(
     # Maximum deviation allowed between the is given df, which
     # determines accuracy the signals have been sampled with.
     custom_error_msg = (
-        'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is very small, consider '
+        'Frequency samples of input signals are not equal. This might be\n'
+        'due to `df` being too large. If `df` is very small, consider\n'
         'choosing a (negative) power of two as these seem to work best.'
     )
     # Is perhaps because interpolate uses fft, which works best with powers of two
@@ -734,18 +768,46 @@ def optimized_inner_product(
     signal2: FrequencySeries,
     psd: FrequencySeries,
     # use_irfft: bool = False  # Results for False are usually a bit better
-) -> float:
+) -> tuple[TimeSeries, float, float]:
+    """
+    Lower level function for inner product calculation. Assumes that
+    signal conditioning has been done so that they contain values at the
+    same frequencies and then carries out the actual computation.
+
+    In contrast to `inner_product_computation`, this function optimizes
+    the inner product over time and phase shifts.
+
+    Parameters
+    ----------
+    signal1 : gwpy.frequencyseries.FrequencySeries
+        First signal to put into inner product.
+    signal2 : gwpy.frequencyseries.FrequencySeries
+        Second signal to put into inner product.
+    psd : gwpy.frequencyseries.FrequencySeries
+        Power spectral density to use in inner product.
+
+    Returns
+    -------
+    float
+        Optimized inner product value with `signal1`, `signal2` inserted.
+    """
 
     # First step: assure same distance of samples
     assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df, rtol=0.01),\
            'Signals must have equal frequency spacing.'
+    
+    # Second step: make sure all signals start at f=0
+    assert (np.isclose(signal1.f0, 0.0, rtol=0.01)
+            and np.isclose(signal2.f0, 0.0, rtol=0.01)
+            and np.isclose(psd.f0, 0.0, rtol=0.01)),\
+            'All signals must start at f=0.'
 
-    # Second step: assure frequencies are sufficiently equal.
+    # Third step: assure frequencies are sufficiently equal.
     # Maximum deviation allowed between the is given df, which
     # determines accuracy the signals have been sampled with.
     custom_error_msg = (
-        'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is very small, consider '
+        'Frequency samples of input signals are not equal. This might be\n'
+        'due to `df` being too large. If `df` is very small, consider\n'
         'choosing a (negative) power of two as these seem to work best.'
     )
     # Is perhaps because interpolate uses fft, which works best with powers of two
@@ -770,21 +832,21 @@ def optimized_inner_product(
         dtype=dft_series.dtype
     )
 
-    full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
+    # full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
     # Get correct ordering for numpy ifft (f=0 component first, then positive
     # terms, then negative terms)
+
+    full_dft_series = np.append(dft_series.value, negative_freq_terms.value)
 
 
     dt = 1.0 / (full_dft_series.size * signal1.df)
 
-    match_series = TimeSeries(
-        np.fft.ifft(full_dft_series.value / dt.value),  # Discrete -> continuous
+    match_series = 4.0 * TimeSeries(
+        np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
-        dt=dt
+        dt=dt.to(u.s)
     ).abs()
-
-    match_series *= 4.0
 
     match_result = match_series.max()
 
@@ -810,16 +872,16 @@ def norm(
     signal: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
     **kw_args
-) -> float:
+) -> float | tuple[TimeSeries, float, float]:
     """
     Calculates the norm (i.e. SNR) of a given `signal` as measured by
     the noise-weighted inner product implemented in `inner_product`.
 
     Parameters
     ----------
-    signal : TimeSeries | FrequencySeries
+    signal : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
         Signal to compute norm for.
-    psd : FrequencySeries
+    psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
     **kw_args
         Additional arguments, will be passed to `inner_product` function.
@@ -831,15 +893,23 @@ def norm(
     """
 
     # return np.sqrt(inner_product(signal, signal, psd, **kw_args))
-    if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
-        # return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
-        out = inner_product(signal, signal, psd, **kw_args)
-        return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
-    else:
-        return np.sqrt(inner_product(signal, signal, psd, **kw_args))
+    # if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
+    #     # return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
+    #     out = inner_product(signal, signal, psd, **kw_args)
+    #     return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
+    # else:
+    #     return np.sqrt(inner_product(signal, signal, psd, **kw_args))
     
     # TODO: handle case where much stuff is returned by inner_product better
     # -> rather do this when needed in function -> uh, no, needed here as well since no sqrt for time!
+    # -> use isinstance to make stuff more explicit?
+
+    out = inner_product(signal, signal, psd, **kw_args)
+
+    if isinstance(out, float):
+        return np.sqrt(out)
+    else:
+        return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
 
 
 def overlap(
@@ -848,7 +918,7 @@ def overlap(
     psd: FrequencySeries,
     # optimize_time_and_phase: bool = True,
     **kw_args
-) -> float:
+) -> float | tuple[TimeSeries, float, float]:
     """
     Calculates the overlap of two given signals as measured by the
     noise-weighted inner product of the corresponding signals normalized
@@ -856,11 +926,11 @@ def overlap(
 
     Parameters
     ----------
-    signal1 : TimeSeries | FrequencySeries
+    signal1 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
         First signal.
-    signal2 : TimeSeries | FrequencySeries
+    signal2 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
         Second signal.
-    psd : FrequencySeries
+    psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
     **kw_args
         Additional arguments, will be passed to `inner_product` function.
@@ -883,11 +953,36 @@ def overlap(
 
     # if optimize_time_and_phase:
     # if 'optimize_time_and_phase' in kw_args:# and optimize_time_and_phase:
-    if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
-        normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
-        return out[0] / normalization, out[1] / normalization, out[2]
-    else:
-        normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
-        return out / normalization
+    # if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
+    #     normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
+    #     return out[0] / normalization, out[1] / normalization, out[2]
+    # else:
+    #     normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
+    #     return out / normalization
     
     # TODO: handle case where much stuff is returned by inner_product better
+    
+    # if isinstance(out, float):
+    #     normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
+    #     return out / normalization
+    # else:
+    #     normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
+    #     return out[0] / normalization, out[1] / normalization, out[2]
+    
+    normalization = 1.0
+
+    if isinstance(norm1 := norm(signal1, psd, **kw_args), float):
+        normalization *= norm1
+    else:
+        normalization *= norm1[1]
+
+    if isinstance(norm2 := norm(signal2, psd, **kw_args), float):
+        normalization *= norm2
+    else:
+        normalization *= norm2[1]
+
+
+    if isinstance(out, float):
+        return out / normalization
+    else:
+        return out[0] / normalization, out[1] / normalization, out[2]

@@ -1,8 +1,0 @@
-README.md
-setup.py
-gw_signal_tools.egg-info/PKG-INFO
-gw_signal_tools.egg-info/SOURCES.txt
-gw_signal_tools.egg-info/dependency_links.txt
-gw_signal_tools.egg-info/not-zip-safe
-gw_signal_tools.egg-info/requires.txt
-gw_signal_tools.egg-info/top_level.txt

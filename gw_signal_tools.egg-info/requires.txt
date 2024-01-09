@@ -1,7 +1,0 @@
-lalsuite[lalinference]
-numpy
-scipy
-matplotlib
-
-[jupyter]
-jupyter

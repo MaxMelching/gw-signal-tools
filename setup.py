@@ -28,6 +28,10 @@ setuptools.setup(
     extras_require={
         'jupyter': 'jupyter',
         'pyseobnr': 'pyseobnr',
-        # 'test': 'pytest'
-    }  # Hope this is how it works -> seems to be given as option via pip install -test -> nope, vai pip install -e .[option]
+        'dev': [
+            'pycbc',
+            'mypy',
+            # 'pytest'
+        ]
+    }  # Install each of these options via pip install -e .[option]
 )

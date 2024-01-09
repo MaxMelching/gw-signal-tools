@@ -40,19 +40,41 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     """
 
     # Get discrete Fourier coefficients and corresponding frequencies
-    out = FrequencySeries(
-        np.fft.rfft(signal),
-        frequencies=np.fft.rfftfreq(signal.size, d=signal.dx),
-        # unit=u.dimensionless_unscaled
-        unit=signal.unit
-    )
+    # out = FrequencySeries(
+    #     np.fft.rfft(signal),
+    #     frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value),
+    #     # unit=u.dimensionless_unscaled
+    #     unit=signal.unit
+    # )
+
+    # out = signal.fft()  # Might be nicer because it also copies channel etc
+    out = signal.fft() * signal.size  # Might be nicer because it also copies channel etc
+    # out = signal.fft() * np.sqrt(signal.size)  # Might be nicer because it also copies channel etc
+
+    out[1:] /= 2.0  # Account for GWpy factor
 
     # Convert discrete Fourier components to continuous
-    out *= signal.dx / u.s
+    out *= signal.dx.value
     # out *= signal.dx #/ u.s
     
     # Account for non-zero starting time
     out *= np.exp(-1.j * 2 * np.pi * out.frequencies * signal.t0)
+
+    # TODO: if input type is complex, do non-real fft
+    # -> so maybe not using GWpy fft is better anyway. Template:
+    # if isinstance(signal.dtype, np.dtypes.Complex128DType):
+    # # Maybe use np.iscomplexobj?
+    #     dft = ...
+    #     # Don't forget fftshift!!! And adjust f0
+    # # else:
+    # elif isinstance(signal.dtype, np.dtypes.Float64DType):
+    #     dft = ...
+    # else:
+    # print('Error)
+    # 
+    # Also set frequencies
+    
+    # out = FrequencySeries(dft)
     
     return out
 
@@ -251,8 +273,24 @@ def fd_to_td_waveform(
     # discrete Fourier coefficients by approximating the corresponding
     # integral (df comes in)
 
+    # out = (signal / dt.value).ifft()
+    # out = signal.ifft()
+    # out = (signal * 2 * (signal.size - 1) / dt.value).ifft()
+    # out = (signal * np.sqrt(2 * (signal.size - 1)) / dt.value).ifft()
+    out = (signal / (2 * (signal.size - 1)) / dt.value).ifft()
+
+
+    # TODO: add possibility that ifft is done, based on value of f0
+
+    out[1:] *= 2.0  # Account for GWpy factor
+    # out.epoch -= 2.0 * u.s  # Account for epoch bug
+    out.epoch = 0.0 * u.s  # Account for epoch bug
+
     # Handle wrap-around of signal
     # TODO: put this in separate function cyclic_shift?
+    # TODO: once epoch is given for FreqSeries, no wrap-around should be
+    # needed, right? Thus maybe use if-condition here and only roll if t0=0.0?
+    # -> ah no, wrap-around would still occur, has to be kept in (maybe without shift then)
     number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
     out = np.roll(out, shift=number_to_roll)
     # print(out.times[number_to_roll], out.duration * 7 / 8)
@@ -262,6 +300,9 @@ def fd_to_td_waveform(
 
     # TODO: make optional argument taper? TimeSeries has built-in function
     # .taper() to handle this
+    # out = out.taper(duration=out.duration.value / 6.0)  # Default is side='leftright'
+    # out = out.taper(duration=out.duration.value / 2.0, side='right')
+    # out = out.taper(duration=out.duration.value / 5.0, side='right')
 
     return out
 
@@ -355,7 +396,7 @@ def psd_from_file(
 def psd_from_file_to_FreqSeries(
     fname: str,
     is_asd: bool = False,
-    **kw_args
+    **kwargs
 ) -> FrequencySeries:
     """
     Read Power spectral density (PSD) values from file into a GWpy
@@ -369,7 +410,7 @@ def psd_from_file_to_FreqSeries(
     is_asd : bool, optional, default = False
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
-    **kw_args
+    **kwargs
         Other keyword arguments that will be passed to FrequencySeries
         constructor. Can be used to assign name to series and more.
 
@@ -391,7 +432,7 @@ def psd_from_file_to_FreqSeries(
         psd,
         frequencies=freqs,
         unit=1 / u.Hz,
-        **kw_args
+        **kwargs
     )
 
 
@@ -399,7 +440,7 @@ def get_FreqSeries_from_dict(
     psd: dict,
     psd_vals_key: str,
     is_asd: bool = False,
-    **kw_args
+    **kwargs
 ) -> FrequencySeries:
     """
     Converts dictionary with Power spectral density (PSD) values into a
@@ -415,7 +456,7 @@ def get_FreqSeries_from_dict(
     is_asd : bool, optional, default = False
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
-    **kw_args
+    **kwargs
         Other keyword arguments that will be passed to FrequencySeries
         constructor. Can be used to assign name to series and more.
 
@@ -428,7 +469,7 @@ def get_FreqSeries_from_dict(
     return FrequencySeries(
         psd[psd_vals_key]**2 if is_asd else psd[psd_vals_key],
         frequencies=psd['frequencies'],
-        **kw_args
+        **kwargs
     )
 
 # TODO (potentially): move to psd folder, e.g. given into __init__ file?
@@ -824,19 +865,23 @@ def optimized_inner_product(
     dft_series = signal1 * signal2.conjugate() / psd
     
 
-    negative_freq_terms = FrequencySeries(
-        np.zeros(dft_series.size - 1),
-        unit=dft_series.unit,
-        f0=-dft_series.frequencies[-1],
-        df=dft_series.df,
-        dtype=dft_series.dtype
-    )
+    # negative_freq_terms = FrequencySeries(
+    #     np.zeros(dft_series.size - 1),
+    #     unit=dft_series.unit,
+    #     f0=-dft_series.frequencies[-1],
+    #     df=dft_series.df,
+    #     dtype=dft_series.dtype
+    # )
 
     # full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
     # Get correct ordering for numpy ifft (f=0 component first, then positive
     # terms, then negative terms)
 
-    full_dft_series = np.append(dft_series.value, negative_freq_terms.value)
+    # full_dft_series = np.append(dft_series.value, negative_freq_terms.value)
+
+    full_dft_series = np.append(dft_series.value, np.zeros(dft_series.size - 1))
+    # Should be sufficient, right? And hopefully more efficient than creating
+    # a whole FrequencySeries -> yep, works
 
 
     dt = 1.0 / (full_dft_series.size * signal1.df)
@@ -871,7 +916,7 @@ def optimized_inner_product(
 def norm(
     signal: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
-    **kw_args
+    **kwargs
 ) -> float | tuple[TimeSeries, float, float]:
     """
     Calculates the norm (i.e. SNR) of a given `signal` as measured by
@@ -883,7 +928,7 @@ def norm(
         Signal to compute norm for.
     psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
-    **kw_args
+    **kwargs
         Additional arguments, will be passed to `inner_product` function.
 
     Returns
@@ -904,7 +949,7 @@ def norm(
     # -> rather do this when needed in function -> uh, no, needed here as well since no sqrt for time!
     # -> use isinstance to make stuff more explicit?
 
-    out = inner_product(signal, signal, psd, **kw_args)
+    out = inner_product(signal, signal, psd, **kwargs)
 
     if isinstance(out, float):
         return np.sqrt(out)
@@ -917,7 +962,7 @@ def overlap(
     signal2: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
     # optimize_time_and_phase: bool = True,
-    **kw_args
+    **kwargs
 ) -> float | tuple[TimeSeries, float, float]:
     """
     Calculates the overlap of two given signals as measured by the
@@ -932,7 +977,7 @@ def overlap(
         Second signal.
     psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
-    **kw_args
+    **kwargs
         Additional arguments, will be passed to `inner_product` function.
 
     Returns
@@ -945,7 +990,7 @@ def overlap(
     # already have unit norm? Would save some operations sometimes
     
     # out = inner_product(signal1, signal2, psd, optimize_time_and_phase=optimize_time_and_phase, **kwargs)
-    out = inner_product(signal1, signal2, psd, **kw_args)
+    out = inner_product(signal1, signal2, psd, **kwargs)
     
     # normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
     # No need to give optimization to norm function, right? Because
@@ -971,12 +1016,12 @@ def overlap(
     
     normalization = 1.0
 
-    if isinstance(norm1 := norm(signal1, psd, **kw_args), float):
+    if isinstance(norm1 := norm(signal1, psd, **kwargs), float):
         normalization *= norm1
     else:
         normalization *= norm1[1]
 
-    if isinstance(norm2 := norm(signal2, psd, **kw_args), float):
+    if isinstance(norm2 := norm(signal2, psd, **kwargs), float):
         normalization *= norm2
     else:
         normalization *= norm2[1]

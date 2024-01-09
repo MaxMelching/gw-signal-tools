@@ -7,28 +7,35 @@ Repository with files surrounding computations with waveforms from lal.
 ## Installation
 
 Since there is no lal-version for Python 3.12 yet, you have to install
-Python 3.11, e.g. in a virtual or conda environment.
+Python 3.11, e.g. in a virtual environment.
 
-After that, either clone the repo to some destination and then navigate
+After that, clone the repo to some destination and then navigate
 there and run
 
 ```shell
 pip install -e .
 ```
 
-or run
+to install it as a Pythong package. This syntax is convenient because it
+allows to install options via
+
+```shell
+pip install -e .[option]
+```
+
+Valid options for this package are `jupyter`, `pyseobnr`, `dev`.
+
+Another possibility without the extra cloning step is to run
 
 ```shell
 pip install git+https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
 ```
 
-In case you have a SSH key pair, running
+or (recommended if you have a SSH key pair) running
 
 ```shell
 pip install git+ssh://git@gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
 ```
-
-is recommended.
 
 ## Project Status
 

@@ -40,18 +40,20 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     """
 
     # Get discrete Fourier coefficients and corresponding frequencies
-    # out = FrequencySeries(
-    #     np.fft.rfft(signal),
-    #     frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value),
-    #     # unit=u.dimensionless_unscaled
-    #     unit=signal.unit
-    # )
+    out = FrequencySeries(
+        np.fft.rfft(signal),
+        frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value),
+        # unit=u.dimensionless_unscaled
+        unit=signal.unit
+    )
 
     # out = signal.fft()  # Might be nicer because it also copies channel etc
-    out = signal.fft() * signal.size  # Might be nicer because it also copies channel etc
+    # out = signal.fft() * signal.size  # Might be nicer because it also copies channel etc
     # out = signal.fft() * np.sqrt(signal.size)  # Might be nicer because it also copies channel etc
 
-    out[1:] /= 2.0  # Account for GWpy factor
+    # out[1:] /= 2.0  # Account for GWpy factor
+
+    # WHAT?! This built-in method is somehow MUCH slower than own implementation above
 
     # Convert discrete Fourier components to continuous
     out *= signal.dx.value
@@ -575,9 +577,9 @@ def inner_product(
     if f_range is not None:
         if len(f_range) != 2:
             raise ValueError(
-                ('`f_range` must contain lower and upper frequency bounds for'
-                 'integration. One of them or both can be `None`, but both'
-                 'have to be specified if `f_range` is given.')
+                '`f_range` must contain lower and upper frequency bounds for'
+                'integration. One of them or both can be `None`, but both'
+                'have to be specified if `f_range` is given.'
             )
         
         # Check if both lower and upper are given or one of them is None
@@ -600,9 +602,9 @@ def inner_product(
             f_lower = f_lower_new
         else:
             # Leave lower bound at f_lower, no update
-            print((f'Given lower bound of {f_lower_new} is smaller than '
-                   f'values available from given signals. Taking a lower '
-                   f'bound of {f_lower} instead.'))
+            print(f'Given lower bound of {f_lower_new} is smaller than '
+                  'values available from given signals. Taking a lower '
+                  f'bound of {f_lower} instead.')
 
         # New upper bound must be smaller than current upper bound,
         # otherwise no values for the range are available in signals
@@ -610,107 +612,25 @@ def inner_product(
             f_upper = f_upper_new
         else:
             # Leave upper bound at f_upper, no update
-            print((f'Given upper bound of {f_upper_new} is larger than '
-                   f'values available from given signals. Taking an upper '
-                   f'bound of {f_upper} instead.'))
+            print(f'Given upper bound of {f_upper_new} is larger than '
+                  'values available from given signals. Taking an upper '
+                  f'bound of {f_upper} instead.')
 
 
     # Get signals to same frequencies, i.e. make df equal (if necessary)
     # and then restrict range
     df_val = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
-    # TODO: check if interpolate does something if df is the one of signal
-    # -> if no, replace lines with something like signal = signal.interpolate() if signal.df != df else signal
-    # -> is NOT the case, so manual checking is important
-    # signal1 = signal1.interpolate(df_val) if signal1.df != df else signal1
-    # signal2 = signal2.interpolate(df_val) if signal2.df != df else signal2
-    # psd = psd.interpolate(df_val) if psd.df != df else psd
+    
     signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, rtol=0.01) else signal1
     signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, rtol=0.01) else signal2
     psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, rtol=0.01) else psd
 
-    # print(np.isclose(signal1.df, df, rtol=0.01), np.isclose(signal2.df, df, rtol=0.01), np.isclose(psd.df, df, rtol=0.01))
-    
-
-    # signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, rtol=0.01) else signal1.copy()
-    # signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, rtol=0.01) else signal2.copy()
-    # psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, rtol=0.01) else psd.copy()
-    # Build in argument inplace where no copy is made?
-
-    # interpolate already copies, no need to copy again
-    # signal1 = restrict_f_range(signal1, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
-    # # signal1 = signal1[signal1.frequencies <= f_upper]
-
-    # signal2 = restrict_f_range(signal2, [f_lower, f_upper], fill_val=0.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
-    # # signal2 = signal2[signal2.frequencies <= f_upper]
-
-    # psd = restrict_f_range(psd, [f_lower, f_upper], fill_val=1.0, pad_to_f_zero=True, cut_upper=True, inplace=False)
-    # # psd = psd[psd.frequencies <= f_upper]
-
-    # # print(f_upper)
-    # # print(signal1.frequencies)
-    # # print(signal2.frequencies)
-    # # print(psd.frequencies)
-
-    # if optimize_time_and_phase:
-    #     return optimized_inner_product(signal1, signal2, psd)
-    # else:
-    #     return inner_product_computation(signal1, signal2, psd)
-    
-    # Wow, this is actually less efficient... Roughly 1ms slower...
-    # We are now at 6.8 ms (with optimized)
-    # or around 7.7 with use of array method in restrict_f_range,
-    # while older one takes 6.6
-    # -> idea: use crop and append/pad in restrict? Actualy, without
-    # restrict might be blueprint... Or just use function one? And have
-    # less functionality in restrict_f_range?
-    # -> might be best to crop first, finding correct frequencies etc is
-    # not too easy as well and also not very efficient, right?
-    # -> yeah and replacing array version is also complicated... And
-    # maybe not even necessary. Because we do same in inner_product
-    # -> another advantage of this: cropping is more efficient for
-    # non-optimized version because less entries in array
-
-
-    # Older versions, new one should be more efficient
-    # signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
-    # signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
-    # psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
-    # Note: frequencies may not be changed by that, but is not needed
-
-    # TODO: use built-in function to do that -> see following
     signal1 = signal1.crop(start=f_lower, end=f_upper)
     signal2 = signal2.crop(start=f_lower, end=f_upper)
     psd = psd.crop(start=f_lower, end=f_upper)
 
-    # signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper])
-    # signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper])
-    # psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0)
-    # Note: we fill with ones for psd to avoid division by zero
-
-    # -> ah this does not work because we have unequal length in that case
-    # So maybe use restrict_f_range for lower limit and cut off upper?
-
-    # -> haha, next problem: they may not start at same frequency...
-    # So initial solution might be best. Or we pad to f=0 here already...
-    # But this would mean more operations in norm... Maybe do handling
-    # separately for optimize and not
-    
-
     if optimize_time_and_phase:
-        # Shit, problem: we cut f_range... But need start at zero for ifft -> maybe do correcction in optimized_inner_product function?
-        # -> should be solved now by use of restrict_f_range beforehand
-        # -> nope, is not; doing that in optimized seems to be good idea and
-        # also there is not other way I think since we absolutely need padding
-        # to f=0 for ifft
-
-        # signal1 = signal1[signal1.frequencies <= f_upper]
-        # signal1 = restrict_f_range(signal1, f_range=[f_lower, None])
-
-        # signal2 = signal2[signal2.frequencies <= f_upper]
-        # signal2 = restrict_f_range(signal2, f_range=[f_lower, None])
-
-        # psd = psd[psd.frequencies <= f_upper]
-        # psd = restrict_f_range(psd, f_range=[f_lower, None], fill_val=1.0)
+        # ifft wants start at f=0, so we may have to pad signals with zeros
 
         number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0 to make it clear what happens
         
@@ -728,8 +648,6 @@ def inner_product(
 
         # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
         f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
-        # f_series_to_pad.unit = psd.unit   # May be Hz
-        # f_series_to_pad.to(psd.unit)   # May be Hz
         f_series_to_pad *= psd.unit   # Conver unit, may be Hz
         psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
 
@@ -738,17 +656,12 @@ def inner_product(
         # signal2 = signal2.pad(number_to_append, mode='constant', constant_values=0.0)
         # psd = psd.pad(number_to_append, mode='constant', constant_values=1.0)
 
-
         return optimized_inner_product(signal1, signal2, psd)
         # return signal1, signal2, psd
         # TODO: decide if we divide by norm here? Or in overlap? Maybe do in
         # separate match function that always sets optimize_time_and_phase=True?
         # -> use overlap function for that?
-    else:
-        # signal1 = signal1[(signal1.frequencies >= f_lower) & (signal1.frequencies <= f_upper)]
-        # signal2 = signal2[(signal2.frequencies >= f_lower) & (signal2.frequencies <= f_upper)]
-        # psd = psd[(psd.frequencies >= f_lower) & (psd.frequencies <= f_upper)]
-        
+    else:        
         return inner_product_computation(signal1, signal2, psd)
 
 
@@ -863,25 +776,9 @@ def optimized_inner_product(
     
     
     dft_series = signal1 * signal2.conjugate() / psd
-    
 
-    # negative_freq_terms = FrequencySeries(
-    #     np.zeros(dft_series.size - 1),
-    #     unit=dft_series.unit,
-    #     f0=-dft_series.frequencies[-1],
-    #     df=dft_series.df,
-    #     dtype=dft_series.dtype
-    # )
-
-    # full_dft_series = np.fft.ifftshift(negative_freq_terms.append(dft_series))
-    # Get correct ordering for numpy ifft (f=0 component first, then positive
-    # terms, then negative terms)
-
-    # full_dft_series = np.append(dft_series.value, negative_freq_terms.value)
-
+    # Append zeros so that ifft can be used
     full_dft_series = np.append(dft_series.value, np.zeros(dft_series.size - 1))
-    # Should be sufficient, right? And hopefully more efficient than creating
-    # a whole FrequencySeries -> yep, works
 
 
     dt = 1.0 / (full_dft_series.size * signal1.df)
@@ -899,7 +796,8 @@ def optimized_inner_product(
     number_to_roll = match_series.size // 2  # Value chosen, no deep meaning
     match_series = np.roll(match_series, shift=number_to_roll)
 
-    match_series.times -= match_series.times[number_to_roll]  # Use .shift()? Shouldn't it be sufficient to substract from t0?
+    # match_series.times -= match_series.times[number_to_roll]  # Use .shift()? Yep, below works
+    match_series.shift(-match_series.times[number_to_roll])  # Shouldn't it be sufficient to substract from t0? -> perhaps only with __array_finalize__ afterwards
 
     # TODO: check if t0=0 and then shifting is correct...
 

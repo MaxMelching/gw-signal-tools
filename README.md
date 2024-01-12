@@ -6,8 +6,8 @@ Repository with files surrounding computations with waveforms from lal.
 
 ## Installation
 
-Since there is no lal-version for Python 3.12 yet, you have to install
-Python 3.11, e.g. in a virtual environment.
+Since there is no lal-version for Python 3.12 yet, Python 3.11 is required
+to install this package.
 
 After that, clone the repo to some destination and then navigate
 there and run
@@ -16,7 +16,7 @@ there and run
 pip install -e .
 ```
 
-to install it as a Pythong package. This syntax is convenient because it
+to install it as a Python package. This syntax is convenient because it
 allows to install options via
 
 ```shell

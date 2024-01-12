@@ -4,7 +4,9 @@ from scipy.integrate import simpson
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+
 from typing import Optional
+import logging
 
 
 __doc__ = """
@@ -42,22 +44,14 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     # Get discrete Fourier coefficients and corresponding frequencies
     out = FrequencySeries(
         np.fft.rfft(signal),
-        frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value),
-        # unit=u.dimensionless_unscaled
-        unit=signal.unit
+        frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value),  # frequencies.unit is set to Hz automatically
+        unit=signal.unit,
+        name='Fourier transform of ' + signal.name if signal.name is not None else None,
+        channel=signal.channel
     )
-
-    # out = signal.fft()  # Might be nicer because it also copies channel etc
-    # out = signal.fft() * signal.size  # Might be nicer because it also copies channel etc
-    # out = signal.fft() * np.sqrt(signal.size)  # Might be nicer because it also copies channel etc
-
-    # out[1:] /= 2.0  # Account for GWpy factor
-
-    # WHAT?! This built-in method is somehow MUCH slower than own implementation above
 
     # Convert discrete Fourier components to continuous
     out *= signal.dx.value
-    # out *= signal.dx #/ u.s
     
     # Account for non-zero starting time
     out *= np.exp(-1.j * 2 * np.pi * out.frequencies * signal.t0)
@@ -76,7 +70,7 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     # 
     # Also set frequencies
     
-    # out = FrequencySeries(dft)
+    # out = FrequencySeries(dft, ...)
     
     return out
 
@@ -87,7 +81,7 @@ def restrict_f_range(
     fill_val: float = 0.0,
     pad_to_f_zero: bool = False,
     cut_upper: bool = False,
-    inplace: bool = False
+    copy: bool = True
 ) -> FrequencySeries:
     """
     Set frequency components of signal outside of f_range to fill_val.
@@ -111,6 +105,13 @@ def restrict_f_range(
 
         Convenient in preparation for computations with multiple signals
         where equal frequency ranges might be needed.
+    copy : bool, optional, default = True
+        Determines if the input signal is copied before performing
+        operations or not.
+
+        Note that copying is done automatically in case `pad_to_f_zero`
+        is `True` because this involves appending, an operation the
+        input array has to be copied in any case.
 
     Returns
     -------
@@ -136,6 +137,26 @@ def restrict_f_range(
     f_upper = u.Quantity(f_upper, unit=u.Hz)
 
 
+    # Sanity checks with frequencies
+    if (f_lower < signal.f0) and not pad_to_f_zero:
+        # Note: first condition fine if padding shall be done, thus second
+        # condition after "and" is important
+        logging.info(
+            f'The `f_lower` provided is smaller than the signals smallest '
+            'frequency. Please be aware that this function does not nothing '
+            'to change that, i.e. no padding to this lower frequency is '
+            'applied (can be changed by setting `pad_to_zero` to `True`).'
+        )
+    
+    if f_upper > signal.frequencies[-1]:
+        logging.info(
+            f'The `f_upper` provided is higher than the signals highest '
+            'frequency. Please be aware that this function does not nothing '
+            'to change that, i.e. no padding to this higher frequency is '
+            'applied (not the scope of this function).'
+        )
+
+
     if pad_to_f_zero:# and (signal.f0 > signal.df):
         # Padding to zero frequency component shall be done and is needed
         number_to_append = int(signal.f0.value / signal.df.value)
@@ -147,69 +168,28 @@ def restrict_f_range(
             df=signal.df.to(u.Hz),
             dtype=signal.dtype
         ).append(signal)
-    else:
-        # Otherwise filling is inplace
+    elif copy:
+        # Note that this is not separate if-condition because copying
+        # happens automatically in append-operation in case above. Thus
+        # making another copy would make no sense.
         signal = signal.copy()
-    
-    # TODO: check if argument inplace is needed, does not work the way
-    # it was intended originally -> implementation does not seem to make difference
 
-    # if pad_to_f_zero:# and (signal.f0 > signal.df):
-    #     # Padding to zero frequency component shall be done and is needed
-    #     number_to_append = int(signal.f0.value / signal.df.value)
-
-    #     signal = signal.prepend(
-    #         FrequencySeries(
-    #             np.zeros(number_to_append),
-    #             unit=signal.unit,
-    #             f0=0.0,
-    #             df=signal.df,
-    #             dtype=signal.dtype
-    #         ),
-    #         inplace=inplace
-    #     )
-    # elif not inplace:
-    #     # Otherwise filling is inplace
-    #     signal = signal.copy()
+    # Otherwise all operations are performed inplace
 
 
+    # Now filling of all values outside of frequency range
+    # and potentially cutting off some parts of the signal
     fill_val = u.Quantity(fill_val, unit=signal.unit)
 
-    # lower_filter = signal.frequencies < f_lower
-    # lower_number_to_discard = lower_filter[lower_filter == True].size
-    # signal[:lower_number_to_discard].fill(fill_val)
-    # V2
-    lower_number_to_discard = int(np.ceil((f_lower.value - signal.f0.value) / signal.df.value))  # Trying to avoid array stuff for efficiency reasons -> helps a bit, but not sure if number 1ßß% correct at all times... Does not look like that
+    lower_number_to_discard = int(np.ceil((f_lower.value - signal.f0.value) / signal.df.value))
     signal[:lower_number_to_discard].fill(fill_val)
-    # Another version
-    # signal[:lower_number_to_discard] = np.full(lower_number_to_discard, fill_val)  # Still inplace
-    # signal = np.append(np.full(lower_number_to_discard, fill_val), (signal[lower_number_to_discard:]))  # Does not modify frequencies, problem
 
-    # upper_filter = signal.frequencies > f_upper
-    if cut_upper:
-        # signal = signal[np.logical_not(upper_filter)]
-
-        # upper_filter = signal.frequencies <= f_upper
-        # signal = signal[upper_filter]
+    if cut_upper and (f_upper < signal.frequencies[-1]):
+        # If second condition is not True, no cropping can be performed
         signal = signal.crop(end=f_upper)
     else:
-        # upper_filter = signal.frequencies > f_upper
-        # upper_number_to_discard = upper_filter[upper_filter == True].size
-        # # upper_number_to_discard = int((f_upper.value - signal.frequencies[-1].value) / signal.df.value)  # Trying to avoid array stuff for efficiency reasons
-        # signal[signal.size - upper_number_to_discard:].fill(fill_val)
-        # # signal[signal.size - upper_number_to_discard:] = np.full(upper_number_to_discard, fill_val)  # Still inplace
-        # # signal = np.append(signal[upper_number_to_discard:], np.full(upper_number_to_discard, fill_val))  # Does not modify frequencies, problem
-
-        # TODO: replace with upper_filter = signal.frequencies <= and signal[upper_number_to_discard:].dill(fill_val)? -> works
-        # upper_filter = signal.frequencies <= f_upper
-        # upper_number_to_discard = upper_filter[upper_filter == True].size
-        # signal[upper_number_to_discard:].fill(fill_val)
-        # V2
-        upper_number_to_discard = int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
-        signal[signal.size - upper_number_to_discard:].fill(fill_val)
-
-        # print((f_lower.value - signal.f0.value) / signal.df.value, lower_number_to_discard,\
-        #       signal.size - (signal.frequencies[-1].value - f_upper.value) / signal.df.value, signal.size - upper_number_to_discard)
+        upper_number_to_discard = signal.size -  int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
+        signal[upper_number_to_discard:].fill(fill_val)
 
     return signal
 
@@ -265,7 +245,9 @@ def fd_to_td_waveform(
         # np.fft.irfft(signal / dt),
         # unit=signal.unit / dt.unit,
         t0=0.0 * u.s,
-        dt=dt.to(u.s)  # Ensure unit is displayed in seconds, not 1/Hz
+        dt=dt.to(u.s),  # Ensure unit is displayed in seconds, not 1/Hz
+        name='Inverse Fourier transform of ' + signal.name if signal.name is not None else None,
+        channel=signal.channel
     )
     # Note: dividing by dt is necessary because irfft uses discrete
     # Fourier coefficients, but the input is expected to be continuous
@@ -275,18 +257,9 @@ def fd_to_td_waveform(
     # discrete Fourier coefficients by approximating the corresponding
     # integral (df comes in)
 
-    # out = (signal / dt.value).ifft()
-    # out = signal.ifft()
-    # out = (signal * 2 * (signal.size - 1) / dt.value).ifft()
-    # out = (signal * np.sqrt(2 * (signal.size - 1)) / dt.value).ifft()
-    out = (signal / (2 * (signal.size - 1)) / dt.value).ifft()
-
 
     # TODO: add possibility that ifft is done, based on value of f0
 
-    out[1:] *= 2.0  # Account for GWpy factor
-    # out.epoch -= 2.0 * u.s  # Account for epoch bug
-    out.epoch = 0.0 * u.s  # Account for epoch bug
 
     # Handle wrap-around of signal
     # TODO: put this in separate function cyclic_shift?
@@ -295,7 +268,6 @@ def fd_to_td_waveform(
     # -> ah no, wrap-around would still occur, has to be kept in (maybe without shift then)
     number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
     out = np.roll(out, shift=number_to_roll)
-    # print(out.times[number_to_roll], out.duration * 7 / 8)
 
     # out.times -= out.times[number_to_roll]  # Equivalent to following
     out.shift(-7 / 8 * out.duration)  # Note: 7 / 8 * out.duration = out.times[number_to_roll]
@@ -602,9 +574,11 @@ def inner_product(
             f_lower = f_lower_new
         else:
             # Leave lower bound at f_lower, no update
-            print(f'Given lower bound of {f_lower_new} is smaller than '
-                  'values available from given signals. Taking a lower '
-                  f'bound of {f_lower} instead.')
+            logging.info(
+                f'Given lower bound of {f_lower_new} is smaller than '
+                'values available from given signals. Taking a lower '
+                f'bound of {f_lower} instead.'
+            )
 
         # New upper bound must be smaller than current upper bound,
         # otherwise no values for the range are available in signals
@@ -612,9 +586,11 @@ def inner_product(
             f_upper = f_upper_new
         else:
             # Leave upper bound at f_upper, no update
-            print(f'Given upper bound of {f_upper_new} is larger than '
-                  'values available from given signals. Taking an upper '
-                  f'bound of {f_upper} instead.')
+            logging.info(
+                f'Given upper bound of {f_upper_new} is larger than '
+                'values available from given signals. Taking an upper '
+                f'bound of {f_upper} instead.'
+            )
 
 
     # Get signals to same frequencies, i.e. make df equal (if necessary)
@@ -788,9 +764,10 @@ def optimized_inner_product(
         unit=u.dimensionless_unscaled,
         t0=0.0 * u.s,
         dt=dt.to(u.s)
-    ).abs()
+    )#.abs()
 
-    match_result = match_series.max()
+    # match_result = match_series.max()
+    match_result = match_series.abs().max()
 
 
     number_to_roll = match_series.size // 2  # Value chosen, no deep meaning
@@ -807,7 +784,6 @@ def optimized_inner_product(
     # peak_time = (peak_index - t_zero_index) * match_series.dt.value
     peak_time = match_series.times[peak_index]
     
-    # return match_result
     return match_series, match_result, peak_time  # match_result.value?
 
 
@@ -832,20 +808,9 @@ def norm(
     Returns
     -------
     float
-        Norm of `signal`.
+        Norm of `signal`, i.e. square root of inner product of `signal`
+        with itself.
     """
-
-    # return np.sqrt(inner_product(signal, signal, psd, **kw_args))
-    # if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
-    #     # return np.sqrt(inner_product(signal, signal, psd, **kw_args)[1])
-    #     out = inner_product(signal, signal, psd, **kw_args)
-    #     return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
-    # else:
-    #     return np.sqrt(inner_product(signal, signal, psd, **kw_args))
-    
-    # TODO: handle case where much stuff is returned by inner_product better
-    # -> rather do this when needed in function -> uh, no, needed here as well since no sqrt for time!
-    # -> use isinstance to make stuff more explicit?
 
     out = inner_product(signal, signal, psd, **kwargs)
 
@@ -859,7 +824,6 @@ def overlap(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
-    # optimize_time_and_phase: bool = True,
     **kwargs
 ) -> float | tuple[TimeSeries, float, float]:
     """
@@ -884,35 +848,9 @@ def overlap(
         Overlap of `signal1` and `signal2`.
     """
 
-    # TODO: use keyword is_normalized to indicate that both signals
-    # already have unit norm? Would save some operations sometimes
-    
-    # out = inner_product(signal1, signal2, psd, optimize_time_and_phase=optimize_time_and_phase, **kwargs)
     out = inner_product(signal1, signal2, psd, **kwargs)
-    
-    # normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
-    # No need to give optimization to norm function, right? Because
-    # Simpson rule is more accurate -> but results get slightly inconsistent in some cases, thus change
 
-    # if optimize_time_and_phase:
-    # if 'optimize_time_and_phase' in kw_args:# and optimize_time_and_phase:
-    # if 'optimize_time_and_phase' in kw_args and kw_args['optimize_time_and_phase'] == True:
-    #     normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
-    #     return out[0] / normalization, out[1] / normalization, out[2]
-    # else:
-    #     normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
-    #     return out / normalization
-    
-    # TODO: handle case where much stuff is returned by inner_product better
-    
-    # if isinstance(out, float):
-    #     normalization = norm(signal1, psd, **kw_args) * norm(signal2, psd, **kw_args)
-    #     return out / normalization
-    # else:
-    #     normalization = norm(signal1, psd, **kw_args)[1] * norm(signal2, psd, **kw_args)[1]
-    #     return out[0] / normalization, out[1] / normalization, out[2]
-    
-    normalization = 1.0
+    normalization = 1.0  # Default value
 
     if isinstance(norm1 := norm(signal1, psd, **kwargs), float):
         normalization *= norm1

@@ -1,7 +1,5 @@
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 from gw_signal_tools.inner_product import inner_product, norm, overlap
 from gw_signal_tools.PSDs import psd_gw150914
 

@@ -1,4 +1,7 @@
-from gw_signal_tools.inner_product import td_to_fd_waveform, fd_to_td_waveform, pad_to_get_target_df, restrict_f_range
+from gw_signal_tools.waveform_utils import (
+    td_to_fd_waveform, fd_to_td_waveform,
+    pad_to_get_target_df, restrict_f_range
+)
 
 import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm

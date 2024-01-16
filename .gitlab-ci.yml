@@ -1,0 +1,22 @@
+image: python:3.11.5
+
+stages:
+  - install
+  - test
+  - docs
+  - deploy
+
+
+# Test installation of repo
+installation:
+  stage: install
+  script:
+    - pip install .[jupyter, pyseobnr, dev]
+
+
+# Verify code is running correctly
+testing:
+  stage: install
+  script:
+    - pytest --pyargs tests
+    # - pytest --pyargs gw_signal_tools  # In case location is changed in the future

@@ -1,8 +1,38 @@
 import setuptools
+import subprocess
+import os
 
-version = '0.0.1'
+
+# Automatically get version and make it available in package
+version = (
+     subprocess.run(['git', 'tag', '--points-at', 'HEAD'], stdout=subprocess.PIPE)
+     .stdout.decode('utf-8')
+     .strip()
+)
+
+if version == '':
+    version = (
+        subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], stdout=subprocess.PIPE)
+        .stdout.decode('utf-8')
+        .strip()
+    )
 
 
+version = '0.0.1'  # TODO: remove once first tag is made
+
+
+# Write to file that is used in __init__.py
+with open('gw_signal_tools/version.py', mode='wt') as f:
+    f.write(f'__version__ = \'{version}\'')
+    f.close()
+
+
+# We paste README into long_description, need read function for this
+def read(fname):
+    return open(os.path.join(os.path.dirname(__file__), fname)).read()
+
+
+# TODO: rather use pyproject.toml instead of setup.py?
 
 setuptools.setup(
     name='gw_signal_tools',
@@ -10,7 +40,8 @@ setuptools.setup(
     author='Frank Ohme, Max Melching',
     # author_email='',
     description='Tools for GW Data Analysis',
-    # long_description='',
+    long_description=read('README.md'),
+    long_description_content_type='text/markdown',
     url='https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
     packages=setuptools.find_packages(),
     include_package_data=True,
@@ -31,7 +62,7 @@ setuptools.setup(
         'dev': [
             'pycbc',
             'mypy',
-            # 'pytest'
+            'pytest'
         ]
     }  # Install each of these options via pip install -e .[option]
 )

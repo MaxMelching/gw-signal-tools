@@ -38,19 +38,17 @@ setuptools.setup(
     name='gw_signal_tools',
     version=version,
     author='Frank Ohme, Max Melching',
-    # author_email='',
+    author_email='max.melching@aei.mpg.de',
     description='Tools for GW Data Analysis',
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     url='https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
     packages=setuptools.find_packages(),
-    include_package_data=True,  # TODO: mark where data is
+    package_data={'gw_signal_tools': ['PSDs/*.txt']},
+    include_package_data=True,
     zip_safe=False,
-    # python_requires='>=3.10',
     python_requires='==3.11.5',  # Installation is verified to work with that
-    # python_requires='<3.11',
     install_requires=[
-        # 'lalsuite',
         'lalsuite[lalinference]',
         'numpy',
         'scipy',
@@ -64,5 +62,5 @@ setuptools.setup(
         ],
         'jupyter': 'jupyter',
         # 'pyseobnr': 'pyseobnr',  # Apparently causes error
-    }  # Install each of these options via pip install -e .[option]
+    }
 )

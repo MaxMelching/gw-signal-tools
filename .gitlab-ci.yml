@@ -11,7 +11,7 @@ stages:
 installation:
   stage: install
   script:
-    - pip install '.[dev, jupyter]'
+    - python -m pip install '.[dev, jupyter]'
     # - pip install '.[dev, jupyter, pyseobnr]'
 
 
@@ -21,6 +21,6 @@ testing:
   dependencies:
     - installation
   script:
-    - pip install .[dev]
+    - python -m pip install .[dev]
     - pytest --pyargs tests
     # - pytest --pyargs gw_signal_tools  # In case location is changed in the future

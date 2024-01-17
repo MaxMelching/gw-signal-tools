@@ -13,17 +13,17 @@ After that, clone the repo to some destination and then navigate
 there and run
 
 ```shell
-pip install -e .
+pip install .
 ```
 
-to install it as a Python package. This syntax is convenient because it
-allows to install options via
+to install it as a Python package (adding `-e` after `install` enables editable
+mode). This syntax is convenient because it allows to install options via
 
 ```shell
-pip install -e .[option]
+pip install .[option]
 ```
 
-Valid options for this package are `jupyter`, `pyseobnr`, `dev`.
+Valid options for this package are `jupyter`, `dev`.
 
 Another possibility without the extra cloning step is to run
 

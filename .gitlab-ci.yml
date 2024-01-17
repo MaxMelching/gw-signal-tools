@@ -1,5 +1,4 @@
-image: python:latest
-# image: python:3.11.5
+image: python:3.11.5
 
 stages:
   - install

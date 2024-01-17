@@ -11,7 +11,7 @@ stages:
 installation:
   stage: install
   script:
-    - pip install .[jupyter, pyseobnr, dev]
+    - pip install '.[jupyter, pyseobnr, dev]'
 
 
 # Verify code is running correctly

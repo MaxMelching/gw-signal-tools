@@ -13,15 +13,14 @@ installation:
   script:
     - pip install '.[dev, jupyter]'
     # - pip install '.[dev, jupyter, pyseobnr]'
-    - pip install '.[dev, jupyter]'
-    # - pip install '.[dev, jupyter, pyseobnr]'
 
 
 # Verify code is running correctly
 testing:
-  stage: install
+  stage: test
   dependencies:
     - installation
   script:
+    - pip install .[dev]
     - pytest --pyargs tests
     # - pytest --pyargs gw_signal_tools  # In case location is changed in the future

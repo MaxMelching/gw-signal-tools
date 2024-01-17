@@ -44,7 +44,7 @@ setuptools.setup(
     long_description_content_type='text/markdown',
     url='https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
     packages=setuptools.find_packages(),
-    include_package_data=True,
+    include_package_data=True,  # TODO: mark where data is
     zip_safe=False,
     # python_requires='>=3.10',
     python_requires='==3.11.5',  # Installation is verified to work with that
@@ -57,12 +57,12 @@ setuptools.setup(
         'matplotlib'
     ],
     extras_require={
-        'jupyter': 'jupyter',
-        'pyseobnr': 'pyseobnr',
         'dev': [
             'pycbc',
             'mypy',
             'pytest'
-        ]
+        ],
+        'jupyter': 'jupyter',
+        # 'pyseobnr': 'pyseobnr',  # Apparently causes error
     }  # Install each of these options via pip install -e .[option]
 )

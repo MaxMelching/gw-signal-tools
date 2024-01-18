@@ -1,11 +1,12 @@
+import logging
+from typing import Optional, Any
+
 import numpy as np
+
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm
-
-import logging
-from typing import Optional, Any
 
 from .inner_product import inner_product, norm
 
@@ -60,6 +61,9 @@ def num_diff(
     differentiation for numpy arrays and instances of GWpy Series class
     (which includes instances of TimeSeries, FrequencySeries).
 
+    At the boundary points, less accurate methods like the central,
+    forward and backward difference are used.
+
     Parameters
     ----------
     signal : gwpy.types.series.Series or numpy.ndarray
@@ -75,13 +79,15 @@ def num_diff(
     """
     
     if isinstance(signal, Series):
-        if h is not None:
-            logging.info(
-                '`signal` is instance of `gwpy.Series` class, `h` is'
-                'taken from there and input is ignored.'
-            )  # overridden would be nice word here
+        # if h is not None:
+        #     logging.info(
+        #         '`signal` is instance of `gwpy.Series` class, `h` is '
+        #         'taken from there and input is ignored.'
+        #     )  # overridden would be nice word here
         
-        h = signal.dx
+        # h = signal.dx
+        if h is None:
+            h = signal.dx
     else:
         # Make sure signal is array, we utilize numpy operations
         signal = np.asarray(signal)
@@ -108,13 +114,21 @@ def num_diff(
     # signal_deriv[-1] += signal[1]
     # signal_deriv[-2] += signal[0]
 
-    signal_deriv[0] = signal_deriv[1] = signal_deriv[2]
-    signal_deriv[-1] = signal_deriv[-2] = signal_deriv[-3]
+    # signal_deriv[0] = signal_deriv[1] = signal_deriv[2]
+    # signal_deriv[-1] = signal_deriv[-2] = signal_deriv[-3]
 
-    return signal_deriv / (12.0 * h)
+    signal_deriv /= 12.0 * h
+
+    signal_deriv[0] = (signal[1] - signal[0]) / h  # Forward difference
+    signal_deriv[1] = (signal[2] - signal[0]) / (2.0 * h)  # Central difference
+
+    signal_deriv[-2] = (signal[-1] - signal[-3]) / (2.0 * h)  # Central difference
+    signal_deriv[-1] = (signal[-1] - signal[-2]) / h  # Backward difference
+
+    return signal_deriv
 
 
-# TODO: implement fitting derivative method
+# TODO: implement fitting derivative method -> hm, this might be hard
 
 
 # NOTE: this version does not work
@@ -212,7 +226,7 @@ def fisher_val_at_point(
 
         # deriv_series += num_diff(waveforms, h=step_size)
 
-        derivative_at_point = norm(deriv_series, psd)
+        derivative_at_point = norm(deriv_series, psd)**2  # TODO: add square here?
 
         # logging.info(np.abs((derivative_at_point - derivative_vals[-1]) / derivative_at_point) <= tolerance)
         # Check for convergence

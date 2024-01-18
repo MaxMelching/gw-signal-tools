@@ -22,5 +22,5 @@ testing:
     - installation
   script:
     - python -m pip install .[dev]
-    - coverage report pytest --pyargs tests
+    - coverage run -m pytest --pyargs tests
     # - pytest --pyargs gw_signal_tools  # In case location is changed in the future

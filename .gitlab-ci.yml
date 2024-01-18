@@ -24,3 +24,5 @@ testing:
     - python -m pip install .[dev]
     - coverage run -m pytest --pyargs tests
     # - pytest --pyargs gw_signal_tools  # In case location is changed in the future
+  coverage:
+    '/TOTAL \d+(?:\.\d+)?/'

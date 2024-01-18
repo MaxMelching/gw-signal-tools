@@ -1,3 +1,7 @@
+[![pipeline status](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/badges/main/pipeline.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/commits/main)
+[![coverage report](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/badges/main/coverage.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/commits/main)
+[![Latest Release](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/badges/release.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/releases)
+
 # gw_signal_tools
 
 ## Description

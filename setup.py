@@ -58,7 +58,8 @@ setuptools.setup(
         'dev': [
             'pycbc',
             'mypy',
-            'pytest'
+            'pytest',
+            'coverage'
         ],
         'jupyter': 'jupyter',
         # 'pyseobnr': 'pyseobnr',  # Apparently causes error

@@ -9,7 +9,7 @@ cache:
   paths:
     - .cache/pip
 
-before_script:
+before_script:  # Enabling virtual environment is recommended
   - python --version ; pip --version  # For debugging
   - pip install virtualenv
   - virtualenv venv
@@ -42,6 +42,7 @@ testing:
     - installation
   script:
     # - python -m pip install .[dev]  # TODO: check if this one is needed, since we depend on installation being completed
+    - pip install .[dev]
     - coverage run -m pytest --pyargs tests
     - coverage report
     # - pytest --pyargs gw_signal_tools  # In case location is changed in the future

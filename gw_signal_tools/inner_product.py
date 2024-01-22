@@ -250,6 +250,7 @@ def inner_product(
         # Check if both lower and upper are given or one of them is None
         if f_range[0] is not None:
             f_lower_new = u.Quantity(f_range[0], unit=u.Hz)
+            # TODO: change unit to signal1.unit? Because sometimes, we may want to use geometric units -> perhaps along with check that all input signals have same frequency unit
         else:
             f_lower_new = f_lower
         
@@ -318,7 +319,8 @@ def inner_product(
         
         f_series_to_pad = FrequencySeries(
             np.zeros(number_to_append),
-            unit=u.dimensionless_unscaled,  # TODO: use signal1.unit?
+            # unit=u.dimensionless_unscaled,  # TODO: use signal1.unit?
+            unit=signal1.unit,
             f0=0.0,
             df=df,
             dtype=complex  # TODO: use signal1.dtype?
@@ -327,11 +329,16 @@ def inner_product(
         try:
             # Note: `pad` argument of append does not help, does what we do
             signal1 = f_series_to_pad.append(signal1, inplace=False)
+
+            f_series_to_pad *= signal2.unit / f_series_to_pad.unit
             signal2 = f_series_to_pad.append(signal2, inplace=False)
 
             # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
-            f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
-            f_series_to_pad *= psd.unit   # Conver unit, may be Hz
+            # f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
+            f_series_to_pad.fill(1.0 * f_series_to_pad.unit)  # No return here, thus has to be done separately
+            # f_series_to_pad *= psd.unit   # Conver unit, may be Hz
+            f_series_to_pad *= psd.unit / f_series_to_pad.unit   # Conver unit, may be Hz
+            # TODO: look for more efficient way than multiplication, can we avoid operations? On the other hand, padding is perhaps not too long
             psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
         except ValueError as err:
             err_msg = str(err)
@@ -402,7 +409,7 @@ def inner_product_computation(
     # determines accuracy the signals have been sampled with.
     custom_error_msg = (
         'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is very small, consider '
+        'due to `df` being too large. If `df` is already small, consider '
         'choosing a (negative) power of two as these seem to work best.'
     )
     # Is perhaps because interpolate uses fft, which works best with powers of two
@@ -464,7 +471,7 @@ def optimized_inner_product(
     # determines accuracy the signals have been sampled with.
     custom_error_msg = (
         'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is very small, consider '
+        'due to `df` being too large. If `df` is already small, consider '
         'choosing a (negative) power of two as these seem to work best.'
     )
     # Is perhaps because interpolate uses fft, which works best with powers of two

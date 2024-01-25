@@ -29,7 +29,7 @@ def psd_from_file(
 ) -> tuple[np.ndarray, np.ndarray]:
     """
     Read Power spectral density (PSD) values from a file into numpy
-    arrays. The file must be readable by `numpy.loadtxt`.
+    arrays. The file must be readable by `~numpy.loadtxt`.
 
     Parameters
     ----------
@@ -47,8 +47,7 @@ def psd_from_file(
 
     See also
     --------
-    `numpy.loadtxt`
-        Routine used to read the file.
+    numpy.loadtxt : Used to read the file.
     """
 
     file_vals = np.loadtxt(fname)
@@ -67,7 +66,7 @@ def psd_from_file_to_FreqSeries(
 ) -> FrequencySeries:
     """
     Read Power spectral density (PSD) values from file into a GWpy
-    FrequencySeries.
+    ``FrequencySeries``.
 
     Parameters
     ----------
@@ -78,13 +77,13 @@ def psd_from_file_to_FreqSeries(
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
     **kwargs
-        Other keyword arguments that will be passed to FrequencySeries
+        Other keyword arguments that are passed to ``FrequencySeries``
         constructor. Can be used to assign name to series and more.
 
     Returns
     -------
     gwpy.frequencyseries.FrequencySeries
-        PSD as a FrequencySeries.
+        PSD as a ``FrequencySeries``.
     """
 
     file_vals = np.loadtxt(fname)
@@ -111,7 +110,7 @@ def get_FreqSeries_from_dict(
 ) -> FrequencySeries:
     """
     Converts dictionary with Power spectral density (PSD) values into a
-    GWpy FrequencySeries. Frequencies are expected to be accessible
+    GWpy ``FrequencySeries``. Frequencies are expected to be accessible
     using the key 'frequencies'.
 
     Parameters
@@ -124,13 +123,13 @@ def get_FreqSeries_from_dict(
         If true, values in file are taken to be ASD values rather than
         PSD values and thus a squared version of them is returned.
     **kwargs
-        Other keyword arguments that will be passed to FrequencySeries
+        Other keyword arguments that are passed to ``FrequencySeries``
         constructor. Can be used to assign name to series and more.
 
     Returns
     -------
     gwpy.frequencyseries.FrequencySeries
-        Data from input dict in a GWpy FrequencySeries.
+        Data from input dict in a ``FrequencySeries``.
     """
 
     return FrequencySeries(
@@ -158,13 +157,13 @@ def inner_product(
 
     Parameters
     ----------
-    signal1 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
+    signal1 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         First signal
-    signal2 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
+    signal2 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Second signal
     psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
-    f_range : list[float] | list[astropy.units.Quantity], optional, default = None
+    f_range : list[float] or list[astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
         input signals.
@@ -189,7 +188,7 @@ def inner_product(
 
     Returns
     -------
-    float
+    float or tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
         Inner product value with `signal1`, `signal2` inserted.
 
     Raises
@@ -198,6 +197,13 @@ def inner_product(
         In case either one of `signal1`, `signal2`, `psd` has wrong type.
     ValueError
         In case format of `f_range` parameter is not correct.
+
+    See also
+    --------
+    gw_signal_tools.waveform_utils.td_to_fd_waveform : 
+        Used to convert ``TimeSeries`` input to a ``FrequencySeries``.
+    gwpy.frequencyseries.frequencyseries.interpolate :
+        Function used to get signals to same sampling rate.
     """
 
     # Copying does not seem to be necessary. So we avoid the operations
@@ -398,6 +404,10 @@ def inner_product_computation(
     -------
     float
         Inner product value with `signal1`, `signal2` inserted.
+    
+    See also
+    --------
+    scipy.integrate.simpson : Used for evaluation of inner product.
     """
 
     # First step: assure same distance of samples
@@ -452,8 +462,13 @@ def optimized_inner_product(
 
     Returns
     -------
-    float
-        Optimized inner product value with `signal1`, `signal2` inserted.
+    tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
+        A tuple with three values:
+        (i) a ``TimeSeries`` where values of the inner product for
+        different relative time shifts between `signal1`, `signal2`
+        are stored (optimization over phase is already carried out)
+        (ii) maximum value of (i)
+        (iii) time at which maximum value (ii) occurs in (i)
     """
 
     # First step: assure same distance of samples
@@ -532,7 +547,7 @@ def norm(
 
     Parameters
     ----------
-    signal : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
+    signal : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Signal to compute norm for.
     psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
@@ -541,9 +556,18 @@ def norm(
 
     Returns
     -------
-    float
+    float or tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
         Norm of `signal`, i.e. square root of inner product of `signal`
         with itself.
+
+        If `optimize_time_and_phase = True`, a tuple is returned that
+        contains a ``TimeSeries``, the aforementioned norm and a time.
+        See `optimized_inner_product` for details on the return.
+    
+    See also
+    --------
+    gw_signal_tools.inner_product.inner_product :
+        Arguments are passed to this function for calculations.
     """
 
     out = inner_product(signal, signal, psd, **kwargs)
@@ -567,9 +591,9 @@ def overlap(
 
     Parameters
     ----------
-    signal1 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
+    signal1 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         First signal.
-    signal2 : gwpy.timeseries.TimeSeries | gwpy.frequencyseries.FrequencySeries
+    signal2 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Second signal.
     psd : gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
@@ -578,8 +602,17 @@ def overlap(
 
     Returns
     -------
-    float
+    float or tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
         Overlap of `signal1` and `signal2`.
+
+        If `optimize_time_and_phase = True`, a tuple is returned that
+        contains a ``TimeSeries``, the aforementioned norm and a time.
+        See `optimized_inner_product` for details on the return.
+    
+    See also
+    --------
+    gw_signal_tools.inner_product.inner_product :
+        Arguments are passed to this function for calculations.
     """
 
     out = inner_product(signal1, signal2, psd, **kwargs)

@@ -24,19 +24,21 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
 
     Parameters
     ----------
-    signal : gwpy.timeseries.TimeSeries
+    signal : ~gwpy.timeseries.TimeSeries
         Signal to be transformed.
 
     Returns
     -------
-    out : gwpy.frequencyseries.FrequencySeries
+    out : ~gwpy.frequencyseries.FrequencySeries
         Transformed signal.
 
     See also
     --------
-    `numpy.fft.rfft`
-        Fourier transformation routine used here.
+    numpy.fft.rfft : Fourier transformation routine used.
     """
+
+    # TODO: add df argument and thus automatic pad_to_target_df call?
+    # -> hmm, but would require handling df < df_from_signal, right? Inconvenient...
 
     # Get discrete Fourier coefficients and corresponding frequencies
     out = FrequencySeries(
@@ -85,14 +87,14 @@ def restrict_f_range(
 
     Parameters
     ----------
-    signal : gwpy.frequencyseries.FrequencySeries
+    signal : ~gwpy.frequencyseries.FrequencySeries
         Signal to be restricted.
-    f_range : list[float] | list[astropy.units.Quantity]
+    f_range : list[float] or list[~astropy.units.Quantity]
         Two-tuple specifying lower and upper frequency bounds that will
         be used as cutoffs.
     fill_val : float, optional, default = 0.0
         Value that will be used to fill `signal` outside of `f_range`.
-    pad_to_f_zero : boolean, optional, default = False
+    pad_to_f_zero : bool, optional, default = False
         If true, signal is padded with `fill_val` to start at f=0.
 
         Convenient option if signal shall be prepared for inverse
@@ -112,10 +114,10 @@ def restrict_f_range(
 
     Returns
     -------
-    gwpy.frequencyseries.FrequencySeries
+    ~gwpy.frequencyseries.FrequencySeries
         Copy of signal where values outside of `f_range` have been
-        changed. If the interval defined by `f_range` is larger than
-        the one spanned by signal.frequencies, no entry will be changed.
+        changed. If the interval defined by `f_range` is larger than the
+        one spanned by `signal.frequencies`, no entry will be changed.
 
     Raises
     ------
@@ -202,15 +204,15 @@ def fd_to_td_waveform(
 
     Parameters
     ----------
-    signal : gwpy.frequencyseries.FrequencySeries
+    signal : ~gwpy.frequencyseries.FrequencySeries
         Signal to be transformed
-    f_range : list[float] | list[astropy.units.Quantity], optional, default = None
+    f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
         Range of frequency components to take into account. Is used as
         input for `restrict_f_range` function.
 
     Returns
     -------
-    out : gwpy.timeseries.TimeSeries
+    out : ~gwpy.timeseries.TimeSeries
         Transformed signal.
 
     Raises
@@ -220,8 +222,7 @@ def fd_to_td_waveform(
 
     See also
     --------
-    `numpy.fft.irfft`
-        Inverse Fourier transformation routine used here.
+    numpy.fft.irfft : Inverse Fourier transformation routine used.
     """
 
     if f_range is not None:
@@ -284,18 +285,22 @@ def pad_to_get_target_df(
 ) -> TimeSeries:
     """
     Pads `signal` with zeros after its end until a fft of it has desired
-    resolution of `df`.
+    resolution of `df`. If the resolution is already at the required
+    level, it does not nothing (i.e. this function is not suited for
+    getting a smaller df, which would require cropping of the
+    time-domain signal; to do this, `FrequencySeries.interpolate` can
+    be applied to the Fourier transform instead).
 
     Parameters
     ----------
-    signal : gwpy.timeseries.TimeSeries
+    signal : ~gwpy.timeseries.TimeSeries
         Signal that will be padded.
-    df : float | astropy.units.Quantity
+    df : float or ~astropy.units.Quantity
         Desired resolution in frequency domain.
 
     Returns
     -------
-    padded_signal : gwpy.timeseries.TimeSeries
+    padded_signal : ~gwpy.timeseries.TimeSeries
         Padded signal, still in time domain.
     """
 

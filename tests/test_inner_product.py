@@ -1,4 +1,5 @@
 import numpy as np
+from numpy.testing import assert_allclose
 
 from gw_signal_tools.inner_product import inner_product, norm, overlap
 from gw_signal_tools.PSDs import psd_gw150914
@@ -51,6 +52,10 @@ hp_f_fine, _ = wfm.GenerateFDWaveform(wf_params, gen)
 
 hp_f_coarse, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)}, gen)
 
+# Make units consistent with gw_signal_tools
+hp_f_fine *= u.s
+hp_f_coarse *= u.s
+
 
 def test_fd_td_match_consistency():
     match_td = norm(hp_t, psd_gw150914, df=2**-2, f_range=[f_min, None])
@@ -69,7 +74,17 @@ def test_norm():
     norm_fd_coarse = overlap(hp_f_coarse, hp_f_coarse, psd_gw150914, df=2**-2, f_range=[f_min, None])
     norm_fd_fine = overlap(hp_f_fine, hp_f_fine, psd_gw150914, df=2**-4, f_range=[f_min, None])
 
-    assert np.all(np.isclose([norm_td, norm_fd_coarse, norm_fd_fine], [1.0, 1.0, 1.0], atol=0.0, rtol=0.005))
+    assert_allclose([norm_td, norm_fd_coarse, norm_fd_fine], [1.0, 1.0, 1.0], atol=0.0, rtol=0.005)
+
+def test_f_range():
+    f_min, f_max = 30.*u.Hz, 50.*u.Hz
+    norm1 = norm(hp_f_fine, psd_gw150914, f_range=[f_min, f_max])
+
+    hp_f_restricted, _ = wfm.GenerateFDWaveform(wf_params | {'f22_start': f_min, 'f_max': f_max}, gen)
+    hp_f_restricted *= u.s
+    norm2 = norm(hp_f_restricted, psd_gw150914)
+
+    assert np.isclose(norm1, norm2, atol=0.0, rtol=0.005)
 
 
 #%% ---------- Confirming results with PyCBC match function ----------
@@ -125,9 +140,9 @@ flen = tlen//2 + 1
 psd_pycbc = aLIGOZeroDetHighPower(flen, delta_f, f_low)
 
 
-hp_1_pycbc_converted = FrequencySeries.from_pycbc(hp_1_pycbc)
-hp_2_pycbc_converted = FrequencySeries.from_pycbc(hp_2_pycbc)
-psd_pycbc_converted = FrequencySeries.from_pycbc(psd_pycbc)
+hp_1_pycbc_converted = FrequencySeries.from_pycbc(hp_1_pycbc) * u.s
+hp_2_pycbc_converted = FrequencySeries.from_pycbc(hp_2_pycbc) * u.s
+psd_pycbc_converted = FrequencySeries.from_pycbc(psd_pycbc) / u.Hz
 
 
 def test_match_pycbc():

@@ -205,46 +205,111 @@ def inner_product(
     gwpy.frequencyseries.frequencyseries.interpolate :
         Function used to get signals to same sampling rate.
     """
+    # ----- Handling of units -----
+    if isinstance(signal1, FrequencySeries):
+        frequ_unit = signal1.frequencies.unit
+        signal_unit = signal1.unit
+    elif isinstance(signal1, TimeSeries):
+        frequ_unit = signal1.times.unit * u.Hz / u.s
+        signal_unit = signal1.unit * u.s
+    else:
+        raise TypeError('`signal1` has to be a GWpy TimeSeries or FrequencySeries')
+
+    if isinstance(signal2, FrequencySeries):
+        assert frequ_unit == signal2.frequencies.unit,\
+        'Need consistent frequency/time units for `signal1` and `signal2`.'
+        
+        assert signal_unit == signal2.unit,\
+        'Need consistent units of `signal1` and `signal2`.'
+    elif isinstance(signal2, TimeSeries):
+        assert frequ_unit == signal2.times.unit * u.Hz / u.s,\
+        'Need consistent frequency/time units times for `signal1` and `signal2`.'
+        
+        assert signal_unit == signal2.unit * u.s,\
+        'Need consistent signal units for `signal1` and `signal2`.'
+    else:
+        raise TypeError('`signal2` has to be a GWpy TimeSeries or FrequencySeries')
+    
+    if isinstance(psd, FrequencySeries):
+        assert frequ_unit == psd.frequencies.unit,\
+        'Need consistent frequency/time units for `psd` and `signal1`, `signal2`.'
+        
+        # assert signal_unit / u.Hz == psd.unit,\
+        # ('Need consistent signal units for psd and `signal1`, `signal2`,'
+        #  'i.e. psd unit has to be signal unit per Hz.')
+
+        assert signal_unit**2 / psd.unit * frequ_unit == u.dimensionless_unscaled,\
+        ('Need consistent signal units for psd and `signal1`, `signal2`,'
+         'i.e. the product `signal1`.unit * `signal2`.unit / `psd`.unit * '
+         '`df`.unit has to be dimensionless (note that `df`.unit is set to '
+         'the match of the one of signal1.frequencies etc. if not given).')
+    elif psd is None:  # TODO: implement psd=None in argument and docstring
+        from gw_signal_tools.PSDs import psd_no_noise
+        
+        psd = psd_no_noise
+
+        # TODO: create psd_no_noise_geom and use this one in case frequ_unit == u.dimensionless_unscaled
+
+        assert frequ_unit == psd.frequencies.unit,\
+        'Need consistent frequency/time units for `psd` and `signal1`, `signal2`.'
+
+        # assert signal_unit / u.Hz == psd.unit,\
+        # ('Need consistent signal units for psd and `signal1`, `signal2`,'
+        #  'i.e. psd unit has to be signal unit per Hz.')
+
+        assert signal_unit**2 / psd.unit * frequ_unit == u.dimensionless_unscaled,\
+        ('Need consistent signal units for psd and `signal1`, `signal2`,'
+         'i.e. the product `signal1`.unit * `signal2`.unit / `psd`.unit * '
+         '`df`.unit has to be dimensionless (note that `df`.unit is set to '
+         'the match of the one of signal1.frequencies etc. if not given).')
+    else:
+        raise TypeError('`psd` has to be a GWpy FrequencySeries or None.')
 
     # Copying does not seem to be necessary. So we avoid the operations
 
-    if type(psd) != FrequencySeries:
-        raise TypeError('`psd` has to be a GWpy FrequencySeries.')
-    # TODO: allow psd to be None? In this case, set it to 1? -> maybe handle that
-    # via special FreqSeries, after all we use psd.frequencies etc
 
 
-    # Handling of df argument
+    # ----- Handling of df argument -----
     if df is None:
-        df = 0.0625 * u.Hz  # Default value of output of FDWaveform
+        df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
     else:
-        # Set default value of output of lal function FDWaveform
-        df = u.Quantity(df, unit=u.Hz)
+        try:
+            df = u.Quantity(df, unit=frequ_unit)
+        except u.UnitConversionError:
+        # Conversion only fails if df is already Quantity and has
+        # non-matching unit, so we can assume that df.unit works
+            raise ValueError(
+                f'Need consistent frequency units for `df` ({df.unit}) and'
+                f' signals ({frequ_unit}).'
+            )
 
 
     # If necessary, do fft. We apply padding to ensure sufficient
     # resolution in frequency domain.
-    if type(signal1) == TimeSeries:
+    if isinstance(signal1, TimeSeries):
         signal1 = pad_to_get_target_df(signal1, df)
         # TODO: do if part from padding function here? Would avoid function call
         signal1 = td_to_fd_waveform(signal1)
-    elif type(signal1) != FrequencySeries:
-        raise TypeError('`signal1` has to be a GWpy TimeSeries or FrequencySeries')
+    # elif type(signal1) != FrequencySeries:
+    #     raise TypeError('`signal1` has to be a GWpy TimeSeries or FrequencySeries')
+    # Should be obsolete now, we check this in units handling
 
-    if type(signal2) == TimeSeries:
+    if isinstance(signal2, TimeSeries):
         signal2 = pad_to_get_target_df(signal2, df)
         signal2 = td_to_fd_waveform(signal2)
-    elif type(signal2) != FrequencySeries:
-        raise TypeError('`signal2` has to be a GWpy TimeSeries or FrequencySeries')
+    # elif type(signal2) != FrequencySeries:
+    #     raise TypeError('`signal2` has to be a GWpy TimeSeries or FrequencySeries')
+        
+    logging.info(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
     
 
-    # Set default values
+    # ----- Set default values -----
     f_lower, f_upper =[
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
         min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
     ]
 
-    # If bounds are given, check that they fit the input data
+    # ----- If bounds are given, check that they fit the input data -----
     if f_range is not None:
         if len(f_range) != 2:
             raise ValueError(
@@ -255,13 +320,29 @@ def inner_product(
         
         # Check if both lower and upper are given or one of them is None
         if f_range[0] is not None:
-            f_lower_new = u.Quantity(f_range[0], unit=u.Hz)
+            try:
+                f_lower_new = u.Quantity(f_range[0], unit=frequ_unit)
+            except u.UnitConversionError:
+        # Conversion only fails if df is already Quantity and has
+        # non-matching unit, so we can assume that df.unit works
+                raise ValueError(
+                    'Need consistent frequency units for `f_range` members'
+                    f' ({f_range[0].unit}) and signals ({frequ_unit}).'
+                )
             # TODO: change unit to signal1.unit? Because sometimes, we may want to use geometric units -> perhaps along with check that all input signals have same frequency unit
         else:
             f_lower_new = f_lower
         
         if f_range[1] is not None:
-            f_upper_new = u.Quantity(f_range[1], unit=u.Hz)
+            try:
+                f_upper_new = u.Quantity(f_range[1], unit=frequ_unit)
+            except u.UnitConversionError:
+        # Conversion only fails if df is already Quantity and has
+        # non-matching unit, so we can assume that df.unit works
+                raise ValueError(
+                    'Need consistent frequency units for `f_range` members'
+                    f' ({f_range[1].unit}) and signals ({frequ_unit}).'
+                )
 
             # TODO: implement check of f_max with Nyquist of signals
         else:
@@ -293,9 +374,11 @@ def inner_product(
             )
 
 
-    # Get signals to same frequencies, i.e. make df equal (if necessary)
-    # and then restrict range
+    # ----- Get signals to same frequencies, i.e. make df equal -----
+    # ----- (if necessary) and then restrict range -----
     df_val = df.value if type(df) == u.Quantity else df  # interpolate wants dimensionless df
+
+    psd_unit = psd.unit  # Has to be kept as long as GWPy bug present
     
     signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, rtol=0.01) else signal1
     signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, rtol=0.01) else signal2
@@ -303,11 +386,19 @@ def inner_product(
     logging.debug(psd.df.value)
     psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, rtol=0.01) else psd
 
+    # NOTE: these lines are temporary and shall fix bug in GWPy interpolate
+    if signal1.unit != signal_unit:
+        signal1 *= (signal_unit / signal1.unit)
+    if signal2.unit != signal_unit:
+        signal2 *= (signal_unit / signal2.unit)
+    if psd.unit != psd_unit:
+        psd *= (psd_unit / psd.unit)
+
     # signal1 = signal1.crop(start=f_lower, end=f_upper)
     # signal2 = signal2.crop(start=f_lower, end=f_upper)
     # psd = psd.crop(start=f_lower, end=f_upper)
 
-    # Rounding needed due to use of `floor` in crop?
+    # TODO: check if rounding needed due to use of `floor` in crop?
     signal1 = signal1.crop(start=f_lower + 0.9 * df, end=f_upper)
     signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
     psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
@@ -316,27 +407,41 @@ def inner_product(
     logging.debug(signal2.frequencies)
     logging.debug(psd.frequencies)
 
+    logging.info(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
+
     if optimize_time_and_phase:
         # ifft wants start at f=0, so we may have to pad signals with zeros
 
         number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0 to make it clear what happens
         # number_to_append = int(np.floor((f_lower.value - 0.0) / df_val))  # Symbolic -0.0 to make it clear what happens
+
+        if number_to_append < 0:
+            raise ValueError(
+                'Cannot pad signal to f=0. Signal frequencies might be negative.'
+            )
+
+        logging.debug(number_to_append)
         
+        logging.info(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
         
         f_series_to_pad = FrequencySeries(
             np.zeros(number_to_append),
-            # unit=u.dimensionless_unscaled,  # TODO: use signal1.unit?
-            unit=signal1.unit,
+            # unit=signal1.unit,  # TODO: use signal_unit?
+            unit=signal_unit,  # TODO: use signal_unit?
             f0=0.0,
             df=df,
             dtype=complex  # TODO: use signal1.dtype?
         )
 
+        # TODO: check if this has effect on FT, is not smooth right?
+        # -> Maybe use 'linear_ramp' option of np.pad?
+        # See https://numpy.org/doc/stable/reference/generated/numpy.pad.html#numpy.pad
+
         try:
             # Note: `pad` argument of append does not help, does what we do
             signal1 = f_series_to_pad.append(signal1, inplace=False)
 
-            f_series_to_pad *= signal2.unit / f_series_to_pad.unit
+            # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
             signal2 = f_series_to_pad.append(signal2, inplace=False)
 
             # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
@@ -410,7 +515,7 @@ def inner_product_computation(
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
 
-    # First step: assure same distance of samples
+    # ----- Assure same distance of samples -----
     assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df, rtol=0.01),\
            'Signals must have equal frequency spacing.'
     
@@ -433,8 +538,9 @@ def inner_product_computation(
         raise ValueError(custom_error_msg)
     
 
-    return 4.0 * np.real(simpson(y=np.multiply(signal1, signal2.conjugate()) / psd,
-                                 x=signal1.frequencies))
+    return 4.0 * np.real(
+        simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
+    )
 
 
 def optimized_inner_product(
@@ -442,7 +548,7 @@ def optimized_inner_product(
     signal2: FrequencySeries,
     psd: FrequencySeries,
     # use_irfft: bool = False  # Results for False are usually a bit better
-) -> tuple[TimeSeries, float, float]:
+) -> tuple[TimeSeries, float, u.Quantity]:
     """
     Lower level function for inner product calculation. Assumes that
     signal conditioning has been done so that they contain values at the
@@ -462,7 +568,7 @@ def optimized_inner_product(
 
     Returns
     -------
-    tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
+    tuple[TimeSeries, float, ~astropy.units.Quantity]
         A tuple with three values:
         (i) a ``TimeSeries`` where values of the inner product for
         different relative time shifts between `signal1`, `signal2`
@@ -471,19 +577,19 @@ def optimized_inner_product(
         (iii) time at which maximum value (ii) occurs in (i)
     """
 
-    # First step: assure same distance of samples
+    # ----- First step: assure same distance of samples -----
     assert np.isclose(signal1.df, psd.df, rtol=0.01) and np.isclose(signal2.df, psd.df, rtol=0.01),\
            'Signals must have equal frequency spacing.'
     
-    # Second step: make sure all signals start at f=0
+    # ----- Second step: make sure all signals start at f=0 -----
     assert (np.isclose(signal1.f0, 0.0, rtol=0.01)
             and np.isclose(signal2.f0, 0.0, rtol=0.01)
             and np.isclose(psd.f0, 0.0, rtol=0.01)),\
             'All signals must start at f=0.'
 
-    # Third step: assure frequencies are sufficiently equal.
-    # Maximum deviation allowed between the is given df, which
-    # determines accuracy the signals have been sampled with.
+    # ----- Third step: assure frequencies are sufficiently equal. -----
+    # ----- Maximum deviation allowed between the is given df, which -----
+    # ----- determines accuracy the signals have been sampled with. -----
     custom_error_msg = (
         'Frequency samples of input signals are not equal. This might be '
         'due to `df` being too large. If `df` is already small, consider '
@@ -499,7 +605,7 @@ def optimized_inner_product(
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
     
-    
+    # ----- Fourth step: computations -----
     dft_series = signal1 * signal2.conjugate() / psd
 
     # Append zeros so that ifft can be used
@@ -511,36 +617,35 @@ def optimized_inner_product(
     match_series = 4.0 * TimeSeries(
         np.fft.ifft(full_dft_series / dt.value),  # Discrete -> continuous
         unit=u.dimensionless_unscaled,
-        t0=0.0 * u.s,
-        dt=dt.to(u.s)
+        t0=0.0 * dt.unit,
+        dt=dt
     )#.abs()
+    # NOTE: it has been asserted that this series is dimensionless in the
+    # inner_product function that should be used prior to this function
 
     # match_result = match_series.max()
-    match_result = match_series.abs().max()
+    match_result = match_series.abs().max().value
 
 
     number_to_roll = match_series.size // 2  # Value chosen, no deep meaning
     match_series = np.roll(match_series, shift=number_to_roll)
 
-    # match_series.times -= match_series.times[number_to_roll]  # Use .shift()? Yep, below works
     match_series.shift(-match_series.times[number_to_roll])  # Shouldn't it be sufficient to substract from t0? -> perhaps only with __array_finalize__ afterwards
 
     # TODO: check if t0=0 and then shifting is correct...
 
     # Compute peak time
     peak_index = np.argmax(match_series)
-    # t_zero_index = match_series[match_series.times <= 0].size
-    # peak_time = (peak_index - t_zero_index) * match_series.dt.value
     peak_time = match_series.times[peak_index]
     
-    return match_series, match_result, peak_time  # match_result.value?
+    return match_series, match_result, peak_time
 
 
 def norm(
     signal: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
     **kwargs
-) -> float | tuple[TimeSeries, float, float]:
+) -> float | tuple[TimeSeries, float, u.Quantity]:
     """
     Calculates the norm (i.e. SNR) of a given `signal` as measured by
     the noise-weighted inner product implemented in `inner_product`.
@@ -556,7 +661,7 @@ def norm(
 
     Returns
     -------
-    float or tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
+    float or tuple[TimeSeries, float, ~astropy.units.Quantity]
         Norm of `signal`, i.e. square root of inner product of `signal`
         with itself.
 
@@ -583,7 +688,7 @@ def overlap(
     signal2: TimeSeries | FrequencySeries,
     psd: FrequencySeries,
     **kwargs
-) -> float | tuple[TimeSeries, float, float]:
+) -> float | tuple[TimeSeries, float, u.Quantity]:
     """
     Calculates the overlap of two given signals as measured by the
     noise-weighted inner product of the corresponding signals normalized
@@ -602,7 +707,7 @@ def overlap(
 
     Returns
     -------
-    float or tuple[TimeSeries, float, ~astropy.units.Quantity['s']]
+    float or tuple[TimeSeries, float, ~astropy.units.Quantity]
         Overlap of `signal1` and `signal2`.
 
         If `optimize_time_and_phase = True`, a tuple is returned that

@@ -147,7 +147,7 @@ def get_FreqSeries_from_dict(
 def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
-    psd: FrequencySeries,
+    psd: Optional[FrequencySeries] = None,
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False  # Call it 'compute_match'?
@@ -161,8 +161,9 @@ def inner_product(
         First signal
     signal2 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Second signal
-    psd : gwpy.frequencyseries.FrequencySeries
-        Power spectral density to use in inner product.
+    psd : gwpy.frequencyseries.FrequencySeries, optional, default = None
+        Power spectral density to use in inner product. If None, it is taken
+        to be 1 1/Hz at all frequencies.
     f_range : list[float] or list[astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
@@ -230,29 +231,22 @@ def inner_product(
     else:
         raise TypeError('`signal2` has to be a GWpy TimeSeries or FrequencySeries')
     
+
+    if psd is None:
+        from .PSDs import psd_no_noise
+
+        psd = psd_no_noise
+
+        # TODO: create psd_no_noise_geom and use this one in case frequ_unit == u.dimensionless_unscaled
+        # -> update on that: no good idea, in this case one should be given.
+        # Because Hz remains Hz in geometrical units, no difference.
+        # Dimensionless would be rescaled with masses, but we should not
+        # account for this
+    
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit,\
         'Need consistent frequency/time units for `psd` and `signal1`, `signal2`.'
         
-        # assert signal_unit / u.Hz == psd.unit,\
-        # ('Need consistent signal units for psd and `signal1`, `signal2`,'
-        #  'i.e. psd unit has to be signal unit per Hz.')
-
-        assert signal_unit**2 / psd.unit * frequ_unit == u.dimensionless_unscaled,\
-        ('Need consistent signal units for psd and `signal1`, `signal2`,'
-         'i.e. the product `signal1`.unit * `signal2`.unit / `psd`.unit * '
-         '`df`.unit has to be dimensionless (note that `df`.unit is set to '
-         'the match of the one of signal1.frequencies etc. if not given).')
-    elif psd is None:  # TODO: implement psd=None in argument and docstring
-        from gw_signal_tools.PSDs import psd_no_noise
-        
-        psd = psd_no_noise
-
-        # TODO: create psd_no_noise_geom and use this one in case frequ_unit == u.dimensionless_unscaled
-
-        assert frequ_unit == psd.frequencies.unit,\
-        'Need consistent frequency/time units for `psd` and `signal1`, `signal2`.'
-
         # assert signal_unit / u.Hz == psd.unit,\
         # ('Need consistent signal units for psd and `signal1`, `signal2`,'
         #  'i.e. psd unit has to be signal unit per Hz.')
@@ -444,12 +438,19 @@ def inner_product(
             # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
             signal2 = f_series_to_pad.append(signal2, inplace=False)
 
-            # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
-            # f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
-            f_series_to_pad.fill(1.0 * f_series_to_pad.unit)  # No return here, thus has to be done separately
-            # f_series_to_pad *= psd.unit   # Conver unit, may be Hz
-            f_series_to_pad *= psd.unit / f_series_to_pad.unit   # Conver unit, may be Hz
+            # # psd = f_series_to_pad.fill(1.0).append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
+            # # f_series_to_pad.fill(1.0)  # No return here, thus has to be done separately
+            # f_series_to_pad.fill(1.0 * f_series_to_pad.unit)  # No return here, thus has to be done separately
+            # # f_series_to_pad *= psd.unit   # Conver unit, may be Hz
+            # f_series_to_pad *= psd.unit / f_series_to_pad.unit   # Conver unit, may be Hz
             # TODO: look for more efficient way than multiplication, can we avoid operations? On the other hand, padding is perhaps not too long
+
+            
+            f_series_to_pad.override_unit(psd.unit)
+            # Should be much more efficient, orders of magnitude in test with
+            # waveforms. Ok to work inplace here since f_series_pad is local
+            f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+
             psd = f_series_to_pad.append(psd, inplace=False)  # Otherwise division by zero. Contribution is zero anyway because signals are zero there
         except ValueError as err:
             err_msg = str(err)
@@ -643,20 +644,20 @@ def optimized_inner_product(
 
 def norm(
     signal: TimeSeries | FrequencySeries,
-    psd: FrequencySeries,
+    *args,
     **kwargs
 ) -> float | tuple[TimeSeries, float, u.Quantity]:
     """
-    Calculates the norm (i.e. SNR) of a given `signal` as measured by
-    the noise-weighted inner product implemented in `inner_product`.
+    Wrapper function for calculation of the norm of the given `signal`
+    (i.e. square root of inner product between `signal` and `signal`,
+    its SNR) as measured by the noise-weighted inner product
+    implemented in `inner_product`.
 
     Parameters
     ----------
     signal : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Signal to compute norm for.
-    psd : gwpy.frequencyseries.FrequencySeries
-        Power spectral density to use in inner product.
-    **kwargs
+    *args, **kwargs
         Additional arguments, will be passed to `inner_product` function.
 
     Returns
@@ -675,7 +676,7 @@ def norm(
         Arguments are passed to this function for calculations.
     """
 
-    out = inner_product(signal, signal, psd, **kwargs)
+    out = inner_product(signal, signal, *args, **kwargs)
 
     if isinstance(out, float):
         return np.sqrt(out)
@@ -686,13 +687,15 @@ def norm(
 def overlap(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
-    psd: FrequencySeries,
+    *args,
     **kwargs
 ) -> float | tuple[TimeSeries, float, u.Quantity]:
     """
-    Calculates the overlap of two given signals as measured by the
-    noise-weighted inner product of the corresponding signals normalized
-    to have unit norm (with respect to this inner product).
+    Wrapper for calculation of the overlap of two given signals as
+    measured by the noise-weighted inner product implemented in
+    `inner_product`. This means the signals are normalized to have unit
+    norm (with respect to this inner product) and then inserted into
+    `inner_product`.
 
     Parameters
     ----------
@@ -700,9 +703,7 @@ def overlap(
         First signal.
     signal2 : gwpy.timeseries.TimeSeries or gwpy.frequencyseries.FrequencySeries
         Second signal.
-    psd : gwpy.frequencyseries.FrequencySeries
-        Power spectral density to use in inner product.
-    **kwargs
+    *args, **kwargs
         Additional arguments, will be passed to `inner_product` function.
 
     Returns
@@ -720,16 +721,16 @@ def overlap(
         Arguments are passed to this function for calculations.
     """
 
-    out = inner_product(signal1, signal2, psd, **kwargs)
+    out = inner_product(signal1, signal2, *args, **kwargs)
 
     normalization = 1.0  # Default value
 
-    if isinstance(norm1 := norm(signal1, psd, **kwargs), float):
+    if isinstance(norm1 := norm(signal1, *args, **kwargs), float):
         normalization *= norm1
     else:
         normalization *= norm1[1]
 
-    if isinstance(norm2 := norm(signal2, psd, **kwargs), float):
+    if isinstance(norm2 := norm(signal2, *args, **kwargs), float):
         normalization *= norm2
     else:
         normalization *= norm2[1]

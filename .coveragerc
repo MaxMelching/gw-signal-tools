@@ -1,0 +1,6 @@
+[run]
+branch = True
+
+; https://coverage.readthedocs.io/en/7.4.0/config.html#ini-syntax
+
+; https://coverage.readthedocs.io/en/7.4.0/excluding.html

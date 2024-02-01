@@ -22,7 +22,7 @@ version = '0.0.1'  # TODO: remove once first tag is made
 
 
 # Write to file that is used in __init__.py
-with open('gw_signal_tools/version.py', mode='wt') as f:
+with open('gw_signal_tools/_version.py', mode='wt') as f:
     f.write(f'__version__ = \'{version}\'')
     f.close()
 
@@ -52,7 +52,7 @@ setuptools.setup(
         'lalsuite[lalinference]',
         'numpy',
         'scipy',
-        'matplotlib'
+        'matplotlib'  # TODO: think about moving this to dev
     ],
     extras_require={
         'dev': [

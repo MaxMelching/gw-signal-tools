@@ -1,4 +1,4 @@
-from .version import __version__  # Make attribute available, not created automatically
+from ._version import __version__  # Make attribute available, not created automatically
 
 
 

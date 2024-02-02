@@ -9,31 +9,20 @@ import lalsimulation.gwsignal.core.waveform as wfm
 
 
 #%% ---------- Consistency tests with inner_product function ----------
-
-deltaT = 1./2048.*u.s
-f_min = 20.*u.Hz  # Cutoff frequency
-f_ref = 20.*u.Hz  # Frequency where we specify spins
-distance = 440.*u.Mpc
-inclination = 2.7*u.rad  # Value taken from posteriors.ipynb, where posterior of inclination is plotted
-phiRef = 0.*u.rad
-eccentricity = 0.*u.dimensionless_unscaled
-longAscNodes = 0.*u.rad
-meanPerAno = 0.*u.rad
-
+f_min = 20.*u.Hz
 
 wf_params = {
     'mass1' : 36*u.solMass,
     'mass2' : 29*u.solMass,
-    'deltaT' : deltaT,  # Needed even for FDWaveform, otherwise f_max very small
-    # 'deltaF' : deltaT / u.s * u.Hz,  # Does work
-    'f22_start' : f_min,
-    'f22_ref': f_ref,
-    'phi_ref' : phiRef,
-    'distance' : distance,
-    'inclination' : inclination,
-    'eccentricity' : eccentricity,
-    'longAscNodes' : longAscNodes,
-    'meanPerAno' : meanPerAno,
+    'deltaT' : 1./2048.*u.s,
+    'f22_start' : f_min,  # Lower cutoff frequency
+    'f22_ref': 20.*u.Hz,# Frequency where spins are specified
+    'phi_ref' : 0.*u.rad,
+    'distance' : 1.*u.Mpc,
+    'inclination' : 0.0*u.rad,
+    'eccentricity' : 0.*u.dimensionless_unscaled,
+    'longAscNodes' : 0.*u.rad,
+    'meanPerAno' : 0.*u.rad,
     'condition' : 0
 }
 

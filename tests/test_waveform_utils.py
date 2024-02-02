@@ -14,29 +14,20 @@ import pytest
 
 
 # We will perform tests with a GW150914-like signal
-deltaT = 1./2048.*u.s
 f_min = 20.*u.Hz
-f_ref = 20.*u.Hz
-distance = 440.*u.Mpc
-inclination = 2.7*u.rad
-phiRef = 0.*u.rad
-eccentricity = 0.*u.dimensionless_unscaled
-longAscNodes = 0.*u.rad
-meanPerAno = 0.*u.rad
-
 
 wf_params = {
-    'mass1' : 36.*u.solMass,
-    'mass2' : 29.*u.solMass,
-    'deltaT' : deltaT,
-    'f22_start' : f_min,
-    'f22_ref': f_ref,
-    'phi_ref' : phiRef,
-    'distance' : distance,
-    'inclination' : inclination,
-    'eccentricity' : eccentricity,
-    'longAscNodes' : longAscNodes,
-    'meanPerAno' : meanPerAno,
+    'mass1' : 36*u.solMass,
+    'mass2' : 29*u.solMass,
+    'deltaT' : 1./2048.*u.s,
+    'f22_start' : f_min,  # Lower cutoff frequency
+    'f22_ref': 20.*u.Hz,# Frequency where spins are specified
+    'phi_ref' : 0.*u.rad,
+    'distance' : 1.*u.Mpc,
+    'inclination' : 0.0*u.rad,
+    'eccentricity' : 0.*u.dimensionless_unscaled,
+    'longAscNodes' : 0.*u.rad,
+    'meanPerAno' : 0.*u.rad,
     'condition' : 0
 }
 
@@ -82,8 +73,9 @@ def test_fft_ifft_consistency():
     hp_t_cropped = hp_t.crop(start=t_min_comp, end=t_max_comp)[2:]
     hp_t_fft_ifft_cropped = hp_t_fft_ifft.crop(start=t_min_comp, end=t_max_comp)
 
-    assert_allclose(hp_t_cropped.value, hp_t_fft_ifft_cropped.value, atol=1.2e-23, rtol=0.0)
+    assert_allclose(hp_t_cropped.value, hp_t_fft_ifft_cropped.value, atol=6e-21, rtol=0.0)
     # Have to apply different kind of threshold here because coarse sampling is indeed very coarse
+    # -> slight phase shift due to that is biggest problem, causes amplitude errors in comparison of values at same time
     assert hp_t_cropped.unit == hp_t_fft_ifft_cropped.unit  # Comparing unit in assert_allclose does not work
 
     hp_t_fft_ifft_fine = fd_to_td_waveform(td_to_fd_waveform(pad_to_get_target_df(hp_t, df=0.0625 * u.Hz)))
@@ -196,13 +188,13 @@ def test_pad_to_target_df(df):
 
 # TODO: get this to work
 
-wf_params_with_total_mass = wf_params.copy()
-wf_params_with_total_mass.pop('mass1')
-wf_params_with_total_mass.pop('mass2')
+# wf_params_with_total_mass = wf_params.copy()
+# wf_params_with_total_mass.pop('mass1')
+# wf_params_with_total_mass.pop('mass2')
 
-total_mass = 100.*u.solMass
-wf_params_with_total_mass['total_mass'] = total_mass
-wf_params_with_total_mass['mass_ratio'] = 0.5 * u.dimensionless_unscaled
+# total_mass = 100.*u.solMass
+# wf_params_with_total_mass['total_mass'] = total_mass
+# wf_params_with_total_mass['mass_ratio'] = 0.5 * u.dimensionless_unscaled
 
 
 # @pytest.mark.parametrize('target_unit_sys', ['SI', 'cosmo', 'geom'])

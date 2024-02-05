@@ -373,6 +373,7 @@ def fisher_val_v3(
         derivative_vals = [np.array(np.inf)]  # Make sure first difference is too large
         deriv_norms = [np.inf]
         convergence_val = np.inf
+        convergence_vals = []
         is_converged = False
         # TODO: better names for parameters in this for loop
 
@@ -425,16 +426,28 @@ def fisher_val_v3(
                     convergence_val = norm(deriv_param - derivative_vals[-2], psd, **inner_prod_kw_args) / np.sqrt(derivative_norm)  # Index -1 is deriv_param
 
 
-            logging.info(convergence_val)                
+            logging.info(convergence_val)
+
+            convergence_vals += [convergence_val]
             
+
+            # if convergence_val <= convergence_threshold:
+            #     is_converged = True
+            #     break
 
             if convergence_val <= convergence_threshold:
                 is_converged = True
-                break
         
         # Remove np.inf from beginning
         deriv_norms.pop(0)
         derivative_vals.pop(0)
+
+        min_dev_index = np.nanargmin(convergence_vals)
+
+        if convergence_check != 'stem':
+            derivative_vals = [derivative_vals[min_dev_index]]
+            derivative_norm = deriv_norms[min_dev_index]
+            # Copied from below. Could unify maybe
         
         # if convergence_check == 'stem':
         #     # fit_vals_x = step_sizes.copy()
@@ -592,6 +605,7 @@ def fisher_val_v3(
             plt.plot(step_sizes[:len(deriv_norms)], deriv_norms, 'x-')#, label='Evolution of\nFisher Values')
 
             plt.plot([step_sizes[0], step_sizes[-1]], 2 * [derivative_norm], 'r--', label='Result')
+            plt.plot([step_sizes[min_dev_index], step_sizes[min_dev_index]], [min(deriv_norms), max(deriv_norms)], 'r--')
 
             plt.legend()
             plt.xlim([1.1 * max(step_sizes), 0.9 * min(step_sizes)])

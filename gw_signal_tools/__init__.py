@@ -1,6 +1,15 @@
 from ._version import __version__  # Make attribute available, not created automatically
 
 
+from os.path import dirname as _path_dirname
+
+PACKAGE_PATH = _path_dirname(__file__)
+
+from os.path import join as _path_join
+
+PLOT_STYLE_SHEET = _path_join(PACKAGE_PATH, 'plot_stylesheet.sty')
+
+
 
 # TODO: decide if functions shall be imported here. Otherwise one has to
 # import from each module (preferred solution at the moment)
@@ -17,6 +26,9 @@ logging.basicConfig(
 )
 
 # TODO: handle errors via logging? On the other hand, we log to command line anyway...
+
+# TODO: make function set_logger, where custom logger can be specified?
+# Would be called as gw_signal_tools.set_logger(), i.e. it has to live in this file
 
 # logging.captureWarnings(True)  # Makes formatting a bit worse, can this be changed?
 

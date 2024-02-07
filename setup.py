@@ -17,7 +17,7 @@ if version == '':
         .strip()
     )
 
-if version[0] == 'v':
+if version != '' and version[0] == 'v':
     version = version[1:]
 
 # Write to file that is used in __init__.py

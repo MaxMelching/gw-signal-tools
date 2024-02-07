@@ -59,3 +59,52 @@ dynamic = [
 [tool.setuptools_scm]
 version_file = 'gw_signal_tools/_version.py'
 # write_to = 'gw_signal_tools/_version.py'
+
+
+# Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file
+
+# [tool.mypy]
+# show_error_codes = True
+# Throws error, but does not seem to be needed
+
+[[tool.mypy.overrides]]
+module = [
+  'astropy.*',
+  'gwpy.*',
+  'lalsimulation.*',
+  'scipy.*'
+]
+
+ignore_missing_imports = true
+
+
+[tool.pytest.ini_options]
+testpaths = [
+  'tests',
+]
+
+filterwarnings = [
+  'ignore:pkg_resources is deprecated as an API..*',
+  # ignore: Deprecated call to `pkg_resources.declare_namespace('ligo')`..*  ; Including string 'ligo' does not work
+  'ignore:Deprecated call to `pkg_resources.declare_namespace(.*)`.*',
+  'ignore:This code is currently UNREVIEWED, use with caution!',
+]
+
+
+# Syntax from https://coverage.readthedocs.io/en/latest/config.html#sample-file
+[tool.coverage.run]
+source = [
+  'gw_signal_tools'
+]
+
+omit = [
+  # don't report coverage for _version.py
+  # (generated automatically by setuptools-scm)
+  '*/_version.py',
+]
+
+branch = true
+
+
+[tool.coverage.report]
+ignore_errors = true

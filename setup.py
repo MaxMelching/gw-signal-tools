@@ -1,29 +1,5 @@
 import setuptools
-import subprocess
 import os
-# import versioneer
-
-# Automatically get version and make it available in package
-# version = (
-#      subprocess.run(['git', 'tag', '--points-at', 'HEAD'], stdout=subprocess.PIPE)
-#      .stdout.decode('utf-8')
-#      .strip()
-# )
-
-# if version == '':
-#     version = (
-#         subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], stdout=subprocess.PIPE)
-#         .stdout.decode('utf-8')
-#         .strip()
-#     )
-
-# if version != '' and version[0] == 'v':
-#     version = version[1:]
-
-# # Write to file that is used in __init__.py
-# with open('gw_signal_tools/_version.py', mode='wt') as f:
-#     f.write(f'__version__ = \'{version}\'')
-#     f.close()
 
 
 # We paste README into long_description, need read function for this
@@ -31,16 +7,8 @@ def read(fname):
     return open(os.path.join(os.path.dirname(__file__), fname)).read()
 
 
-# TODO: rather use pyproject.toml instead of setup.py? -> setup.cfg could maybe do the same, check that
-
 setuptools.setup(
     name='gw_signal_tools',
-    # version=version,
-    # version=versioneer.get_version(),
-    # cmdclass=versioneer.get_cmdclass(),
-    # use_scm_version=True,
-    # version=None,
-    # setup_requires=['setuptools_scm'],
     author='Frank Ohme, Max Melching',
     author_email='max.melching@aei.mpg.de',
     description='Tools for GW Data Analysis',

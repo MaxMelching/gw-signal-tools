@@ -24,7 +24,7 @@ setuptools.setup(
         'lalsuite[lalinference]',
         'numpy',
         'scipy',
-        'setuptools_scm',
+        # 'setuptools_scm',  # Is already covered under build-system in toml, thus not needed here
         'matplotlib'  # TODO: think about moving this to dev
     ],
     extras_require={
@@ -38,3 +38,11 @@ setuptools.setup(
         # 'pyseobnr': 'pyseobnr',  # Apparently causes error
     }
 )
+
+# This is strange: if I try to move stuff entirely to pyprojet.toml, an error occurs.
+# However, if I comment build-system stuff in toml, versioning does not work...
+# -> ahhh, figured it out: problem occurs with empty, but existing setup in
+# combination with toml. In that case, two setup files exist (formally), which
+# leads to a conflict. Renaming this file here and using just toml works fine
+# -> more detailed: [project] section of toml is problem; this is also where
+# dynamic part lies, so not sure if this has effect after commenting...

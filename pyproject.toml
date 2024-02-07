@@ -2,13 +2,14 @@
 # (link: https://github.com/gwpy/gwpy/blob/v3.0.7/pyproject.toml)
 
 
-# [build-system]
-# requires = [
-#   'setuptools>=64',
-#   'setuptools_scm>=8',
-#   'wheel',
-# ]
-# build-backend = 'setuptools.build_meta'
+[build-system]
+requires = [
+  'setuptools>=64',
+  'setuptools_scm>=8',
+  'wheel',
+]
+
+build-backend = 'setuptools.build_meta'
 
 # [project]
 # name = 'gw_signal_tools'
@@ -30,9 +31,19 @@
 # ]
 
 # dynamic properties set by tools
-dynamic = [
-  'version',
-]
+# dynamic = [
+#   'version',
+# ]
+# not sure if this has an effect as long as [project] commented
+# -> installation still works, so we leave it for future to incorporate
+# -> is probably not really dynamic if commented. But that no error is thrown
+# when running it is good enough for now
+
+
+# [project.urls]
+# "Source Code" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools'
+# # "Documentation" = ''  # to be built
+# "Bug Tracker" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
 
 
 # [project.optional-dependencies]
@@ -56,9 +67,11 @@ dynamic = [
 # ]
 
 
+# how versioning is handled
 [tool.setuptools_scm]
 version_file = 'gw_signal_tools/_version.py'
-# write_to = 'gw_signal_tools/_version.py'
+
+fallback_version = 'unknown'  # what is done if no version found
 
 
 # Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file
@@ -78,6 +91,7 @@ module = [
 ignore_missing_imports = true
 
 
+# Syntax: https://docs.pytest.org/en/7.3.x/reference/customize.html#pyproject-toml
 [tool.pytest.ini_options]
 testpaths = [
   'tests',

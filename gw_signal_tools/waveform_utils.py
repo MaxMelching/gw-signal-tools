@@ -39,33 +39,28 @@ def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
     """
 
     # Get Fourier coefficients and corresponding frequencies
-    out = FrequencySeries(
-        np.fft.rfft(signal) * signal.dx,  # Discrete -> continuous
-        frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value) << 1 / signal.dx.unit,
-        unit=signal.unit,
-        name=('Fourier transform of '
-              + signal.name if signal.name is not None else None),
-        channel=signal.channel
-    )
+    if np.iscomplexobj(signal):
+        # rfft not sufficient, need fft
+        out = FrequencySeries(
+            np.fft.fftshift(np.fft.fft(signal)) * signal.dx,  # Discrete -> continuous
+            frequencies=np.fft.fftshift(np.fft.fftfreq(signal.size, d=signal.dx.value)) << 1 / signal.dx.unit,
+            unit=signal.unit * signal.dx.unit,  # Make sure numpy functions carry unit correctly
+            name=('Fourier transform of '
+                + signal.name if signal.name is not None else None),
+            channel=signal.channel
+        )
+    else:
+        out = FrequencySeries(
+            np.fft.rfft(signal) * signal.dx,  # Discrete -> continuous
+            frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value) << 1 / signal.dx.unit,
+            unit=signal.unit * signal.dx.unit,  # Make sure numpy functions carry unit correctly
+            name=('Fourier transform of '
+                + signal.name if signal.name is not None else None),
+            channel=signal.channel
+        )
     
     # Account for non-zero starting time
     out *= np.exp(-1.j * 2 * np.pi * out.frequencies * signal.t0)
-
-    # TODO: if input type is complex, do non-real fft
-    # -> so maybe not using GWpy fft is better anyway. Template:
-    # if isinstance(signal.dtype, np.dtypes.Complex128DType):
-    # # Maybe use np.iscomplexobj?
-    #     dft = ...
-    #     # Don't forget fftshift!!! And adjust f0
-    # # else:
-    # elif isinstance(signal.dtype, np.dtypes.Float64DType):
-    #     dft = ...
-    # else:
-    # print('Error)
-    # 
-    # Also set frequencies
-    
-    # out = FrequencySeries(dft, ...)
     
     return out
 
@@ -247,7 +242,6 @@ def fd_to_td_waveform(
         signal = restrict_f_range(signal, f_range)
         
 
-    # dt = 1 / (2 * signal.size * signal.df)  # Two because rfft has only half size
     dt = 1 / (2 * (signal.size - 1) * signal.df)
     # Note: 2*(n-1) follows normalization that happens according to the docs:
     # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
@@ -274,13 +268,57 @@ def fd_to_td_waveform(
 
     # TODO: add possibility that ifft is done, based on value of f0
 
+    if signal.f0 == 0.0:
+        # Can perform rfft
+
+        dt = 1 / (2 * (signal.size - 1) * signal.df)
+        # Note: 2*(n-1) follows normalization that happens according to the docs:
+        # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
+
+        out = TimeSeries(
+            np.fft.irfft(signal / dt),
+            unit=signal.unit / dt.unit,  # Make sure numpy functions carry unit correctly
+            t0=0.0 * dt.unit,
+            dt=dt,  # Units might not be s, thus no use of .to()
+            name=('Inverse Fourier transform of '
+                + signal.name if signal.name is not None else None),
+            channel=signal.channel
+        )
+    elif signal.f0 < 0.0:
+        # if shifted_frequs:=np.fft.ifftshift(signal.frequencies)[0] != 0.0:
+        if np.fft.ifftshift(signal.frequencies)[0] != 0.0:
+            raise ValueError(
+                '`signal` does not have correct format for ifft. Please check '
+                'https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html#numpy.fft.ifft'
+                'for the requirements regarding frequency range.'
+            )
+
+        dt = 1 / (signal.size * signal.df)
+        # Note: follows normalization that happens according to the docs:
+        # https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html
+
+        out = TimeSeries(
+            np.fft.ifft(np.fft.ifftshift(signal) / dt),
+            unit=signal.unit / dt.unit,  # Make sure numpy functions carry unit correctly
+            t0=0.0 * dt.unit,
+            dt=dt,  # Units might not be s, thus no use of .to()
+            name=('Inverse Fourier transform of '
+                + signal.name if signal.name is not None else None),
+            channel=signal.channel
+        )
+    else:
+        raise ValueError(
+            'Signal starts at positive frequency. Need either f0=0 (for irfft)'
+            ' or negative f0 (for ifft).'
+        )
+
 
     # Handle wrap-around of signal
     # TODO: put this in separate function cyclic_shift?
     # TODO: once epoch is given for FreqSeries, no wrap-around should be
     # needed, right? Thus maybe use if-condition here and only roll if t0=0.0?
     # -> ah no, wrap-around would still occur, has to be kept in (maybe without shift then)
-    number_to_roll = out.size * 7 // 8  # Value chosen, no deep meaning
+    number_to_roll = out.size * 7 // 8  # Arbitrary value, no deep meaning
     out = np.roll(out, shift=number_to_roll)
 
     # out.times -= out.times[number_to_roll]  # Equivalent to following
@@ -445,13 +483,14 @@ def get_strain(
         `extrinsic_params` is `None`), this argument determines which
         strain is returned. Can be `'plus'` (only plus polarization is
         returned), `'cross'` (only cross polarization is returned) or
-        `'mixed'` (combination :math:`h = h_+ - i h_{\cross}` is returned).
+        `'mixed'` (combination :math:`h = h_+ - i h_{\\cross}` is returned).
 
     Returns
     -------
     Any
         Gravitational wave strain.
     """
+    
     if domain == 'time':
         generator_func = wfm.GenerateTDWaveform
     elif domain == 'frequency':
@@ -492,7 +531,17 @@ def get_strain(
             case 'mixed':
                 hp, hc = generator_func(intrinsic_params, wf_generator)
 
-                return hp - 1.j * hc
+                # return hp - 1.j * hc
+            
+                # TODO: account for need to specify negative components in FD
+                if domain == 'time':
+                    return hp - 1.j * hc
+                else:
+                    return FrequencySeries(
+                        np.flip((np.conjugate(hp) - 1.j * np.conjugate(hc))[1:]),
+                        f0=-hp.frequencies[-1],
+                        df=hp.df
+                    ).append(hp - 1.j * hc)
             case _:
                 raise ValueError('Invalid `mode`.')
 

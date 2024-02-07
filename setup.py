@@ -17,9 +17,8 @@ if version == '':
         .strip()
     )
 
-
-version = '0.0.1'  # TODO: remove once first tag is made
-
+if version[0] == 'v':
+    version = version[1:]
 
 # Write to file that is used in __init__.py
 with open('gw_signal_tools/_version.py', mode='wt') as f:

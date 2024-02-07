@@ -1,0 +1,50 @@
+Comparison of results after changing code
+
+
+break_upon_convergence = False
+
+total_mass: 1e-4, 5e-4, 5e-4, 5e-4 (excellent agreement, especially for last three)
+            1e-4, 5e-4, 5e-4, 5e-4
+
+sym_mass_ratio: 5e-4, 5e-4, 5e-4, 1e-3 (excellent agreement, especially for first three)
+                5e-4, 5e-4, 5e-4, 1e-3
+
+mass_ratio: 1e-3, 1e-3, 1e-3, 5e-5 (excellent agreement for all)
+            1e-3, 1e-3, 1e-3, 5e-5
+
+spin1z: 5e-3, 5e-3, 5e-3, 1e-2
+        5e-3, 5e-3, 5e-3, 1e-2
+
+
+
+break_upon_convergence = True
+
+total_mass: 1e-3, 1e-3, 1e-3, 1e-4 (not sure about last one though; but this discrepancy makes sense, after all there has been no breaking upon convergence with stem method in this older version)
+            1e-3, 1e-3, 1e-3, 1e-7
+
+sym_mass_ratio: 1e-5, 1e-3, 1e-3, 1e-3
+                5e-4, 1e-3, 1e-3, 5e-3
+
+mass_ratio: 5e-3, 1e-2, 1e-2, 1e-4 (not sure about last one again)
+            5e-3, 1e-2, 1e-2, 1e-5
+
+spin1z: 1e-2, 1e-2, 1e-2, 1e-2
+        1e-2, 1e-2, 1e-2, 5e-4
+
+
+-> some differences seem to be caused by different thresholds (update: nope, are the same):
+match convergence_check:
+    case 'rel_deviation':
+        convergence_threshold = 0.01
+    case 'stem':
+        convergence_threshold = 0.001
+    case 'mismatch':
+        convergence_threshold = 0.01
+    case 'diff_norm':
+        convergence_threshold = 1.0
+
+
+
+-> all in all, does not seem to be the better option
+
+

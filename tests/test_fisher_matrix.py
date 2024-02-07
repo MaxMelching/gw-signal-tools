@@ -1,6 +1,6 @@
 import numpy as np
 
-from gw_signal_tools.fisher_utils import num_diff, fisher_val_at_point
+from gw_signal_tools.fisher_matrix import num_diff, fisher_val_at_point
 
 
 def test_num_diff():

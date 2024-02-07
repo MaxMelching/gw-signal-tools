@@ -61,5 +61,23 @@ logging.basicConfig(
 # from warnings import filterwarnings as _filterwarnings
 # _filterwarnings('ignore', message=".*This code is currently UNREVIEWED, use with caution!.*")
 # This works. But really do it? Definitely remove in releases, maybe keep privately
-from . import _version
-__version__ = _version.get_versions()['version']
+
+
+# Using versioneer
+# from . import _version
+# __version__ = _version.get_versions()['version']
+
+
+# Using setuptools-scm
+# from pkg_resources import get_distribution, DistributionNotFound
+# try:
+#     __version__ = get_distribution(__name__).version
+# except DistributionNotFound:
+#     # package is not installed
+#     pass
+
+
+try:
+    from ._version import version as __version__
+except ModuleNotFoundError:  # development mode
+    __version__ = ''

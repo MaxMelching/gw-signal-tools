@@ -1,9 +1,14 @@
 __pycache__
 
-*.egg-info/*
+*.egg-info*
+
+*.eggs*
 
 build/*
 
 .coverage
 
 htmlcov/*
+
+
+gw_signal_tools/_version.py

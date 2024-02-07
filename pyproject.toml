@@ -1,0 +1,61 @@
+# Credit to GWPy, where much of the contents of this file is copied from
+# (link: https://github.com/gwpy/gwpy/blob/v3.0.7/pyproject.toml)
+
+
+# [build-system]
+# requires = [
+#   'setuptools>=64',
+#   'setuptools_scm>=8',
+#   'wheel',
+# ]
+# build-backend = 'setuptools.build_meta'
+
+# [project]
+# name = 'gw_signal_tools'
+# description = 'Tools for GW Data Analysis'
+# readme = 'README.md'
+# authors = [
+#   {name = 'Max Melching', email = 'max.melching@aei.mpg.de'},
+#   {name = 'Frank Ohme'},
+# ]
+
+# # requires
+# requires-python = '==3.11.5'
+# dependencies = [
+#   'lalsuite[lalinference]',
+#   'numpy',
+#   'scipy',
+#   # 'setuptools_scm',
+#   'matplotlib'
+# ]
+
+# dynamic properties set by tools
+dynamic = [
+  'version',
+]
+
+
+# [project.optional-dependencies]
+# dev = [
+#   'pycbc',
+#   'mypy',
+#   'pytest',
+#   'coverage'
+# ]
+# jupyter = [
+#   'jupyter'
+# ]
+
+
+# [tool.setuptools.packages.find]
+# # note: this is only required in CI, which otherwise fails because
+# #       GHA is creating a temporary directory that setuptools
+# #       discovers as another top-level package
+# include = [
+#   'gw_signal_tools*',
+# ]
+
+
+[tool.setuptools_scm]
+version_file = 'gw_signal_tools/_version.py'
+# write_to = 'gw_signal_tools/_version.py'

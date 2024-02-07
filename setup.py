@@ -1,7 +1,7 @@
 import setuptools
 import subprocess
 import os
-import versioneer
+# import versioneer
 
 # Automatically get version and make it available in package
 # version = (
@@ -36,8 +36,11 @@ def read(fname):
 setuptools.setup(
     name='gw_signal_tools',
     # version=version,
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    # version=versioneer.get_version(),
+    # cmdclass=versioneer.get_cmdclass(),
+    # use_scm_version=True,
+    # version=None,
+    # setup_requires=['setuptools_scm'],
     author='Frank Ohme, Max Melching',
     author_email='max.melching@aei.mpg.de',
     description='Tools for GW Data Analysis',
@@ -53,6 +56,7 @@ setuptools.setup(
         'lalsuite[lalinference]',
         'numpy',
         'scipy',
+        'setuptools_scm',
         'matplotlib'  # TODO: think about moving this to dev
     ],
     extras_require={

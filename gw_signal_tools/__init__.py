@@ -1,4 +1,4 @@
-from ._version import __version__  # Make attribute available, not created automatically
+# from ._version import __version__  # Make attribute available, not created automatically -> now handled below
 
 
 from os.path import dirname as _path_dirname
@@ -61,3 +61,5 @@ logging.basicConfig(
 # from warnings import filterwarnings as _filterwarnings
 # _filterwarnings('ignore', message=".*This code is currently UNREVIEWED, use with caution!.*")
 # This works. But really do it? Definitely remove in releases, maybe keep privately
+from . import _version
+__version__ = _version.get_versions()['version']

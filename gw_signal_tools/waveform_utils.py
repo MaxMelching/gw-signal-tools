@@ -360,6 +360,144 @@ def pad_to_get_target_df(
 
 
 
+# ---------- Wrapper function for strain generation ----------
+
+import lalsimulation.gwsignal.core.waveform as wfm
+
+
+#
+
+# def get_strain_from_dict(params: dict, domain: Literal['TD', 'FD'], gen, mode=None) -> Any:
+#     # mode can be plus, cross or mixed
+#     if domain != 'TD' and domain != 'FD':
+#         raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
+    
+#     if mode is None:
+#         mode = 'plus'
+    
+
+#     if 'ra' in params or ...:
+#         # Generate detector strain
+#         if domain == 'TD':
+#             return wfm.GenerateTDWaveform()
+#     else:    
+#         # Generate raw strain
+#         match mode:
+
+
+# def get_strain_from_dict(params: dict, domain: Literal['TD', 'FD'], gen, mode=None) -> Any:
+#     # mode can be plus, cross or mixed
+#     if domain != 'TD' and domain != 'FD':
+#         raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
+    
+#     if 'ra' in params or 'dec' in params or 'psi' in params or 'tgps' in params:
+#         detector_output = True
+
+#         if not ('ra' in params and 'dec' in params and 'psi' in params and 'tgps' in params):
+#             raise ValueError('Need complete set of right ascension, dec, ')
+#     else:
+#         detector_output = False
+    
+#     if mode is None:
+#         mode = 'plus'
+    
+
+#     if 'ra' in params or ...:
+#         # Generate detector strain
+#         if domain == 'TD':
+#             return wfm.GenerateTDWaveform().strain()
+#     else:    
+#         # Generate raw strain
+#         match mode:
+
+
+def get_strain(
+    intrinsic_params: dict[str, float | u.Quantity],
+    domain: Literal['time', 'frequency'],
+    wf_generator: Any,
+    extrinsic_params: Optional[dict[str, str | u.Quantity]] = None,
+    mode: Optional[Literal['plus', 'cross', 'mixed']] = None
+) -> Any:
+    """
+    Wrapper function that allows to generate various types of
+    gravitational wave strain.
+
+    Parameters
+    ----------
+    intrinsic_params : dict[str, float or ~astropy.units.Quantity]
+        Parameters to use for waveform generation. Is passed straight to
+        `~lalsimulation.gwsignal.core.waveform.GenerateTDWaveform` or
+        `~lalsimulation.gwsignal.core.waveform.GenerateFDWaveform`,
+        depending on the value of `domain`.
+    domain : Literal['time', 'frequency']
+        Determines domain that waveform is generated in.
+    wf_generator : Any
+        Instance of `~lalsimulation.gwsignal.core.waveform.
+        LALCompactBinaryCoalescenceGenerator` class that is used for
+        waveform generation.
+    extrinsic_params : dict[str, str or ~astropy.units.Quantity],
+    optional, default = None
+        All arguments required to call `~lalsimulation.gwsignal.core.gw.
+        GravitationalWavePolarizations.strain`.
+        If None, no projection on a detector is performed.         
+    mode : Literal['plus', 'cross', 'mixed'], optional, default = None
+        If output is not projected on a detector (i.e.
+        `extrinsic_params` is `None`), this argument determines which
+        strain is returned. Can be `'plus'` (only plus polarization is
+        returned), `'cross'` (only cross polarization is returned) or
+        `'mixed'` (combination :math:`h = h_+ - i h_{\cross}` is returned).
+
+    Returns
+    -------
+    Any
+        Gravitational wave strain.
+    """
+    if domain == 'time':
+        generator_func = wfm.GenerateTDWaveform
+    elif domain == 'frequency':
+        generator_func = wfm.GenerateFDWaveform
+    else:
+        raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
+
+    expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
+
+    if (extrinsic_params is not None
+        and any(param in expected_extr_params for param in extrinsic_params)):
+        return_detector_output = True
+
+        if not all(param in expected_extr_params for param in extrinsic_params):
+            raise ValueError('Need complete set of extrinsic parameters.')    
+    else:
+        return_detector_output = False
+
+    
+    if mode is None:
+        mode = 'plus'
+    else:
+        if return_detector_output:
+            logging.info(
+                '`mode` argument has been set, but is ignored because '
+                'extrinsic parameters have been passed.'
+            )
+    
+
+    if return_detector_output:
+        return generator_func(intrinsic_params, wf_generator).strain(**extrinsic_params)
+    else:
+        match mode:
+            case 'plus':
+                return generator_func(intrinsic_params, wf_generator)[0]
+            case 'cross':
+                return generator_func(intrinsic_params, wf_generator)[1]
+            case 'mixed':
+                hp, hc = generator_func(intrinsic_params, wf_generator)
+
+                return hp - 1.j * hc
+            case _:
+                raise ValueError('Invalid `mode`.')
+
+
+
 # ---------- Plotting Routine with Labels etc ----------
 # import matplotlib
 # import matplotlib.pyplot as plt

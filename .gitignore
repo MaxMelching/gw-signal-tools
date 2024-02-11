@@ -1,14 +1,16 @@
+# Python/Jupyter
 __pycache__
-
-*.egg-info*
-
-*.eggs*
-
-build/*
 
 .coverage
 
 htmlcov/*
 
 
-gw_signal_tools/_version.py
+# Build
+*.egg-info*
+
+*.eggs*
+
+build/*
+
+*_version.py

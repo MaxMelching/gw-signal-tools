@@ -2,14 +2,14 @@
 # (link: https://github.com/gwpy/gwpy/blob/v3.0.7/pyproject.toml)
 
 
-[build-system]
-requires = [
-  'setuptools>=64',
-  'setuptools_scm>=8',
-  'wheel',
-]
+# [build-system]
+# requires = [
+#   'setuptools>=64',
+#   'setuptools_scm>=8',
+#   'wheel',
+# ]
 
-build-backend = 'setuptools.build_meta'
+# build-backend = 'setuptools.build_meta'
 
 # [project]
 # name = 'gw_signal_tools'
@@ -38,6 +38,8 @@ build-backend = 'setuptools.build_meta'
 # -> installation still works, so we leave it for future to incorporate
 # -> is probably not really dynamic if commented. But that no error is thrown
 # when running it is good enough for now
+# -> maybe it makes difference when we do not install with -e (editable mode
+# perhaps makes it some kind of dynamic code already)
 
 
 # [project.urls]
@@ -68,10 +70,10 @@ build-backend = 'setuptools.build_meta'
 
 
 # how versioning is handled
-[tool.setuptools_scm]
-version_file = 'gw_signal_tools/_version.py'
+# [tool.setuptools_scm]
+# version_file = 'gw_signal_tools/_version.py'
 
-fallback_version = 'unknown'  # what is done if no version found
+# fallback_version = 'unknown'  # what is done if no version found
 
 
 # Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file

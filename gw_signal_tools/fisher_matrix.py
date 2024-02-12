@@ -561,6 +561,254 @@ def fisher_val_v3(
     return fisher_matrix
 
 
+def get_waveform_derivative_1D_with_convergence(
+    wf_params_at_point: dict[str, u.Quantity],
+    param_to_vary: str,
+    wf_generator: Any,
+    psd: Optional[FrequencySeries] = None,
+    step_sizes: Optional[list[float]] = None,
+    convergence_check: Optional[Literal['rel_deviation', 'stem', 'mismatch', 'diff_norm']] = None,
+    break_upon_convergence: bool = True,
+    convergence_threshold: float = None,  # Rename to threshold?
+    # convergence_plot: bool = False,  # Removed, now part of return_info
+    return_info: bool = False,
+    **inner_prod_kw_args
+) -> FrequencySeries | tuple[FrequencySeries, u.Quantity]:
+    
+    if psd is None:
+        from .PSDs import psd_no_noise
+
+        psd = psd_no_noise
+
+
+    if step_sizes is None:
+        step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)
+
+    if convergence_check is None:
+        convergence_check = 'rel_deviation'
+    else:
+        if convergence_check not in ['rel_deviation', 'stem', 'mismatch', 'diff_norm']:
+            raise ValueError(
+                    'Invalid value for `convergence_check`.'
+                )
+
+    if convergence_threshold is None:
+        match convergence_check:
+            case 'rel_deviation':
+                convergence_threshold = 0.01
+                # convergence_threshold = 0.005
+            case 'stem':
+                # convergence_threshold = 0.01  # For mean method
+                convergence_threshold = 0.001  # For mean method -> seems very small, maybe only suitable for chirp mass
+            case 'mismatch':
+                convergence_threshold = 0.01  # Maybe choose 0.03? Or 0.001?
+                # convergence_threshold = 0.001
+            case 'diff_norm':
+                # TODO: check this one
+                # convergence_threshold = 1.0
+                convergence_threshold = 0.01
+            # case _:
+            #     raise ValueError(
+            #         'Invalid value for `convergence_check`.'
+            #     )
+    
+
+
+    # derivative_vals = []
+    # deriv_norms = []
+    # convergence_vals = []
+    # TODO: better names for parameters in this for loop
+                
+    is_converged = False
+
+
+    # IDEA: maybe only break if consecutive values are consistent? Could
+    # also build in automatic refinement of step sizes to make it better
+    # -> would add computation time, but really ensure good results
+    # -> consistency measure could be taken from convergence_vals
+
+    refine_numb = 0
+    for _ in range(2):  # Number of refinements of step size
+        derivative_vals = []
+        deriv_norms = []
+        convergence_vals = []
+
+        for i, relative_step_size in enumerate(step_sizes):  # Maybe better than jumping to very small value quickly (numerical errors)
+            deriv_param = get_waveform_derivative_1D(
+                wf_params_at_point,
+                param_to_vary,
+                wf_generator,
+                relative_step_size
+            )
+
+            derivative_norm = norm(deriv_param, psd, **inner_prod_kw_args)
+            if 'optimize_time_and_phase' in inner_prod_kw_args.keys():
+                derivative_norm = derivative_norm[1]**2
+            else:
+                derivative_norm **= 2
+
+            derivative_vals += [deriv_param]
+            deriv_norms += [derivative_norm]
+
+            logging.debug(derivative_vals)
+            logging.debug(deriv_norms)
+
+
+            match convergence_check:
+                case 'rel_deviation':
+                    convergence_vals += [np.abs((derivative_norm - deriv_norms[-2]) / derivative_norm)]
+                case 'mismatch':
+                    # Compute mismatch, using that we already know norms
+                    if len(derivative_vals) >= 2:
+                        convergence_vals += [1.0 - inner_product(deriv_param, derivative_vals[-2], psd, **inner_prod_kw_args) / np.sqrt(derivative_norm * deriv_norms[-2])]  # Index -1 is deriv_param
+                    else:
+                        continue
+                case 'diff_norm':
+                    if len(derivative_vals) >= 2:
+                        # convergence_vals += [norm(deriv_param - derivative_vals[-2], psd, **inner_prod_kw_args)]
+                        # convergence_vals += [norm(deriv_param - derivative_vals[-2], psd, **inner_prod_kw_args) / np.sqrt(derivative_norm * deriv_norms[-2])]  # Index -1 is deriv_param
+                        convergence_vals += [norm(deriv_param - derivative_vals[-2], psd, **inner_prod_kw_args) / np.sqrt(derivative_norm)]  # Index -1 is deriv_param
+                    else:
+                        continue
+
+
+            logging.info(convergence_vals)
+            logging.info([len(derivative_vals), i, len(convergence_vals)])
+
+
+            if (len(convergence_vals) >= 2
+                and (convergence_vals[-2] <= convergence_threshold)
+                and (convergence_vals[-1] <= convergence_threshold)):
+                is_converged = True  # Remains true, is never set to False again
+
+                if break_upon_convergence:
+                    # min_dev_index = -1
+                    # min_dev_index = len(convergence_vals) - 1  # Then it can also be used to access step_sizes
+                    # -> uhhh, problem with this one: convergence_vals is not as long as other lists!!!
+                    # -> so either take i, as done below, or len(derivative_vals)
+                    # -> other idea: make first element nan?
+                    min_dev_index = i  # Then it can also be used to access step_sizes
+                    break
+        
+
+        # TODO: check if stem even makes sense for derivative (is more meaningful in Fisher one)
+        if convergence_check == 'stem':
+            use_mask = len(deriv_norms) * [True]
+            deriv_norms = np.asarray(deriv_norms)
+            fit_vals = deriv_norms[use_mask]
+
+            while len(fit_vals) > 1:
+                mean_val = np.mean(fit_vals)
+
+                # deviations = np.abs(mean_val - fit_vals) / fit_vals
+                # deviations = np.abs(mean_val - deriv_norms) / deriv_norms
+                deviations = (mean_val - deriv_norms)**2 / deriv_norms
+
+            
+                # deviations[np.logical_not(use_mask)] = 0.0  # Avoid index chaos
+
+                # # max_dev_index, min_dev_index = np.argmax(deviations), np.argmin(deviations)
+
+                # max_dev_index = np.argmax(deviations)
+
+                # deviations[np.logical_not(use_mask)] = np.inf  # Avoid index chaos
+                # min_dev_index = np.argmin(deviations)
+
+
+                deviations[np.logical_not(use_mask)] = np.nan  # Avoid index chaos while ignoring excluded points
+                max_dev_index, min_dev_index = np.nanargmax(deviations), np.nanargmin(deviations)
+
+
+                use_mask[max_dev_index] = False
+                # use_mask[use_mask == True][max_dev_index] = False
+                fit_vals = deriv_norms[use_mask]
+                convergence_vals += [deviations[min_dev_index]]
+
+
+                logging.info(fit_vals)
+                logging.info(mean_val)
+                logging.info(deviations)
+                logging.info(min_dev_index)
+
+            
+                if ((convergence_vals[-2] <= convergence_threshold)
+                    and (convergence_vals[-1] <= convergence_threshold)):
+                    is_converged = True  # Remains, is never set to False again
+
+                    if break_upon_convergence:
+                        break
+            
+            # break  # Exit for loop with refinements -> really do that? -> nah, rather not
+        
+
+        # Check if convergence was reached using these step sizes, refine them if not
+        if (not break_upon_convergence or not is_converged) and (convergence_check != 'stem'):
+            min_dev_index = np.nanargmin(convergence_vals)  # Should not have nan, but who knows
+            # TODO: rename min_dev_index
+            # step_sizes = (1.0 + np.array([-0.05, -0.01, 0.01, 0.05])) * step_sizes[min_dev_index]
+
+            # Cut steps made around step size with best criterion value in half
+            # compared to current steps (we take average step size in case
+            # difference to left and right is unequl)
+            # new_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index - 1]) / 8.0  # Due to factor of two below
+            # step_sizes = step_sizes[min_dev_index] + np.array([-2.0, -1.0, 1.0, 2.0]) * new_step
+
+            left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
+            right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
+            # 4.0 due to factor of two below
+            step_sizes = step_sizes[min_dev_index] + np.array(
+                [2.0 * left_step, 1.0 * left_step, 1.0 * right_step, 2.0 * right_step]
+            )
+
+            refine_numb += 1
+        else:
+            # TODO: check if this one makes sense
+            break
+
+    # logging.info(min_dev_index)
+
+    if not is_converged:
+        # TODO: definitely make remark that despite trying very hard, no convergence was possible. Consider changing starting step sizes
+        logging.info(
+            'Calculations using the selected relative step sizes '
+            f'did not converge for parameter `{param_to_vary}` using convergence '
+            f'check method `{convergence_check}`. Last value of criterion '  # Best instead of last?
+            f'was {convergence_vals[-1]}, which is above '  # convergence_vals[min_dev_index]?
+            f'threshold of {convergence_threshold}.'
+        )
+    
+
+    if return_info:
+        # from . import PLOT_STYLE_SHEET
+        # plt.style.use(PLOT_STYLE_SHEET)
+        # Should rather be set by user
+
+        fig, ax = plt.subplots()
+
+        for i in range(len(derivative_vals)):
+            ax.plot(derivative_vals[i], '--', label=f'{step_sizes[i]}')
+
+        # plt.legend(title='Step Sizes', ncols=2 if len(derivative_vals) > 3 else 1)
+        ax.legend(title='Step Sizes', ncols=max(1, len(derivative_vals) % 3))  # Maybe even 4?
+
+        ax.set_xlabel('$f$')
+        ax.set_ylabel('Derivative')
+        ax.set_title(f'Parameter: {param_to_vary}')
+
+        # plt.close()
+
+        return derivative_vals[min_dev_index], {
+            'norm': deriv_norms[min_dev_index],
+            'final_step_size': step_sizes[min_dev_index],
+            'final_convergence_val': convergence_vals[min_dev_index - 1 if min_dev_index != -1 else -1],
+            'number_of_refinements': refine_numb,
+            'final_set_of_rel_step_sizes': step_sizes,
+            'convergence_plot': ax
+        }
+    else:
+        return derivative_vals[min_dev_index]
+
+
 def get_waveform_derivative_1D(
     wf_params_at_point: dict[str, u.Quantity],
     param_to_vary: str,
@@ -627,7 +875,34 @@ def get_waveform_derivative_1D(
 
     deriv_series /= 12.0 * step_size
 
-    # deriv_series = restrict_f_range(deriv_series, f_range=[f_min / 0.9, None])
+    # # deriv_series = restrict_f_range(deriv_series, f_range=[f_min / 0.9, None])
+
+
+    # Just for fun central difference
+    # -> WOW, results are pretty good, actually; I had thought that maybe taking
+    # all these difference may cause issue with floating point error, but
+    # five point stencil is still more accurate (although more calculations involved)
+    # -> numdifftools also uses central method, so it is natural that they have
+    # comparable accuracy, but five point stencil is not significantly more
+    # accurate! So we could save operations and thus e.g. go to lower
+    # thresholds when using central difference
+    # param_vals = param_center_val + np.array([-1.0, 1.0]) * step_size
+
+    # waveforms = [
+    #     wfm.GenerateFDWaveform(
+    #         wf_params_at_point | {param_to_vary: param_val},
+    #         # wf_params_at_point | {param_to_vary: param_val, 'f22_start': f_min},
+    #         wf_generator
+    #     )[0] for param_val in param_vals
+    # ]
+    # # TODO: catch ValueError: Input domain error? This is caused if we
+    # # cross bounds of parameter. In that case we could automatically
+    # # decrease step size... On the other hand, this is again something
+    # # that happens under the hood, not necessarily good idea...
+
+    # deriv_series = waveforms[1] - waveforms[0]
+
+    # deriv_series /= 2.0 * step_size
 
     return deriv_series
 

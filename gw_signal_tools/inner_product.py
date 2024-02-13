@@ -95,7 +95,7 @@ def psd_from_file_to_FreqSeries(
     return FrequencySeries(
         psd,
         frequencies=freqs,
-        unit=1 / u.Hz,
+        unit=1 / u.Hz,  # TODO: change to strain/Hz once lal updates are incorporated
         **kwargs
     )
 
@@ -251,27 +251,19 @@ def inner_product(
 
         psd = psd_no_noise
 
-        # TODO: create psd_no_noise_geom and use this one in case
-        # frequ_unit == u.dimensionless_unscaled
-        # -> update on that: no good idea, in this case one should be given.
-        # Because Hz remains Hz in geometrical units, no difference.
-        # Dimensionless would be rescaled with masses, but we should not
-        # account for this
+        # Make sure units are consistent with input. PSD is always a density,
+        # i.e. strain per frequency
+        psd.frequencies.override_unit(frequ_unit)
+        psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
     
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit, \
             'Need consistent frequency/time units for `psd` and other signals.'
         
-        # assert signal_unit / u.Hz == psd.unit,\
-        # ('Need consistent signal units for psd and `signal1`, `signal2`,'
-        #  'i.e. psd unit has to be signal unit per Hz.')
-
-        # assert signal_unit**2 / psd.unit * frequ_unit == u.dimensionless_unscaled,\
-        # ('Need consistent signal units for psd and `signal1`, `signal2`, '
-        #  'i.e. the product `signal1`.unit * `signal2`.unit / `psd`.unit * '
-        #  '`df`.unit has to be dimensionless (note that `df`.unit is set to '
-        #  'the match of the one of signal1.frequencies etc. if not given).')
-        # TODO: rethink this. Partial derivatives, for example, are not dimensionless
+        assert 1 / frequ_unit == psd.unit, \
+            ('Need consistent signal units for psd and `signal1`, `signal2`,'
+            'i.e. psd unit has to be strain per frequency.')
+        # TODO: change to strain/Hz once lal updates are incorporated
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
@@ -535,7 +527,7 @@ def inner_product_computation(
 
     return 4.0 * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
-    )
+    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
 
 
 def optimized_inner_product(
@@ -614,16 +606,12 @@ def optimized_inner_product(
 
     match_series = 4.0 * TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
-        unit=u.dimensionless_unscaled,
-        # unit=signal1.unit * signal2.unit / psd.unit / dt.unit,
+        unit=(signal1.unit * signal2.unit / psd.unit / dt.unit),
         t0=0.0 * dt.unit,
         dt=dt
     )
-    # NOTE: it has been asserted that this series is dimensionless in the
-    # inner_product function that should be used prior to this function
-    # TODO: verify units again here, might not be 100% correct
 
-    match_result = match_series.abs().max().value
+    match_result = match_series.abs().max()
 
     # Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
@@ -675,7 +663,7 @@ def norm(
 
     out = inner_product(signal, signal, *args, **kwargs)
 
-    if isinstance(out, float):
+    if isinstance(out, (float, u.Quantity)):
         return np.sqrt(out)
     else:
         return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
@@ -725,18 +713,18 @@ def overlap(
 
     normalization = 1.0  # Default value
 
-    if isinstance(norm1 := norm(signal1, *args, **kwargs), float):
+    if isinstance(norm1 := norm(signal1, *args, **kwargs), (float, u.Quantity)):
         normalization *= norm1
     else:
         normalization *= norm1[1]
 
-    if isinstance(norm2 := norm(signal2, *args, **kwargs), float):
+    if isinstance(norm2 := norm(signal2, *args, **kwargs), (float, u.Quantity)):
         normalization *= norm2
     else:
         normalization *= norm2[1]
 
 
-    if isinstance(out, float):
+    if isinstance(out, (float, u.Quantity)):
         return out / normalization
     else:
         return out[0] / normalization, out[1] / normalization, out[2]

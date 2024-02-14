@@ -148,7 +148,7 @@ def inner_product(
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False  # Call it 'compute_match'?
-) -> float | tuple[TimeSeries, float, float]:
+) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
     Calculates the noise-weighted inner product of two signals.
 
@@ -171,7 +171,7 @@ def inner_product(
         input signals.
 
         The whole argument can be None, otherwise it must have length 2.
-        However, one of the bounds (or both) can be None, which
+        However, one of the bounds (or both) can still be None, which
         indicates that no boundary shall be set.
     df : float or ~astropy.units.Quantity, optional, default = None
         Distance df between samples in frequency domain to use in
@@ -186,8 +186,8 @@ def inner_product(
 
     Returns
     -------
-    float or tuple[~gwpy.timeseries.TimeSeries, float,
-    ~astropy.units.Quantity]
+    ~astropy.units.Quantity or tuple[~gwpy.timeseries.TimeSeries,
+    ~astropy.units.Quantity, ~astropy.units.Quantity]
         Inner product value with `signal1`, `signal2` inserted.
 
     Raises
@@ -253,8 +253,9 @@ def inner_product(
 
         # Make sure units are consistent with input. PSD is always a density,
         # i.e. strain per frequency
-        psd.frequencies.override_unit(frequ_unit)
         psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
+        if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
+            psd.frequencies *= (frequ_unit / psd_frequ_unit)
     
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit, \
@@ -365,6 +366,7 @@ def inner_product(
                 'values available from given signals. Taking an upper '
                 f'bound of {f_upper} instead.'
             )
+    logging.info([f_lower, f_upper])
 
 
     # ----- Get signals to same frequencies, i.e. make df equal -----
@@ -395,66 +397,144 @@ def inner_product(
     psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
 
     if optimize_time_and_phase:
-        # ifft wants start at f=0, so we may have to pad signals with zeros
-        number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0
+        logging.debug(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
 
-        if number_to_append < 0:
-            raise ValueError(
-                'Cannot pad signal to f=0. `f_lower` might be negative,'
-                'which is not permitted.'
+        if (f0 := signal1.f0) == 0:
+            pass
+        elif f0 > 0:
+            # irfft wants start at f=0, so we may have to pad signals with zeros
+            number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0
+
+            f_series_to_pad = FrequencySeries(
+                np.zeros(number_to_append),
+                unit=signal_unit,
+                f0=0.0,
+                df=df,
+                dtype=complex  # TODO: use signal1.dtype?
             )
 
-        logging.debug(number_to_append)
-        
-        logging.debug(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
-        
-        f_series_to_pad = FrequencySeries(
-            np.zeros(number_to_append),
-            unit=signal_unit,
-            f0=0.0,
-            df=df,
-            dtype=complex  # TODO: use signal1.dtype?
-        )
 
-        # TODO: check if this has effect on FT, is not smooth right?
-        # -> Maybe use 'linear_ramp' option of np.pad?
-        # See https://numpy.org/doc/stable/reference/generated/numpy.pad.html#numpy.pad
-        # -> ah, but we do not want 'real' FT, we only use it as trick for
-        # calculation of integral. And since limits of integral are fixed,
-        # this here should be the right way to do things
+            try:
+                # Note: `pad` argument of append does not help, does what we do
+                signal1 = f_series_to_pad.append(signal1, inplace=False)
 
-        try:
-            # Note: `pad` argument of append does not help, does what we do
-            signal1 = f_series_to_pad.append(signal1, inplace=False)
+                # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+                signal2 = f_series_to_pad.append(signal2, inplace=False)
 
-            # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
-            signal2 = f_series_to_pad.append(signal2, inplace=False)
+                
+                f_series_to_pad.override_unit(psd.unit)
+                f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+                # 1.0 and not 0.0 to avoid division by zero
+                # Contribution is zero anyway because signals are zero there
 
-            
-            f_series_to_pad.override_unit(psd.unit)
-            f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
-            # 1.0 and not 0.0 to avoid division by zero
-            # Contribution is zero anyway because signals are zero there
+                psd = f_series_to_pad.append(psd, inplace=False)
+            except ValueError as err:
+                err_msg = str(err)
 
-            psd = f_series_to_pad.append(psd, inplace=False)
-        except ValueError as err:
-            err_msg = str(err)
+                if 'Cannot append discontiguous FrequencySeries' in err_msg:
+                    raise ValueError(
+                        'Lower frequency bound and frequency spacing `df` do not '
+                        'match, cannot smoothly continue signals to f=0 (required '
+                        'for Fourier transform). This could be fixed by specifying'
+                        ' a lower bound that is some integer multiple of the given'
+                        ' `df` (if none was given, it is equal to 0.0625, where '
+                        'the unit is derived from the signal frequencies) or by '
+                        'adjusting the given `df`. Note that the source of this '
+                        'error might be a single signal out of the inputs, for '
+                        'instance one that does not start at f=0.'
+                    )
+                else:
+                    # Raise error that would have been raised without exception 
+                    raise ValueError(err_msg)
+        else:
+            number_to_append = abs(int((f_upper.abs().value - f_lower.abs().value) / df_val))
 
-            if 'Cannot append discontiguous FrequencySeries' in err_msg:
-                raise ValueError(
-                    'Lower frequency bound and frequency spacing `df` do not '
-                    'match, cannot smoothly continue signals to f=0 (required '
-                    'for Fourier transform). This could be fixed by specifying'
-                    ' a lower bound that is some integer multiple of the given'
-                    ' `df` (if none was given, it is equal to 0.0625, where '
-                    'the unit is derived from the signal frequencies) or by '
-                    'adjusting the given `df`. Note that the source of this '
-                    'error might be a single signal out of the inputs, for '
-                    'instance one that does not start at f=0.'
+            if f_upper.abs() == f_lower.abs():
+                pass
+            elif f_upper.abs() > f_lower.abs():
+                f_series_to_pad = FrequencySeries(
+                    np.zeros(number_to_append),
+                    unit=signal_unit,
+                    f0=-f_upper,
+                    df=df,
+                    dtype=complex  # TODO: use signal1.dtype?
                 )
-            else:
-                # Raise error that would have been raised without exception 
-                raise ValueError(err_msg)
+
+
+                try:
+                    # Note: `pad` argument of append does not help, does what we do
+                    signal1 = f_series_to_pad.append(signal1, inplace=False)
+
+                    # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+                    signal2 = f_series_to_pad.append(signal2, inplace=False)
+
+                    
+                    f_series_to_pad.override_unit(psd.unit)
+                    f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+                    # 1.0 and not 0.0 to avoid division by zero
+                    # Contribution is zero anyway because signals are zero there
+
+                    psd = f_series_to_pad.append(psd, inplace=False)
+                except ValueError as err:
+                    err_msg = str(err)
+
+                    if 'Cannot append discontiguous FrequencySeries' in err_msg:
+                        raise ValueError(
+                            'Lower frequency bound and frequency spacing `df` do not '
+                            'match, cannot smoothly continue signals to f=0 (required '
+                            'for Fourier transform). This could be fixed by specifying'
+                            ' a lower bound that is some integer multiple of the given'
+                            ' `df` (if none was given, it is equal to 0.0625, where '
+                            'the unit is derived from the signal frequencies) or by '
+                            'adjusting the given `df`. Note that the source of this '
+                            'error might be a single signal out of the inputs, for '
+                            'instance one that does not start at f=0.'
+                        )
+                    else:
+                        # Raise error that would have been raised without exception 
+                        raise ValueError(err_msg)
+            else:        
+                f_series_to_pad = FrequencySeries(
+                    np.zeros(number_to_append),
+                    unit=signal_unit,
+                    f0=-f_lower,
+                    df=df,
+                    dtype=complex  # TODO: use signal1.dtype?
+                )
+
+
+                try:
+                    # Note: `pad` argument of append does not help, does what we do
+                    signal1 = signal1.append(f_series_to_pad, inplace=False)
+
+                    # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+                    signal2 = signal2.append(f_series_to_pad, inplace=False)
+
+                    
+                    f_series_to_pad.override_unit(psd.unit)
+                    f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+                    # 1.0 and not 0.0 to avoid division by zero
+                    # Contribution is zero anyway because signals are zero there
+
+                    psd = psd.append(f_series_to_pad, inplace=False)
+                except ValueError as err:
+                    err_msg = str(err)
+
+                    if 'Cannot append discontiguous FrequencySeries' in err_msg:
+                        raise ValueError(
+                            'Lower frequency bound and frequency spacing `df` do not '
+                            'match, cannot smoothly continue signals to f=0 (required '
+                            'for Fourier transform). This could be fixed by specifying'
+                            ' a lower bound that is some integer multiple of the given'
+                            ' `df` (if none was given, it is equal to 0.0625, where '
+                            'the unit is derived from the signal frequencies) or by '
+                            'adjusting the given `df`. Note that the source of this '
+                            'error might be a single signal out of the inputs, for '
+                            'instance one that does not start at f=0.'
+                        )
+                    else:
+                        # Raise error that would have been raised without exception 
+                        raise ValueError(err_msg)
 
 
         # TODO: implementation using built-in function
@@ -474,7 +554,7 @@ def inner_product_computation(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
     psd: FrequencySeries
-) -> float:
+) -> u.Quantity:
     """
     Lower level function for inner product calculation. Assumes that
     signal conditioning has been done so that they contain values at the
@@ -491,7 +571,7 @@ def inner_product_computation(
 
     Returns
     -------
-    float
+    ~astropy.units
         Inner product value with `signal1`, `signal2` inserted.
     
     See also
@@ -524,17 +604,28 @@ def inner_product_computation(
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
     
+    # if (freq_unit := signal1.frequencies.unit) == u.Hz:
+    #     # freq_unit = freq_unit.to(1/u.s)
+    #     freq_unit = freq_unit
 
     return 4.0 * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
-    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
+    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
+    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).decompose()  # Also resets scale, unwanted
+    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).si  # Also resets scale, unwanted -> uhhh but value unaffected, only scale of unit. I guess that is the best we can do for now
+    # ) * (signal1.unit * signal2.unit / psd.unit * freq_unit)
+    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit * u.s / u.s)  # Cancellation works for dimensionless at least
+    # ) * (((signal1.unit * signal2.unit) * signal1.frequencies.unit) / psd.unit)
+    # ) * (((signal1.unit * signal2.unit) / psd.unit) * signal1.frequencies.unit)
+    # ) * (signal1.unit * signal2.unit * 1/psd.unit * signal1.frequencies.unit)  # No way... Things to cancel correctly here if end unit is dimensionless
+    # ) * (signal1.unit * signal2.unit * signal1.frequencies.unit * 1/psd.unit)  # No difference to line above
 
 
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
     psd: FrequencySeries,
-) -> tuple[TimeSeries, float, u.Quantity]:
+) -> tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
     Lower level function for inner product calculation. Assumes that
     signal conditioning has been done so that they contain values at the
@@ -554,7 +645,8 @@ def optimized_inner_product(
 
     Returns
     -------
-    tuple[~gwpy.timeseries.TimeSeries, float, ~astropy.units.Quantity]
+    tuple[~gwpy.timeseries.TimeSeries, ~astropy.units.Quantity,
+    ~astropy.units.Quantity]
         A tuple with three values:
         (i) a ``TimeSeries`` where values of the inner product for
         different relative time shifts between `signal1`, `signal2`
@@ -569,11 +661,15 @@ def optimized_inner_product(
             and np.isclose(signal2.df, psd.df, atol=0.0, rtol=0.01)), \
         'Signals must have equal frequency spacing.'
     
-    # ----- Second step: make sure all signals start at f=0 -----
-    assert (np.isclose(signal1.f0, 0.0, atol=0.0, rtol=0.01)
-            and np.isclose(signal2.f0, 0.0, atol=0.0, rtol=0.01)
-            and np.isclose(psd.f0, 0.0, atol=0.0, rtol=0.01)), \
-        'All signals must start at f=0.'
+    # ----- Second step: make sure all signals start at valid frequencies -----
+    assert ((np.isclose(signal1.f0, 0.0, atol=0.0, rtol=0.01)
+             and np.isclose(signal2.f0, 0.0, atol=0.0, rtol=0.01)
+             and np.isclose(psd.f0, 0.0, atol=0.0, rtol=0.01)) or
+            (np.isclose(-signal1.f0, signal1.frequencies[-1], atol=0.0, rtol=0.01)
+             and np.isclose(-signal2.f0, signal2.frequencies[-1], atol=0.0, rtol=0.01)
+             and np.isclose(-psd.f0, psd.frequencies[-1], atol=0.0, rtol=0.01))), \
+        ('All signals must start at f=0 or span the same interval from '
+        '0 to f_max and f_min to 0.')
 
     # ----- Third step: assure frequencies are sufficiently equal. -----
     # ----- Maximum deviation allowed between the is given df, which -----
@@ -596,11 +692,13 @@ def optimized_inner_product(
         raise ValueError(custom_error_msg)
     
     # ----- Fourth step: computations -----
-    dft_vals = (signal1 * signal2.conjugate() / psd).value
+    dft_vals = (signal1 * signal2.conjugate() / psd)
 
     # Append zeros so that ifft can be used
-    full_dft_vals = np.append(dft_vals, np.zeros(dft_vals.size - 1))
-
+    if dft_vals.f0 == 0.0:
+        full_dft_vals = np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
+    else:
+        full_dft_vals = np.fft.fftshift(dft_vals.value)
 
     dt = 1.0 / (full_dft_vals.size * signal1.df)
 
@@ -629,7 +727,7 @@ def norm(
     signal: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> float | tuple[TimeSeries, float, u.Quantity]:
+) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
     Wrapper function for calculation of the norm of the given `signal`
     (i.e. square root of inner product between `signal` and `signal`,
@@ -646,8 +744,8 @@ def norm(
 
     Returns
     -------
-    float or tuple[~gwpy.timeseries.TimeSeries, float,
-    ~astropy.units.Quantity]
+    ~astropy.units.Quantity or tuple[~gwpy.timeseries.TimeSeries,
+    ~astropy.units.Quantity, ~astropy.units.Quantity]
         Norm of `signal`, i.e. square root of inner product of `signal`
         with itself.
 
@@ -674,7 +772,7 @@ def overlap(
     signal2: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> float | tuple[TimeSeries, float, u.Quantity]:
+) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
     Wrapper for calculation of the overlap of two given signals as
     measured by the noise-weighted inner product implemented in
@@ -695,8 +793,8 @@ def overlap(
 
     Returns
     -------
-    float or tuple[~gwpy.timeseries.TimeSeries, float,
-    ~astropy.units.Quantity]
+    ~astropy.units.Quantity or tuple[~gwpy.timeseries.TimeSeries,
+    ~astropy.units.Quantity, ~astropy.units.Quantity]
         Overlap of `signal1` and `signal2`.
 
         If `optimize_time_and_phase = True`, a tuple is returned that

@@ -115,6 +115,13 @@ def restrict_f_range(
     ValueError
         If `f_range` does not contain exactly two elements.
     """
+
+    assert isinstance(signal, FrequencySeries), \
+        'Signal has to be a GWPy ``FrequencySeries``.'
+    
+    signal.epoch = None  # Ich raschd ausch alder, ich raschd kompledd ausch
+
+    # ----- Handling f_range -----
     frequ_unit = signal.frequencies.unit
 
     if len(f_range) != 2:
@@ -144,15 +151,17 @@ def restrict_f_range(
 
 
     # Sanity checks with frequencies
-    if (f_lower < signal.f0) and not pad_to_f_zero:
-        # Note: first condition fine if padding shall be done, thus second
-        # condition after "and" is important
-        logging.info(
-            f'The `f_lower` provided is smaller than the signals smallest '
-            'frequency. Please be aware that this function does not nothing '
-            'to change that, i.e. no padding to this lower frequency is '
-            'applied (can be changed by setting `pad_to_zero` to `True`).'
-        )
+    if f_lower < signal.f0:
+        if not pad_to_f_zero:
+            # Note: first condition fine if padding shall be done
+            logging.info(
+                f'The `f_lower` provided is smaller than the signals smallest '
+                'frequency. Please be aware that this function does not nothing '
+                'to change that, i.e. no padding to this lower frequency is '
+                'applied (can be changed by setting `pad_to_zero` to `True`).'
+            )
+
+            f_lower = signal.f0
     
     if f_upper > signal.frequencies[-1]:
         logging.info(
@@ -162,40 +171,67 @@ def restrict_f_range(
             'applied (not the scope of this function).'
         )
 
+        f_upper = signal.frequencies[-1]
 
-    if pad_to_f_zero:# and (signal.f0 > signal.df):
+
+    if pad_to_f_zero and (signal.f0 > signal.df):
         # Padding to zero frequency component shall be done and is needed
-        number_to_append = int(signal.f0.value / signal.df.value)
+        number_to_append = int(np.ceil(signal.f0.value / signal.df.value))
 
         signal = FrequencySeries(
             np.zeros(number_to_append),
             unit=signal.unit,
             f0=0.0,
             df=signal.df,
-            dtype=signal.dtype
+            dtype=signal.dtype,
+            epoch=None
         ).append(signal)
+        # ).append(signal, pad=0.0)
+    elif pad_to_f_zero and (signal.f0 < 0.0):
+        signal = signal.crop(start=0.0, copy=copy)
     elif copy:
         # Note that this is not separate if-condition because copying
         # happens automatically in append-operation in case above. Thus
         # making another copy would make no sense.
-        signal = signal.copy()
+        signal = signal.copy()  # signal.__deepcopy__(None) not needed
 
     # Otherwise all operations are performed inplace
 
 
-    # Now filling of all values outside of frequency range
-    # and potentially cutting off some parts of the signal
-    fill_val = u.Quantity(fill_val, unit=signal.unit)
+    # ----- Now filling of all values outside of frequency range -----
+    # ----- and potentially cutting off some parts of the signal -----
+    try:
+        fill_val = u.Quantity(fill_val, unit=signal.unit)
+    except u.UnitConversionError:
+        # Conversion only fails if df is already Quantity and has
+        # non-matching unit, so we can assume that fill_val.unit works
+        raise ValueError(
+            f'Need consistent units for `fill_val` ({fill_val.unit}) and'
+            f' signals ({signal.unit}).'
+        )
+
 
     lower_number_to_discard = int(np.ceil((f_lower.value - signal.f0.value) / signal.df.value))
     signal[:lower_number_to_discard].fill(fill_val)
+    # signal[:lower_number_to_discard] = np.ones(lower_number_to_discard) * fill_val  # Also inplace if copy=False, so using it is pointless
 
+    # if cut_upper and (f_upper < signal.frequencies[-1]):
+    #     # If second condition is not True, no cropping can be performed
+    #     signal = signal.crop(end=f_upper)
+    # else:
+    #     upper_number_to_discard = signal.size - int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
+    #     signal[upper_number_to_discard:].fill(fill_val)
+    #     # signal[upper_number_to_discard:] = np.ones(signal.size - upper_number_to_discard) * fill_val  # Also inplace if copy=False, so using it is pointless
+
+
+
+    upper_number_to_discard = signal.size - int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
     if cut_upper and (f_upper < signal.frequencies[-1]):
         # If second condition is not True, no cropping can be performed
-        signal = signal.crop(end=f_upper)
+        signal = signal[:upper_number_to_discard]
     else:
-        upper_number_to_discard = signal.size -  int(np.ceil((signal.frequencies[-1].value - f_upper.value) / signal.df.value))
         signal[upper_number_to_discard:].fill(fill_val)
+        # signal[upper_number_to_discard:] = np.ones(signal.size - upper_number_to_discard) * fill_val  # Also inplace if copy=False, so using it is pointless
 
     return signal
 
@@ -403,52 +439,6 @@ def pad_to_get_target_df(
 import lalsimulation.gwsignal.core.waveform as wfm
 
 
-#
-
-# def get_strain_from_dict(params: dict, domain: Literal['TD', 'FD'], gen, mode=None) -> Any:
-#     # mode can be plus, cross or mixed
-#     if domain != 'TD' and domain != 'FD':
-#         raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
-    
-#     if mode is None:
-#         mode = 'plus'
-    
-
-#     if 'ra' in params or ...:
-#         # Generate detector strain
-#         if domain == 'TD':
-#             return wfm.GenerateTDWaveform()
-#     else:    
-#         # Generate raw strain
-#         match mode:
-
-
-# def get_strain_from_dict(params: dict, domain: Literal['TD', 'FD'], gen, mode=None) -> Any:
-#     # mode can be plus, cross or mixed
-#     if domain != 'TD' and domain != 'FD':
-#         raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
-    
-#     if 'ra' in params or 'dec' in params or 'psi' in params or 'tgps' in params:
-#         detector_output = True
-
-#         if not ('ra' in params and 'dec' in params and 'psi' in params and 'tgps' in params):
-#             raise ValueError('Need complete set of right ascension, dec, ')
-#     else:
-#         detector_output = False
-    
-#     if mode is None:
-#         mode = 'plus'
-    
-
-#     if 'ra' in params or ...:
-#         # Generate detector strain
-#         if domain == 'TD':
-#             return wfm.GenerateTDWaveform().strain()
-#     else:    
-#         # Generate raw strain
-#         match mode:
-
-
 def get_strain(
     intrinsic_params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
@@ -496,7 +486,9 @@ def get_strain(
     elif domain == 'frequency':
         generator_func = wfm.GenerateFDWaveform
     else:
-        raise ValueError('Invalid domain, select either `\'TD\'` or `\'FD\'`.')
+        raise ValueError(
+            'Invalid domain, select either `\'time\'` or `\'frequency\'`.'
+        )
 
     expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
 
@@ -531,17 +523,19 @@ def get_strain(
             case 'mixed':
                 hp, hc = generator_func(intrinsic_params, wf_generator)
 
-                # return hp - 1.j * hc
-            
-                # TODO: account for need to specify negative components in FD
+                # NOTE: we choose to construct strain according to the LAL
+                # convention, i.e. as h_+ + i * h_x and not according to
+                # h_+ - i * h_x
+
                 if domain == 'time':
-                    return hp - 1.j * hc
+                    return hp + 1.j * hc
                 else:
+                    # Need to specify negative Fourier components as well
                     return FrequencySeries(
-                        np.flip((np.conjugate(hp) - 1.j * np.conjugate(hc))[1:]),
+                        np.flip((np.conjugate(hp) + 1.j * np.conjugate(hc))[1:]),
                         f0=-hp.frequencies[-1],
                         df=hp.df
-                    ).append(hp - 1.j * hc)
+                    ).append(hp + 1.j * hc, inplace=True)
             case _:
                 raise ValueError('Invalid `mode`.')
 

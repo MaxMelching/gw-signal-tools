@@ -9,7 +9,7 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 from .waveform_utils import (
-    td_to_fd_waveform, pad_to_get_target_df
+    td_to_fd_waveform, pad_to_get_target_df, restrict_f_range
 )
 
 
@@ -106,7 +106,7 @@ def inner_product(
         signal_unit = signal1.unit * u.s
     else:
         raise TypeError(
-            '`signal1` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``'
+            '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
 
     if isinstance(signal2, FrequencySeries):
@@ -123,20 +123,28 @@ def inner_product(
             'Need consistent signal units for `signal1` and `signal2`.'
     else:
         raise TypeError(
-            '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``'
+            '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
     
 
+    # ----- Handling PSD -----
     if psd is None:
         from .PSDs import psd_no_noise
 
-        psd = psd_no_noise
+        psd = psd_no_noise.copy()
 
         # Make sure units are consistent with input. PSD is always a density,
         # i.e. strain per frequency
         psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
         if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
             psd.frequencies *= (frequ_unit / psd_frequ_unit)
+        
+        
+        # V2
+        # psd = FrequencySeries(
+        #     psd_no_noise.value / frequ_unit,
+        #     frequencies=psd_no_noise.frequencies.value * frequ_unit
+        # )
     
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit, \
@@ -150,7 +158,7 @@ def inner_product(
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
 
-    # ----- Handling of df argument -----
+    # ----- Handling df argument -----
     if df is None:
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
     else:
@@ -165,27 +173,24 @@ def inner_product(
             )
 
 
-    # If necessary, do fft. We apply padding to ensure sufficient
-    # resolution in frequency domain.
+    # ----- If necessary, do fft (padding to ensure -----
+    # ----- sufficient resolution in frequency domain) -----
     if isinstance(signal1, TimeSeries):
-        signal1 = pad_to_get_target_df(signal1, df)
-        # TODO: do if part from padding function here? Would avoid function call
-        signal1 = td_to_fd_waveform(signal1)
+        signal1 = td_to_fd_waveform(pad_to_get_target_df(signal1, df))
 
     if isinstance(signal2, TimeSeries):
-        signal2 = pad_to_get_target_df(signal2, df)
-        signal2 = td_to_fd_waveform(signal2)
+        signal2 = td_to_fd_waveform(pad_to_get_target_df(signal2, df))
         
     logging.debug(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
     
 
-    # ----- Set default values -----
+    # ----- Handling frequency range -----
     f_lower, f_upper = [
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
         min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
     ]
 
-    # ----- If bounds are given, check that they fit the input data -----
+    # If bounds are given, check that they fit the input data
     if f_range is not None:
         if len(f_range) != 2:
             raise ValueError(
@@ -247,11 +252,12 @@ def inner_product(
                 'values available from given signals. Taking an upper '
                 f'bound of {f_upper} instead.'
             )
-    logging.info([f_lower, f_upper])
+
+    logging.debug([f_lower, f_upper])
 
 
-    # ----- Get signals to same frequencies, i.e. make df equal -----
-    # ----- (if necessary) and then restrict range -----
+    # ----- Get signals to same frequencies, i.e. make df -----
+    # ----- equal (if necessary) and then restrict range -----
     df_val = df.value  # interpolate wants dimensionless df
 
     psd_unit = psd.unit  # Has to be kept as long as GWPy bug present
@@ -268,154 +274,205 @@ def inner_product(
     if psd.unit != psd_unit:
         psd *= (psd_unit / psd.unit)
 
-    # signal1 = signal1.crop(start=f_lower, end=f_upper)
-    # signal2 = signal2.crop(start=f_lower, end=f_upper)
-    # psd = psd.crop(start=f_lower, end=f_upper)
 
-    # TODO: check if rounding needed due to use of `floor` in crop?
-    signal1 = signal1.crop(start=f_lower + 0.9 * df, end=f_upper)
-    signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
-    psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
+    if not optimize_time_and_phase:
+        # signal1 = signal1.crop(start=f_lower, end=f_upper)
+        # signal2 = signal2.crop(start=f_lower, end=f_upper)
+        # psd = psd.crop(start=f_lower, end=f_upper)
 
-    if optimize_time_and_phase:
-        logging.debug(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
+        # TODO: check if rounding needed due to use of `floor` in crop?
+        signal1 = signal1.crop(start=f_lower + 0.9 * df, end=f_upper)
+        signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
+        psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
 
-        if (f0 := signal1.f0) == 0:
-            pass
-        elif f0 > 0:
-            # irfft wants start at f=0, so we may have to pad signals with zeros
-            number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0
+        return inner_product_computation(signal1, signal2, psd)
+    else:
+        # More complicated because fft routines expect certain frequency
+        # ranges. Thus checking if requirements are fulfilled
+        if f_lower >= 0.0 * frequ_unit:
+            signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper], pad_to_f_zero=True,
+                                       copy=True, cut_upper=True)
+            signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper], pad_to_f_zero=True,
+                                       copy=True, cut_upper=True)
+            psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0,
+                                   pad_to_f_zero=True, copy=True, cut_upper=True)
+        else:
+            signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper], pad_to_f_zero=False,
+                                       copy=True, cut_upper=True)
+            signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper], pad_to_f_zero=False,
+                                       copy=True, cut_upper=True)
+            psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0,
+                                   pad_to_f_zero=False, copy=True, cut_upper=True)
 
-            f_series_to_pad = FrequencySeries(
-                np.zeros(number_to_append),
-                unit=signal_unit,
-                f0=0.0,
-                df=df,
-                dtype=complex  # TODO: use signal1.dtype?
-            )
+        # if (f0 := max(signal1.f0, signal2.f0, psd.f0)) == 0:
+        #     signal1 = signal1.crop(end=f_upper)
+        #     signal2 = signal2.crop(end=f_upper)
+        #     psd = psd.crop(end=f_upper)
+
+        #     # Is cropping really the smartest thing to do? Because setting
+        #     # to zero would increase time domain resolution, right? Which
+        #     # would be very desirable
+
+        #     number_to_fill = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0
+        #     logging.info(number_to_fill)
+
+        #     signal1[:number_to_fill] = np.zeros(number_to_fill) << signal_unit
+        #     signal2[:number_to_fill] = np.zeros(number_to_fill) << signal_unit
+        #     psd[:number_to_fill] = np.ones(number_to_fill) << psd.unit
+
+        #     # signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper], pad_to_f_zero=True,
+        #     #                            copy=True, cut_upper=True)
+        #     # signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper], pad_to_f_zero=True,
+        #     #                            copy=True, cut_upper=True)
+        #     # psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0,
+        #     #                        pad_to_f_zero=True, copy=True, cut_upper=True)
+            
+        #     logging.info(signal1.frequencies)
+        #     logging.info(signal2.frequencies)
+        #     logging.info(psd.frequencies)
+        # elif f0 > 0:
+        #     signal1 = signal1.crop(start=f_lower + 0.9 * df, end=f_upper)
+        #     signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
+        #     psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
+
+        #     # irfft wants start at f=0, so we may have to pad signals with zeros
+        #     number_to_append = int((f_lower.value - 0.0) / df_val)  # Symbolic -0.0
+
+        #     f_series_to_pad = FrequencySeries(
+        #         np.zeros(number_to_append),
+        #         unit=signal_unit,
+        #         f0=0.0,
+        #         df=df,
+        #         dtype=complex  # TODO: use signal1.dtype?
+        #     )
 
 
-            try:
-                # Note: `pad` argument of append does not help, does what we do
-                signal1 = f_series_to_pad.append(signal1, inplace=False)
+        #     try:
+        #         # Note: `pad` argument of append does not help, does what we do
+        #         signal1 = f_series_to_pad.append(signal1, inplace=False)
 
-                # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
-                signal2 = f_series_to_pad.append(signal2, inplace=False)
+        #         # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+        #         signal2 = f_series_to_pad.append(signal2, inplace=False)
 
                 
-                f_series_to_pad.override_unit(psd.unit)
-                f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
-                # 1.0 and not 0.0 to avoid division by zero
-                # Contribution is zero anyway because signals are zero there
+        #         f_series_to_pad.override_unit(psd.unit)
+        #         f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+        #         # 1.0 and not 0.0 to avoid division by zero
+        #         # Contribution is zero anyway because signals are zero there
 
-                psd = f_series_to_pad.append(psd, inplace=False)
-            except ValueError as err:
-                err_msg = str(err)
+        #         psd = f_series_to_pad.append(psd, inplace=False)
+        #     except ValueError as err:
+        #         err_msg = str(err)
 
-                if 'Cannot append discontiguous FrequencySeries' in err_msg:
-                    raise ValueError(
-                        'Lower frequency bound and frequency spacing `df` do not '
-                        'match, cannot smoothly continue signals to f=0 (required '
-                        'for Fourier transform). This could be fixed by specifying'
-                        ' a lower bound that is some integer multiple of the given'
-                        ' `df` (if none was given, it is equal to 0.0625, where '
-                        'the unit is derived from the signal frequencies) or by '
-                        'adjusting the given `df`. Note that the source of this '
-                        'error might be a single signal out of the inputs, for '
-                        'instance one that does not start at f=0.'
-                    )
-                else:
-                    # Raise error that would have been raised without exception 
-                    raise ValueError(err_msg)
-        else:
-            number_to_append = abs(int((f_upper.abs().value - f_lower.abs().value) / df_val))
+        #         if 'Cannot append discontiguous FrequencySeries' in err_msg:
+        #             raise ValueError(
+        #                 'Lower frequency bound and frequency spacing `df` do not '
+        #                 'match, cannot smoothly continue signals to f=0 (required '
+        #                 'for Fourier transform). This could be fixed by specifying'
+        #                 ' a lower bound that is some integer multiple of the given'
+        #                 ' `df` (if none was given, it is equal to 0.0625, where '
+        #                 'the unit is derived from the signal frequencies) or by '
+        #                 'adjusting the given `df`. Note that the source of this '
+        #                 'error might be a single signal out of the inputs, for '
+        #                 'instance one that does not start at f=0.'
+        #             )
+        #         else:
+        #             # Raise error that would have been raised without exception 
+        #             raise ValueError(err_msg)
+        # else:
+        #     number_to_append = abs(int((f_upper.abs().value - f_lower.abs().value) / df_val))
 
-            if f_upper.abs() == f_lower.abs():
-                pass
-            elif f_upper.abs() > f_lower.abs():
-                f_series_to_pad = FrequencySeries(
-                    np.zeros(number_to_append),
-                    unit=signal_unit,
-                    f0=-f_upper,
-                    df=df,
-                    dtype=complex  # TODO: use signal1.dtype?
-                )
+        #     assert np.ifftshift(signal1.frequencies) != 0.0 * frequ_unit, \
+        #         ('signal1 has a negative starting frequency, but not the '
+        #          'frequency range expected by `~numpy.fft.fft`. This is '
+        #          'required when calling with `optimize_time_and_phase=True`.')
 
-
-                try:
-                    # Note: `pad` argument of append does not help, does what we do
-                    signal1 = f_series_to_pad.append(signal1, inplace=False)
-
-                    # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
-                    signal2 = f_series_to_pad.append(signal2, inplace=False)
-
-                    
-                    f_series_to_pad.override_unit(psd.unit)
-                    f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
-                    # 1.0 and not 0.0 to avoid division by zero
-                    # Contribution is zero anyway because signals are zero there
-
-                    psd = f_series_to_pad.append(psd, inplace=False)
-                except ValueError as err:
-                    err_msg = str(err)
-
-                    if 'Cannot append discontiguous FrequencySeries' in err_msg:
-                        raise ValueError(
-                            'Lower frequency bound and frequency spacing `df` do not '
-                            'match, cannot smoothly continue signals to f=0 (required '
-                            'for Fourier transform). This could be fixed by specifying'
-                            ' a lower bound that is some integer multiple of the given'
-                            ' `df` (if none was given, it is equal to 0.0625, where '
-                            'the unit is derived from the signal frequencies) or by '
-                            'adjusting the given `df`. Note that the source of this '
-                            'error might be a single signal out of the inputs, for '
-                            'instance one that does not start at f=0.'
-                        )
-                    else:
-                        # Raise error that would have been raised without exception 
-                        raise ValueError(err_msg)
-            else:        
-                f_series_to_pad = FrequencySeries(
-                    np.zeros(number_to_append),
-                    unit=signal_unit,
-                    f0=-f_lower,
-                    df=df,
-                    dtype=complex  # TODO: use signal1.dtype?
-                )
+        #     if f_upper.abs() == f_lower.abs():
+        #         pass
+        #     elif f_upper.abs() > f_lower.abs():
+        #         f_series_to_pad = FrequencySeries(
+        #             np.zeros(number_to_append),
+        #             unit=signal_unit,
+        #             f0=-f_upper,
+        #             df=df,
+        #             dtype=complex  # TODO: use signal1.dtype?
+        #         )
 
 
-                try:
-                    # Note: `pad` argument of append does not help, does what we do
-                    signal1 = signal1.append(f_series_to_pad, inplace=False)
+        #         try:
+        #             # Note: `pad` argument of append does not help, does what we do
+        #             signal1 = f_series_to_pad.append(signal1, inplace=False)
 
-                    # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
-                    signal2 = signal2.append(f_series_to_pad, inplace=False)
+        #             # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+        #             signal2 = f_series_to_pad.append(signal2, inplace=False)
 
                     
-                    f_series_to_pad.override_unit(psd.unit)
-                    f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
-                    # 1.0 and not 0.0 to avoid division by zero
-                    # Contribution is zero anyway because signals are zero there
+        #             f_series_to_pad.override_unit(psd.unit)
+        #             f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+        #             # 1.0 and not 0.0 to avoid division by zero
+        #             # Contribution is zero anyway because signals are zero there
 
-                    psd = psd.append(f_series_to_pad, inplace=False)
-                except ValueError as err:
-                    err_msg = str(err)
+        #             psd = f_series_to_pad.append(psd, inplace=False)
+        #         except ValueError as err:
+        #             err_msg = str(err)
 
-                    if 'Cannot append discontiguous FrequencySeries' in err_msg:
-                        raise ValueError(
-                            'Lower frequency bound and frequency spacing `df` do not '
-                            'match, cannot smoothly continue signals to f=0 (required '
-                            'for Fourier transform). This could be fixed by specifying'
-                            ' a lower bound that is some integer multiple of the given'
-                            ' `df` (if none was given, it is equal to 0.0625, where '
-                            'the unit is derived from the signal frequencies) or by '
-                            'adjusting the given `df`. Note that the source of this '
-                            'error might be a single signal out of the inputs, for '
-                            'instance one that does not start at f=0.'
-                        )
-                    else:
-                        # Raise error that would have been raised without exception 
-                        raise ValueError(err_msg)
+        #             if 'Cannot append discontiguous FrequencySeries' in err_msg:
+        #                 raise ValueError(
+        #                     'Lower frequency bound and frequency spacing `df` do not '
+        #                     'match, cannot smoothly continue signals to f=0 (required '
+        #                     'for Fourier transform). This could be fixed by specifying'
+        #                     ' a lower bound that is some integer multiple of the given'
+        #                     ' `df` (if none was given, it is equal to 0.0625, where '
+        #                     'the unit is derived from the signal frequencies) or by '
+        #                     'adjusting the given `df`. Note that the source of this '
+        #                     'error might be a single signal out of the inputs, for '
+        #                     'instance one that does not start at f=0.'
+        #                 )
+        #             else:
+        #                 # Raise error that would have been raised without exception 
+        #                 raise ValueError(err_msg)
+        #     else:        
+        #         f_series_to_pad = FrequencySeries(
+        #             np.zeros(number_to_append),
+        #             unit=signal_unit,
+        #             f0=-f_lower,
+        #             df=df,
+        #             dtype=complex  # TODO: use signal1.dtype?
+        #         )
+
+
+        #         try:
+        #             # Note: `pad` argument of append does not help, does what we do
+        #             signal1 = signal1.append(f_series_to_pad, inplace=False)
+
+        #             # f_series_to_pad *= signal2.unit / f_series_to_pad.unit  # Right now, we assure signal1 and signal2 have same unit
+        #             signal2 = signal2.append(f_series_to_pad, inplace=False)
+
+                    
+        #             f_series_to_pad.override_unit(psd.unit)
+        #             f_series_to_pad.fill(1.0 * f_series_to_pad.unit)
+        #             # 1.0 and not 0.0 to avoid division by zero
+        #             # Contribution is zero anyway because signals are zero there
+
+        #             psd = psd.append(f_series_to_pad, inplace=False)
+        #         except ValueError as err:
+        #             err_msg = str(err)
+
+        #             if 'Cannot append discontiguous FrequencySeries' in err_msg:
+        #                 raise ValueError(
+        #                     'Lower frequency bound and frequency spacing `df` do not '
+        #                     'match, cannot smoothly continue signals to f=0 (required '
+        #                     'for Fourier transform). This could be fixed by specifying'
+        #                     ' a lower bound that is some integer multiple of the given'
+        #                     ' `df` (if none was given, it is equal to 0.0625, where '
+        #                     'the unit is derived from the signal frequencies) or by '
+        #                     'adjusting the given `df`. Note that the source of this '
+        #                     'error might be a single signal out of the inputs, for '
+        #                     'instance one that does not start at f=0.'
+        #                 )
+        #             else:
+        #                 # Raise error that would have been raised without exception 
+        #                 raise ValueError(err_msg)
 
 
         # TODO: implementation using built-in function
@@ -427,8 +484,6 @@ def inner_product(
         # Potentially useful... -> nope, see comments above
 
         return optimized_inner_product(signal1, signal2, psd)
-    else:
-        return inner_product_computation(signal1, signal2, psd)
 
 
 def inner_product_computation(
@@ -541,16 +596,23 @@ def optimized_inner_product(
     assert (np.isclose(signal1.df, psd.df, atol=0.0, rtol=0.01)
             and np.isclose(signal2.df, psd.df, atol=0.0, rtol=0.01)), \
         'Signals must have equal frequency spacing.'
+    # TODO: change checks to quantity_close?
     
     # ----- Second step: make sure all signals start at valid frequencies -----
     assert ((np.isclose(signal1.f0, 0.0, atol=0.0, rtol=0.01)
              and np.isclose(signal2.f0, 0.0, atol=0.0, rtol=0.01)
              and np.isclose(psd.f0, 0.0, atol=0.0, rtol=0.01)) or
+             # TODO: think about condition again, for second argument zero this
+             # effectively means we test for equality (which may be valid, right?
+             # Fourier needs exactly zero)
             (np.isclose(-signal1.f0, signal1.frequencies[-1], atol=0.0, rtol=0.01)
              and np.isclose(-signal2.f0, signal2.frequencies[-1], atol=0.0, rtol=0.01)
              and np.isclose(-psd.f0, psd.frequencies[-1], atol=0.0, rtol=0.01))), \
         ('All signals must start at f=0 or span the same interval from '
         '0 to f_max and f_min to 0.')
+            # TODO: think about second condition again. atol of df would also
+            # be reasonable, right? For equal sample size, this condition
+            # cannot be fulfilled
 
     # ----- Third step: assure frequencies are sufficiently equal. -----
     # ----- Maximum deviation allowed between the is given df, which -----
@@ -576,16 +638,18 @@ def optimized_inner_product(
     dft_vals = (signal1 * signal2.conjugate() / psd)
 
     # Append zeros so that ifft can be used
-    if dft_vals.f0 == 0.0:
+    if np.isclose(0.0, dft_vals.f0.value, atol=0.0, rtol=0.01):
+        logging.debug('PERFORMING RFFT')
         full_dft_vals = np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
     else:
+        logging.debug('PERFORMING FFT')
         full_dft_vals = np.fft.fftshift(dft_vals.value)
 
-    dt = 1.0 / (full_dft_vals.size * signal1.df)
+    dt = (1.0 / (full_dft_vals.size * signal1.df)).si
 
     match_series = 4.0 * TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
-        unit=(signal1.unit * signal2.unit / psd.unit / dt.unit),
+        unit=(signal1.unit * signal2.unit / psd.unit / dt.unit).si,
         t0=0.0 * dt.unit,
         dt=dt
     )

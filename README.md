@@ -41,6 +41,9 @@ or (recommended if you have a SSH key pair) running
 pip install git+ssh://git@gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
 ```
 
+The last two commands also allow to install arbitrary versions of the package
+by adding, for example, `@v0.0.1` at the end of the prompt.
+
 ## Project Status
 
 In progress.

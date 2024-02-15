@@ -3,7 +3,7 @@ from os.path import dirname as _path_dirname
 PSD_PATH = _path_dirname(__file__)
 
 from os.path import join as _path_join
-from ..inner_product import psd_from_file_to_FreqSeries as _psd_reader
+from ..psd import psd_from_file_to_FreqSeries as _psd_reader
 
 # TODO: put PSDs sampled at 0.625Hz in there? Or even 0.0125 like O3 ones?
 # Otherwise we have resampling each time function is called?

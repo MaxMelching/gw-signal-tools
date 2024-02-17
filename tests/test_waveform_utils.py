@@ -271,6 +271,10 @@ def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
     # comes at the price of certain smaller deviations for some df
 
 
+# TODO: test for various cases if copy works; e.g. if copy=False, but nothing
+# is to be filled, should not change original array
+
+
 #%% ---------- Testing get_strain function ----------
 # Goal is essentially just to make sure code works
 def test_get_strain_no_extrinsic():

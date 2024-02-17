@@ -262,9 +262,48 @@ def inner_product(
 
     psd_unit = psd.unit  # Has to be kept as long as GWPy bug present
     
-    signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, atol=0.0, rtol=0.01) else signal1
-    signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, atol=0.0, rtol=0.01) else signal2
-    psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, atol=0.0, rtol=0.01) else psd
+    # signal1 = signal1.interpolate(df_val) #if not np.isclose(signal1.df, df, atol=0.0, rtol=0.01) else signal1#.copy()
+    # signal2 = signal2.interpolate(df_val) #if not np.isclose(signal2.df, df, atol=0.0, rtol=0.01) else signal2#.copy()
+    # psd = psd.interpolate(df_val) #if not np.isclose(psd.df, df, atol=0.0, rtol=0.01) else psd#.copy()
+    # # Perhaps faster because interpolate does not seem to copy epoch
+
+    # # epochs = [signal1.epoch, signal2.epoch, psd.epoch]
+
+    # signal1.epoch = None
+    # signal2.epoch = None
+    # psd.epoch = None
+
+
+    # We do see performance gain when doing this instead of interpolating each time
+    # -> in principle, this is custom copying
+    signal1 = signal1.interpolate(df_val) if not np.isclose(signal1.df, df, atol=0.0, rtol=0.01) else FrequencySeries(
+        signal1.value,  # TODO: see if unit is copied -> can we just give signal1 in here? NOPE, this would copy epch as well; give unit manually
+        # frequencies=signal1.frequencies,
+        f0=signal1.f0,
+        df=signal1.df,
+        # epoch=None
+    )
+
+    signal2 = signal2.interpolate(df_val) if not np.isclose(signal2.df, df, atol=0.0, rtol=0.01) else FrequencySeries(
+        signal2.value,
+        # frequencies=signal2.frequencies,
+        f0=signal2.f0,
+        df=signal2.df,
+        # epoch=None
+    )
+
+    psd = psd.interpolate(df_val) if not np.isclose(psd.df, df, atol=0.0, rtol=0.01) else FrequencySeries(
+        psd.value,
+        # frequencies=psd.frequencies,
+        f0=psd.f0,
+        df=psd.df,
+        # epoch=None
+    )
+
+    # Could also try to do this in a separate function
+    # signal1 = get_signal_at_target_df(signal1, df=df)
+    # signal2 = get_signal_at_target_df(signal2, df=df)
+    # psd = get_signal_at_target_df(psd, df=df)
 
     # NOTE: these lines are temporary and supposed to fix a bug in interpolate
     if signal1.unit != signal_unit:
@@ -285,24 +324,26 @@ def inner_product(
         signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
         psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
 
+        # signal1.epoch, signal2.epoch, psd.epoch = epochs
+
         return inner_product_computation(signal1, signal2, psd)
     else:
         # More complicated because fft routines expect certain frequency
         # ranges. Thus checking if requirements are fulfilled
         if f_lower >= 0.0 * frequ_unit:
             signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper], pad_to_f_zero=True,
-                                       copy=True, cut_upper=True)
+                                       copy=False, cut_upper=True)
             signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper], pad_to_f_zero=True,
-                                       copy=True, cut_upper=True)
+                                       copy=False, cut_upper=True)
             psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0,
-                                   pad_to_f_zero=True, copy=True, cut_upper=True)
+                                   pad_to_f_zero=True, copy=False, cut_upper=True)
         else:
             signal1 = restrict_f_range(signal1, f_range=[f_lower, f_upper], pad_to_f_zero=False,
-                                       copy=True, cut_upper=True)
+                                       copy=False, cut_upper=True)
             signal2 = restrict_f_range(signal2, f_range=[f_lower, f_upper], pad_to_f_zero=False,
-                                       copy=True, cut_upper=True)
+                                       copy=False, cut_upper=True)
             psd = restrict_f_range(psd, f_range=[f_lower, f_upper], fill_val=1.0,
-                                   pad_to_f_zero=False, copy=True, cut_upper=True)
+                                   pad_to_f_zero=False, copy=False, cut_upper=True)
 
         # if (f0 := max(signal1.f0, signal2.f0, psd.f0)) == 0:
         #     signal1 = signal1.crop(end=f_upper)
@@ -482,6 +523,8 @@ def inner_product(
         # psd = psd.pad(number_to_append, mode='constant', constant_values=1.0)
         # -> could utilize 'linear_ramp' option mentioned above here...
         # Potentially useful... -> nope, see comments above
+
+        # signal1.epoch, signal2.epoch, psd.epoch = epochs
 
         return optimized_inner_product(signal1, signal2, psd)
 

@@ -2,9 +2,12 @@ import numpy as np
 import unittest
 from numpy.testing import assert_allclose
 
+from gw_signal_tools.waveform_utils import (
+    td_to_fd_waveform, pad_to_get_target_df, get_strain
+)
 from gw_signal_tools.test_utils import (
-    assert_allclose_quantity, assert_allclose_frequseries,
-    assert_allclose_timeseries
+    allclose_quantity, assert_allclose_quantity,
+    assert_allclose_frequseries, assert_allclose_timeseries
 )
 from gwpy.testing.utils import assert_quantity_equal
 
@@ -84,44 +87,99 @@ def test_no_inplace_editing_of_signals(optimize_time_and_phase):
 
 #%% ---------- Consistency tests with inner_product function ----------
 def test_fd_td_match_consistency():
-    match_td = norm(hp_t, psd_gw150914, df=2**-2, f_range=[f_min, None])
-    match_fd = norm(hp_f_coarse, psd_gw150914, df=2**-2, f_range=[f_min, None])
+    norm_td_coarse = norm(hp_t, df=2**-2, f_range=[f_min, None])
+    norm_fd_coarse = norm(hp_f_coarse, df=2**-2, f_range=[f_min, None])
 
-    assert np.isclose(match_td, match_fd, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_td_coarse, norm_fd_coarse, atol=0.0, rtol=0.11)
 
-    match_td = norm(hp_t, psd_gw150914, df=2**-4, f_range=[f_min, None])
-    match_fd = norm(hp_f_fine, psd_gw150914, df=2**-4, f_range=[f_min, None])
+    norm_td_fine = norm(hp_t, df=2**-4, f_range=[f_min, None])
+    norm_fd_fine = norm(hp_f_fine, df=2**-4, f_range=[f_min, None])
 
-    assert np.isclose(match_td, match_fd, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_td_fine, norm_fd_fine, atol=0.0, rtol=0.005)
 
 
-def test_norm():
-    norm_td = overlap(hp_t, hp_t, psd_gw150914, df=2**-4, f_range=[f_min, None])
-    norm_fd_coarse = overlap(hp_f_coarse, hp_f_coarse, psd_gw150914, df=2**-2, f_range=[f_min, None])
-    norm_fd_fine = overlap(hp_f_fine, hp_f_fine, psd_gw150914, df=2**-4, f_range=[f_min, None])
+def test_fd_td_overlap_consistency():
+    norm_td = overlap(hp_t, hp_t, df=2**-4, f_range=[f_min, None])
+    norm_fd_coarse = overlap(hp_f_coarse, hp_f_coarse, df=2**-2, f_range=[f_min, None])
+    norm_fd_fine = overlap(hp_f_fine, hp_f_fine, df=2**-4, f_range=[f_min, None])
 
-    assert_allclose([norm_td, norm_fd_coarse, norm_fd_fine], [1.0, 1.0, 1.0], atol=0.0, rtol=0.005)
+    # assert_allclose_quantity(u.Quantity([norm_td, norm_fd_coarse, norm_fd_fine]), u.Quantity([1.0, 1.0, 1.0]), atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_td, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_fd_coarse, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_fd_fine, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm_td, norm_fd_fine, atol=0.0, rtol=0.005)
 
-def test_positive_f_range():
-    f_min, f_max = 30.*u.Hz, 50.*u.Hz
-    norm1 = norm(hp_f_fine, psd_gw150914, f_range=[f_min, f_max])
+
+def test_optimize_match_consistency():
+    norm1_coarse = norm(hp_f_coarse)
+    _, norm2_coarse, time_coarse = norm(hp_f_coarse, optimize_time_and_phase=True)
+
+    assert_allclose_quantity(norm1_coarse, norm2_coarse, atol=0.0, rtol=0.11)
+    assert_allclose_quantity(0.0 * u.s, time_coarse, atol=1e-10, rtol=0.0)
+
+
+    norm1_fine = norm(hp_f_fine)
+    _, norm2_fine, time_fine = norm(hp_f_fine, optimize_time_and_phase=True)
+
+    assert_allclose_quantity(norm1_fine, norm2_fine, atol=0.0, rtol=0.001)
+    assert_allclose_quantity(0.0 * u.s, time_fine, atol=1e-12, rtol=0.0)
+
+
+@pytest.mark.parametrize('f_min', [f_min, 30.0 * u.Hz])
+@pytest.mark.parametrize('f_max', [50.0 * u.Hz, f_max])
+def test_f_range(f_min, f_max):
+    norm1 = norm(hp_f_fine, f_range=[f_min, f_max])
+    norm_no_units = norm(hp_f_fine, f_range=[f_min.value, f_max.value])
+    assert_quantity_equal(norm1, norm_no_units)
 
     hp_f_restricted, _ = wfm.GenerateFDWaveform(wf_params | {'f22_start': f_min, 'f_max': f_max}, gen)
-    hp_f_restricted *= u.s
-    norm2 = norm(hp_f_restricted, psd_gw150914)
+    hp_f_restricted.override_unit(u.s)
+    norm2 = norm(hp_f_restricted)
 
-    assert np.isclose(norm1, norm2, atol=0.0, rtol=0.005)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-3)
+    # Not fully equal due to potentially being one sample off when filling
 
-def test_negative_f_range():
-    ...
 
-def test_df():
+def test_positive_negative_f_range_consistency():
+    h = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df))
+    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 1.j * 0.0)
+    # h_symm has symmetric spectrum around f=0.0 and the same spectrum as h
+    # for positive frequencies
+
+    # f_max = min(h.frequencies[-1], h_symm.frequencies[-1])
+    f_max = 1024.0 * u.Hz
+
+    norm1 = norm(h, f_range=[0.0, f_max])
+    _, norm1_opt, time_1 = norm(h, f_range=[0.0, f_max], optimize_time_and_phase=True)
+    assert_allclose_quantity(norm1, norm1_opt, atol=0.0, rtol=1e-12)
+    assert_allclose_quantity(0.0 * u.s, time_1, atol=1e-12, rtol=0.0)
+
+    norm2 = norm(h_symm, f_range=[-f_max, f_max])
+    _, norm2_opt, time_2 = norm(h_symm, f_range=[-f_max, f_max], optimize_time_and_phase=True)
+    assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
+    assert_allclose_quantity(0.0 * u.s, time_2, atol=1e-12, rtol=0.0)
+
+
+    assert_quantity_equal(norm1, norm2)
+    assert_allclose_quantity(norm1_opt, norm2_opt, atol=0.0, rtol=1e-12)
+
+
+    norm_plus = norm(h_symm, f_range=[0.0, f_max])
+    norm_minus = norm(h_symm, f_range=[-f_max, 0.0])
+
+    assert_allclose_quantity(norm_plus, norm_minus, atol=0.0, rtol=1e-15)
+    assert_allclose_quantity(norm_plus, norm2, atol=0.0, rtol=1e-15)
+    assert_allclose_quantity(norm_minus, norm2, atol=0.0, rtol=1e-15)
+
+
+def test_df_no_unit():
     df_val = 2**-5
 
     norm1 = norm(hp_f_fine, df=df_val)
     norm2 = norm(hp_f_fine, df=df_val * u.Hz)
 
-    assert np.isclose(norm1, norm2, atol=0.0, rtol=0.005)
+    assert_quantity_equal(norm1, norm2)
+
 
 def test_different_units():
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
@@ -137,7 +195,7 @@ def test_different_units():
     norm1 = norm(hp_f_fine)
     norm2 = norm(hp_f_fine_rescaled)
 
-    assert np.isclose(norm1, norm2, atol=0.0, rtol=0.01)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.01)
     
     new_frequ_unit = hp_f_fine_rescaled.frequencies.unit
 
@@ -148,14 +206,10 @@ def test_different_units():
         1/psd_no_noise_rescaled.frequencies.unit * new_frequ_unit
     )
 
-    # assert hp_f_fine.unit == u.s and hp_f_fine.frequencies.unit == u.Hz
-    # assert psd_no_noise.frequencies.unit == u.Hz
-    # assert psd_no_noise.unit == 1/u.Hz
-
     norm1 = norm(hp_f_fine_rescaled, psd=psd_no_noise_rescaled)
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
 
-    assert np.isclose(norm1, norm2, atol=0.0, rtol=0.01)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.01)
 
 # TODO (maybe): test with mass rescaled waveforms?
 
@@ -202,11 +256,10 @@ class ErrorRaising(unittest.TestCase):
 
     # def test_optimize_requirements(self):
     #     with self.assertRaises(ValueError):
-    #         ...  # Generate using get_strain, then remove certain components
+    #         ...  # Generate using get_strain, then remove certain components -> with behaviour from now, it is intended that no error should be raised!
 
 
 #%% ---------- Confirming results with PyCBC match function ----------
-
 from pycbc.waveform import get_fd_waveform
 from pycbc.filter import match
 from pycbc.psd import aLIGOZeroDetHighPower
@@ -268,7 +321,7 @@ def test_match_pycbc():
 
     _, overlap_gw_signal_tools, _ = inner_product(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
-    assert np.isclose(overlap_pycbc, overlap_gw_signal_tools, atol=0.0, rtol=0.01)
+    assert_allclose(overlap_pycbc, overlap_gw_signal_tools, atol=0.0, rtol=2e-3)
 
 
 def test_overlap_pycbc():
@@ -276,13 +329,12 @@ def test_overlap_pycbc():
 
     _, overlap_normalized_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
-    # assert np.abs((overlap_normalized_pycbc - overlap_normalized) / overlap_normalized_pycbc) < 0.01
-    assert np.isclose(overlap_normalized_pycbc, overlap_normalized_gw_signal_tools, atol=0.0,rtol=0.01)  # TODO: change rtol to 0.005?
+    assert_allclose(overlap_normalized_pycbc, overlap_normalized_gw_signal_tools, atol=0.0,rtol=2e-3)  # TODO: change rtol to 0.005?
 
 
 def test_norm_optimized():
     _, norm1_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_1_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
     _, norm2_gw_signal_tools, _ = overlap(hp_2_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
-    assert np.isclose(norm1_gw_signal_tools, 1.0, atol=0.0, rtol=0.01)
-    assert np.isclose(norm2_gw_signal_tools, 1.0, atol=0.0, rtol=0.01)
+    assert_allclose(norm1_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)
+    assert_allclose(norm2_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)

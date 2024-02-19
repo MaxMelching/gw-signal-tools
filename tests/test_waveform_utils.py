@@ -190,92 +190,313 @@ def test_pad_to_target_df_not_exact(df):
     assert_allclose_quantity(df, hp_t_f.df, atol=0.0, rtol=1e-5)
 
 
-@pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, 0.001*u.Hz, 0.007*u.Hz])
-# Checking with one that is not power of two is important to ensure
-# pad_to_target_df does good job (not necessarily related to restrict_f_range)
-def test_restrict_f_range(df):
-    f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
-
-    hp_t_padded = pad_to_get_target_df(hp_t, df)
-    hp_t_f = td_to_fd_waveform(hp_t_padded)
-    hp_t_f_restricted = restrict_f_range(hp_t_f, f_range=[f_crop_low, f_crop_high])
-    
-    # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes computations similar to what is done in restrict_f_range.
-    # Instead, more straightforward array slicing is used
-
-    hp_t_f_cropped = hp_t_f[(hp_t_f.frequencies >= f_crop_low)
-                            & (hp_t_f.frequencies <= f_crop_high)]
-    hp_t_f_restricted_cropped = hp_t_f_restricted[
-        (hp_t_f_restricted.frequencies >= f_crop_low)
-        & (hp_t_f_restricted.frequencies <= f_crop_high)
-    ]
-
-    assert_quantity_equal(hp_t_f_cropped, hp_t_f_restricted_cropped)
+def test_restrict_f_range_copy():
+    ...
 
 
-    # Also check that everything has been set to zero outside of f_range
-    hp_t_f_restricted_cropped_2 = hp_t_f_restricted[
-        hp_t_f_restricted.frequencies < f_crop_low
-    ]
-    hp_t_f_restricted_cropped_3 = hp_t_f_restricted[
-        hp_t_f_restricted.frequencies > f_crop_high
-    ]
+def test_restrict_f_range_none_args():
+    hp_f, _ = wfm.GenerateFDWaveform(wf_params, gen)
+    hp_f.override_unit(u.s)
 
-    assert_quantity_equal(0.0 * u.s, hp_t_f_restricted_cropped_2)
-    assert_quantity_equal(0.0 * u.s, hp_t_f_restricted_cropped_3)
+    hp_f_filtered = hp_f[hp_f != 0.0 * hp_f.unit]
+
+    # First sanity check, otherwise errors later on might not be our fault
+    assert_quantity_equal(hp_f.f0, 0.0 * u.Hz)
+    assert_quantity_equal(hp_f_filtered.f0, f_min)
+    assert_quantity_equal(hp_f.frequencies[-1], f_max)
+
+
+    hp_f_restricted = restrict_f_range(hp_f)
+
+    assert_quantity_equal(hp_f_restricted.f0, hp_f.f0)
+    assert_quantity_equal(hp_f_restricted.frequencies[-1], hp_f.frequencies[-1])
+
+
+    hp_f_restricted_2 = restrict_f_range(hp_f, f_range=[None, None])
+
+    assert_quantity_equal(hp_f_restricted_2.f0, hp_f.f0)
+    assert_quantity_equal(hp_f_restricted_2.frequencies[-1], hp_f.frequencies[-1])
+
+
+    hp_f_restricted_2_v2 = restrict_f_range(hp_f, f_range=[f_min, f_max])
+
+    assert_quantity_equal(hp_f_restricted_2_v2.f0, hp_f_filtered.f0)
+    assert_quantity_equal(hp_f_restricted_2_v2.frequencies[-1], hp_f.frequencies[-1])
+
+
+    hp_f_restricted_3 = restrict_f_range(hp_f, fill_range=[None, None])
+
+    assert_quantity_equal(hp_f_restricted_3.f0, hp_f.f0)
+    assert_quantity_equal(hp_f_restricted_3.frequencies[-1], hp_f.frequencies[-1])
+
+
+    hp_f_restricted_3_v2 = restrict_f_range(hp_f, fill_range=[f_min, f_max])
+    hp_f_restricted_3_v2_filtered = hp_f_restricted_3_v2[hp_f_restricted_3_v2 != 0.0 * hp_f_restricted_3_v2.unit]
+
+    assert_quantity_equal(hp_f_restricted_3_v2.f0, hp_f.f0)
+    assert_quantity_equal(hp_f_restricted_3_v2_filtered.f0, hp_f_filtered.f0)
+    assert_quantity_equal(hp_f_restricted_3_v2.frequencies[-1], hp_f.frequencies[-1])
 
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, hp_f_fine.df / 4])
-# Region where pad_to_get_to
-def test_restrict_f_range_with_padding_and_cropping_exact(df):
-    f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
-    # For contiguous padding to be possible, f_crop_low has to be an integer
-    # multiple of df
-
-    # hp_t_padded = pad_to_get_target_df(hp_t, df)
-    # hp_t_f = td_to_fd_waveform(hp_t_padded)
+@pytest.mark.parametrize('f_crop_low', [0.9 * f_min, 1.1 * f_min])
+@pytest.mark.parametrize('f_crop_high', [0.9 * f_max, 1.1 * f_max])
+# Last one is there to demonstrate that it is not about size of df, behaviour
+# is about nature of its value (power of two or not)
+def test_restrict_f_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
-    hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-    hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high],
-                                         cut_upper=True, pad_to_f_zero=True)
+    hp_f.override_unit(u.s)
+    
+    hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes computations similar to what is done in restrict_f_range.
+    # utilizes a method similar to what is done in restrict_f_range.
     # Instead, more straightforward array slicing is used
 
-    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    f_lower = max(hp_f.f0, hp_f_restricted.f0)
+    f_upper = min(hp_f.frequencies[-1], hp_f_restricted.frequencies[-1])
+
+    hp_f_cropped = hp_f[(hp_f.frequencies >= f_lower)
+                            & (hp_f.frequencies <= f_upper)]
+    hp_f_restricted_cropped = hp_f_restricted[
+        (hp_f_restricted.frequencies >= f_lower)
+        & (hp_f_restricted.frequencies <= f_upper)
+    ]
+
+    if hp_f_cropped.size != hp_f_restricted_cropped.size:
+        # Note: this only happens for VERY small df like 0.001 where our
+        # estimates of the number of points to pad/cut off may be flawed
+        # and deviate by a single sample
+        assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
+        
+        size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
+        hp_f_cropped = hp_f_cropped[:size_min]
+        hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
+
+    assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+
+    assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+                             atol=0.9 * df.value, rtol=0.0)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-                             atol=0.42 * df.value, rtol=0.0)
-    # We expect accuracy smaller than 0.5 here, which should be distinguishable
+                             atol=0.9 * df.value, rtol=0.0)
+    # NOTE: we cannot demand exact equality for arbitrary limits because
+    # the samples are still discrete. However, the deviation mus not be
+    # larger than the sample spacing, this would mean error in our code
 
 
-@pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
-def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
-    f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
-
+@pytest.mark.parametrize('df', [0.007*u.Hz, 0.001*u.Hz])
+@pytest.mark.parametrize('f_crop_low', [0.9 * f_min, 1.1 * f_min])
+@pytest.mark.parametrize('f_crop_high', [0.9 * f_max, 1.1 * f_max])
+# Checking with one that is not power of two is important to ensure
+# pad_to_target_df does good job (not necessarily related to restrict_f_range)
+def test_restrict_f_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
-    hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-    hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high],
-                                         cut_upper=True, pad_to_f_zero=True)
+    hp_f.override_unit(u.s)
+    
+    hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes computations similar to what is done in restrict_f_range.
+    # utilizes a method similar to what is done in restrict_f_range.
     # Instead, more straightforward array slicing is used
 
-    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    f_lower = max(hp_f.f0, hp_f_restricted.f0)
+    f_upper = min(hp_f.frequencies[-1], hp_f_restricted.frequencies[-1])
+
+    hp_f_cropped = hp_f[(hp_f.frequencies >= f_lower)
+                            & (hp_f.frequencies <= f_upper)]
+    hp_f_restricted_cropped = hp_f_restricted[
+        (hp_f_restricted.frequencies >= f_lower)
+        & (hp_f_restricted.frequencies <= f_upper)
+    ]
+
+    if hp_f_cropped.size != hp_f_restricted_cropped.size:
+        # Note: this only happens for VERY small df like 0.001 where our
+        # estimates of the number of points to pad/cut off may be flawed
+        # and deviate by a single sample
+        assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
+        
+        size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
+        hp_f_cropped = hp_f_cropped[:size_min]
+        hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
+
+    assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+
+    assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+                             atol=df.value, rtol=0.0)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
                              atol=df.value, rtol=0.0)
-    # More tolerance needed here since using the more accurate slicing
-    # method used here is too expensive for use in restrict_f_range. This
-    # comes at the price of certain smaller deviations for some df
+    # NOTE: we cannot demand exact equality for arbitrary limits because
+    # the samples are still discrete. However, the deviation mus not be
+    # larger than the sample spacing, this would mean error in our code
+
+
+@pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
+# Checking with one that is not power of two is important to ensure
+# pad_to_target_df does good job (not necessarily related to restrict_f_range)
+@pytest.mark.parametrize('f_fill_low', [0.8 * f_min, f_min, 1.2 * f_min])
+@pytest.mark.parametrize('f_fill_high', [0.8 * f_max, f_max, 1.2 * f_max])
+def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
+    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f.override_unit(u.s)
+
+    hp_f_restricted = restrict_f_range(hp_f, fill_range=[f_fill_low, f_fill_high])
+    # NOTE: we will not use Series.crop to get the comparisons because it
+    # utilizes a method similar to what is done in restrict_f_range.
+    # Instead, more straightforward array slicing is used
+
+    assert_allclose_quantity(hp_f_restricted.f0, hp_f.f0,
+                             atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_restricted.frequencies[-1], hp_f.frequencies[-1],
+                             atol=df.value, rtol=0.0)
+
+    hp_f_cropped = hp_f[(hp_f.frequencies >= f_fill_low)
+                            & (hp_f.frequencies <= f_fill_high)]
+    hp_f_restricted_cropped = hp_f_restricted[
+        (hp_f_restricted.frequencies >= f_fill_low)
+        & (hp_f_restricted.frequencies <= f_fill_high)
+    ]
+
+    assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+
+    if f_fill_low > hp_f.f0:
+        assert_allclose_quantity(hp_f_restricted_cropped.f0, f_fill_low,
+                                atol=df.value, rtol=0.0)
+    
+    if f_fill_high < hp_f.frequencies[-1]:
+        assert_allclose_quantity(hp_f_restricted_cropped.frequencies[-1], f_fill_high,
+                                 atol=df.value, rtol=0.0)
+        
+    # In respective else case, nothing should happen to the frequency ranges
+    # because there is nothing to do here (by design, no filling over range
+    # [f_min f_max] is applied). We have checked this by ensuring
+    # hp_f_restricted covers the same range as hp_f does
+
+
+    # Also check that everything has been set to zero outside of f_range
+    hp_f_restricted_cropped_2 = hp_f_restricted[
+        hp_f_restricted.frequencies < f_fill_low
+    ]
+    hp_f_restricted_cropped_3 = hp_f_restricted[
+        hp_f_restricted.frequencies > f_fill_high
+    ]
+
+    if f_fill_low > hp_f.f0:
+        assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_2)
+    else:
+        assert len(hp_f_restricted_cropped_2) == 0
+
+    if f_fill_high < hp_f.frequencies[-1]:
+        assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_3)
+    else:
+        assert len(hp_f_restricted_cropped_3) == 0
+
+
+# @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
+# # Checking with one that is not power of two is important to ensure
+# # pad_to_target_df does good job (not necessarily related to restrict_f_range)
+# @pytest.mark.parametrize('f_crop_low', [0.9 * f_min, f_min])
+# @pytest.mark.parametrize('f_crop_high', [f_max, 1.1 * f_max])
+# @pytest.mark.parametrize('f_fill_low', [1.1 * f_min, f_min])
+# @pytest.mark.parametrize('f_fill_high', [0.9 * f_max, f_max])
+# def test_restrict_f_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
+#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f.override_unit(u.s)
+
+#     hp_f_restricted = restrict_f_range(hp_f,
+#                                        f_range=[f_crop_low, f_crop_high],
+#                                        fill_range=[f_fill_low, f_fill_high])
+
+#     assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+#                              atol=df.value, rtol=0.0)
+#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+#                              atol=df.value, rtol=0.0)
+    
+#     # NOTE: we will not use Series.crop to get the comparisons because it
+#     # utilizes a method similar to what is done in restrict_f_range.
+#     # Instead, more straightforward array slicing is used
+
+#     hp_f_cropped = hp_f[(hp_f.frequencies >= f_fill_low)
+#                             & (hp_f.frequencies <= f_fill_high)]
+#     hp_f_restricted_cropped = hp_f_restricted[
+#         (hp_f_restricted.frequencies >= f_fill_low)
+#         & (hp_f_restricted.frequencies <= f_fill_high)
+#     ]
+
+#     assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+
+#     # assert_allclose_quantity(hp_f_restricted_cropped.f0, f_fill_low,
+#     #                          atol=df.value, rtol=0.0)
+#     # assert_allclose_quantity(hp_f_restricted_cropped.frequencies[-1], f_fill_high,
+#     #                          atol=df.value, rtol=0.0)
+
+
+#     # Also check that everything has been set to zero outside of f_range
+#     hp_f_restricted_cropped_2 = hp_f_restricted[
+#         hp_f_restricted.frequencies < f_fill_low
+#     ]
+#     hp_f_restricted_cropped_3 = hp_f_restricted[
+#         hp_f_restricted.frequencies > f_fill_high
+#     ]
+
+#     assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_2)
+#     assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_3)
+    
+#     # assert_allclose_quantity(hp_f_restricted_cropped_2.f0, f_crop_low,
+#     #                          atol=df.value, rtol=0.0)
+#     # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+#     #                          atol=df.value, rtol=0.0)
+
+
+# @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, hp_f_fine.df / 4])
+# # Region where pad_to_get_to
+# def test_restrict_f_range_with_padding_and_cropping_exact(df):
+#     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
+#     # For contiguous padding to be possible, f_crop_low has to be an integer
+#     # multiple of df
+
+#     # hp_t_padded = pad_to_get_target_df(hp_t, df)
+#     # hp_t_f = td_to_fd_waveform(hp_t_padded)
+#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
+#     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
+#                                        fill_range=[f_crop_low, None])
+    
+#     # NOTE: we will not use Series.crop to get the comparisons because it
+#     # utilizes computations similar to what is done in restrict_f_range.
+#     # Instead, more straightforward array slicing is used
+
+#     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+#                              atol=0.42 * df.value, rtol=0.0)
+#     # We expect accuracy smaller than 0.5 here, which should be distinguishable
+
+
+# @pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
+# def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
+#     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
+
+#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
+#     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
+#                                        fill_range=[f_crop_low, None])
+    
+#     # NOTE: we will not use Series.crop to get the comparisons because it
+#     # utilizes computations similar to what is done in restrict_f_range.
+#     # Instead, more straightforward array slicing is used
+
+#     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+#                              atol=df.value, rtol=0.0)
+#     # More tolerance needed here since using the more accurate slicing
+#     # method used here is too expensive for use in restrict_f_range. This
+#     # comes at the price of certain smaller deviations for some df
 
 
 # TODO: test for various cases if copy works; e.g. if copy=False, but nothing
 # is to be filled, should not change original array
 
 
-#%% ---------- Testing get_strain function ----------
+ #%% ---------- Testing get_strain function ----------
 # Goal is essentially just to make sure code works
 def test_get_strain_no_extrinsic():
     # Not sure we can capture this in parametrize, problem is how to

@@ -6,12 +6,14 @@ from scipy.integrate import simpson
 
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
+from gwpy.testing.utils import assert_quantity_equal
 import astropy.units as u
 
 from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, restrict_f_range,
-    get_signal_at_target_df
+    get_signal_at_target_df, get_signal_at_target_frequs
 )
+from .test_utils import allclose_quantity, assert_allclose_quantity
 
 
 __doc__ = """
@@ -29,7 +31,15 @@ def inner_product(
     optimize_time_and_phase: bool = False  # Call it 'compute_match'?
 ) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
-    Calculates the noise-weighted inner product of two signals.
+    Calculates the noise-weighted inner product
+    .. math:: \\langle a, b \\rangle = 2 \\Re \\int_{-\\infty}^{\\infty}
+        \\frac{\\tilde{a(f) \\tilde{b}(f)}{S_n(f)} \\, df
+    of two signals using their representations
+    :math:`\\tilde{a}(f), \\tilde{b}(f)` in frequency domain.
+    
+    In case of a `psd` :math:`S_n(f)` that is equal to 1 at all
+    frequencies (the default case), this corresponds to the :math:`L^2`
+    inner product.
 
     Parameters
     ----------
@@ -260,84 +270,48 @@ def inner_product(
 
     # ----- Get signals to same frequencies, i.e. make df -----
     # ----- equal (if necessary) and then restrict range -----
-    psd_unit = psd.unit  # Has to be kept as long as GWPy bug present
-    
-    # signal1 = signal1.interpolate(df_val) #if not np.isclose(signal1.df, df, atol=0.0, rtol=0.01) else signal1#.copy()
-    # signal2 = signal2.interpolate(df_val) #if not np.isclose(signal2.df, df, atol=0.0, rtol=0.01) else signal2#.copy()
-    # psd = psd.interpolate(df_val) #if not np.isclose(psd.df, df, atol=0.0, rtol=0.01) else psd#.copy()
-    # Perhaps faster because interpolate does not seem to copy epoch, but reassigning local variable and copying do
-
-    signal1 = get_signal_at_target_df(signal1, df=df, full_metadata=False)
-    signal2 = get_signal_at_target_df(signal2, df=df, full_metadata=False)
-    psd = get_signal_at_target_df(psd, df=df, full_metadata=False)
-
-    # NOTE: these lines are temporary and supposed to fix a bug in interpolate
-    if signal1.unit != signal_unit:
-        signal1 *= (signal_unit / signal1.unit)
-    if signal2.unit != signal_unit:
-        signal2 *= (signal_unit / signal2.unit)
-    if psd.unit != psd_unit:
-        psd *= (psd_unit / psd.unit)
-
-
     if not optimize_time_and_phase:
-        # TODO: check if rounding needed due to use of `floor` in crop?
-        # signal1 = signal1.crop(start=f_lower + 0.9 * df, end=f_upper)
-        # signal2 = signal2.crop(start=f_lower + 0.9 * df, end=f_upper)
-        # psd = psd.crop(start=f_lower + 0.9 * df, end=f_upper)
+        target_range = np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
 
-        target_range = [f_lower, f_upper]
-
-        signal1 = restrict_f_range(signal1, f_range=target_range,
-                                   copy=False)
-        signal2 = restrict_f_range(signal2, f_range=target_range,
-                                   copy=False)
-        psd = restrict_f_range(psd, f_range=target_range, fill_val=1.0,
-                               copy=False)
+        signal1 = get_signal_at_target_frequs(signal1, target_range,
+                                              fill_val=0.0 * signal_unit)
+        signal2 = get_signal_at_target_frequs(signal2, target_range,
+                                              fill_val=0.0 * signal_unit)
+        psd = get_signal_at_target_frequs(psd, target_range,
+                                          fill_val=1.0 * psd.unit)
 
 
         return inner_product_computation(signal1, signal2, psd)
     else:
-        # More complicated because fft routines expect certain frequency
-        # ranges. Thus checking if requirements are fulfilled
+        non_zero_range = [f_lower, f_upper]  # Ensure all signals are non-zero on same range
+
         if f_lower >= 0.0 * frequ_unit:
-            # Restrict to interval [f_lower, f_upper], but also format for
-            # irfft where frequency range starting at 0.0 is required
-            target_range = [0.0, f_upper]
-            # non_zero_range = [f_lower, None]
-            # TODO: take f_upper instead of None? Same result, but perhaps
-            # more clear what happens
-            non_zero_range = [f_lower, f_upper]
-
-            signal1 = restrict_f_range(signal1, f_range=target_range,
-                                       fill_range=non_zero_range, copy=False)
-            signal2 = restrict_f_range(signal2, f_range=target_range,
-                                       fill_range=non_zero_range, copy=False)
-            psd = restrict_f_range(psd, f_range=target_range, fill_val=1.0,
-                                   fill_range=non_zero_range, copy=False)
-            
-
-            # Maybe only fill, not crop? Would allow for better resolution
-            # -> but how to do this? Think not possible.. Except we take
-            # maximum of frequencies here... But feels unnecessary
+            target_range = np.arange(0.0, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
         else:
             f_limit = max(abs(f_lower), abs(f_upper))
-            target_range = [-f_limit, f_limit]
-            non_zero_range = [f_lower, f_upper]
+            target_range = np.arange(-f_limit.value, f_limit.value + 0.9 * df.value, step=df.value) << frequ_unit
 
-            # TODO: rethink fill_range; could it also be None?
-            # -> ah, no, has to be [f_lower, f_upper] because not all
-            # might have same non-zero range, we have to ensure that in
-            # addition to padding/trimming
 
-            # Restrict to interval [f_lower, f_upper], but also format for ifft
-            # where symmetric frequency range is required
-            signal1 = restrict_f_range(signal1, f_range=target_range,
-                                       fill_range=non_zero_range, copy=False)
-            signal2 = restrict_f_range(signal2, f_range=target_range,
-                                       fill_range=non_zero_range, copy=False)
-            psd = restrict_f_range(psd, f_range=target_range, fill_val=1.0,
-                                   fill_range=non_zero_range, copy=False)
+        signal1 = get_signal_at_target_frequs(
+            signal1,
+            target_range,
+            fill_val=0.0 * signal_unit,
+            unfilled_frequencies=non_zero_range
+        )
+
+        signal2 = get_signal_at_target_frequs(
+            signal2,
+            target_range,
+            fill_val=0.0 * signal_unit,
+            unfilled_frequencies=non_zero_range
+        )
+
+        psd = get_signal_at_target_frequs(
+            psd,
+            target_range,
+            fill_val=1.0 * psd.unit,
+            unfilled_frequencies=non_zero_range
+        )
             
 
         return optimized_inner_product(signal1, signal2, psd)
@@ -373,8 +347,8 @@ def inner_product_computation(
     """
 
     # ----- Assure same distance of samples -----
-    assert (np.isclose(signal1.df, psd.df, rtol=0.01)
-            and np.isclose(signal2.df, psd.df, rtol=0.01)), \
+    assert (allclose_quantity(signal1.df, psd.df, rtol=0.01)
+            and allclose_quantity(signal2.df, psd.df, rtol=0.01)), \
         'Signals must have equal frequency spacing.'
     
     # Second step: make sure frequencies are sufficiently equal.
@@ -387,10 +361,10 @@ def inner_product_computation(
     )
 
     try:
-        assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies,
-                                  atol=0.0, rtol=0.01))
-                and np.all(np.isclose(signal1.frequencies, psd.frequencies,
-                                      atol=0.0, rtol=0.01))), \
+        assert (allclose_quantity(signal1.frequencies, signal2.frequencies,
+                                  atol=0.0, rtol=0.01)
+                and allclose_quantity(signal1.frequencies, psd.frequencies,
+                                      atol=0.0, rtol=0.01)), \
             custom_error_msg
     except ValueError:
         # Due to unequal sample size. Since this is automatically checked by
@@ -401,7 +375,9 @@ def inner_product_computation(
     #     # freq_unit = freq_unit.to(1/u.s)
     #     freq_unit = freq_unit
 
-    return 4.0 * np.real(
+    return (4.0 if ((signal1.frequencies[0].value >= 0.0)
+                    or (signal1.frequencies[-1].value <= 0.0)) else 2.0  # Check if one-sided or not
+            ) * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
     # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
     # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).decompose()  # Also resets scale, unwanted
@@ -449,27 +425,29 @@ def optimized_inner_product(
         (iii) time at which maximum value (ii) occurs in (i)
     """
 
+    frequ_unit = signal1.frequencies.unit
+
     # ----- First step: assure same distance of samples -----
-    assert (np.isclose(signal1.df, psd.df, atol=0.0, rtol=0.01)
-            and np.isclose(signal2.df, psd.df, atol=0.0, rtol=0.01)), \
+    assert (allclose_quantity(signal1.df, psd.df, atol=0.0, rtol=1e-5)
+            and allclose_quantity(signal2.df, psd.df, atol=0.0, rtol=1e-5)), \
         'Signals must have equal frequency spacing.'
-    # TODO: change checks to quantity_close?
     
     # ----- Second step: make sure all signals start at valid frequencies -----
-    assert ((np.isclose(signal1.f0, 0.0, atol=0.0, rtol=0.01)
-             and np.isclose(signal2.f0, 0.0, atol=0.0, rtol=0.01)
-             and np.isclose(psd.f0, 0.0, atol=0.0, rtol=0.01)) or
-             # TODO: think about condition again, for second argument zero this
-             # effectively means we test for equality (which may be valid, right?
-             # Fourier needs exactly zero)
-            (np.isclose(-signal1.f0, signal1.frequencies[-1], atol=0.0, rtol=0.01)
-             and np.isclose(-signal2.f0, signal2.frequencies[-1], atol=0.0, rtol=0.01)
-             and np.isclose(-psd.f0, psd.frequencies[-1], atol=0.0, rtol=0.01))), \
-        ('All signals must start at f=0 or span the same interval from '
-        '0 to f_max and f_min to 0.')
-            # TODO: think about second condition again. atol of df would also
-            # be reasonable, right? For equal sample size, this condition
-            # cannot be fulfilled
+    assert ((allclose_quantity(signal1.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
+             and allclose_quantity(signal2.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
+             and allclose_quantity(psd.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0))
+            or (allclose_quantity(-signal1.f0, signal1.frequencies[-1], atol=signal1.df, rtol=0.0)
+                and allclose_quantity(-signal2.f0, signal2.frequencies[-1], atol=signal2.df, rtol=0.0)
+                and allclose_quantity(-psd.f0, psd.frequencies[-1], atol=psd.df, rtol=0.0))), \
+        ('All signals must start either at f=0 or be symmetric around f=0, '
+         'where the latter refers to the case of an odd sample size. For an '
+         'even sample size, on the other hand, the number of samples for '
+         'positive frequencies is expected to be one less than the number of '
+         'samples for negative frequencies, in accordance with the format '
+         'expected by `~numpy.fft.fftshift`. Note that the conditions just'
+         'mentioned do not apply to the case of a starting frequency f=0, '
+         'where both even and odd sample sizes are accepted.')
+    
 
     # ----- Third step: assure frequencies are sufficiently equal. -----
     # ----- Maximum deviation allowed between the is given df, which -----
@@ -481,11 +459,10 @@ def optimized_inner_product(
     )
     # Is perhaps because interpolate uses fft, which works best with powers of two
     try:
-        assert (np.all(np.isclose(signal1.frequencies, signal2.frequencies,
-                                  atol=0.0, rtol=0.01))
-                and np.all(np.isclose(signal1.frequencies, psd.frequencies,
-                                      atol=0.0, rtol=0.01))), \
-            custom_error_msg
+        assert_allclose_quantity(signal1.frequencies, signal2.frequencies,
+                                 atol=0.0, rtol=0.01)
+        assert_allclose_quantity(signal1.frequencies, psd.frequencies,
+                                 atol=0.0, rtol=0.01)
     except ValueError:
         # Due to unequal sample size. Since this is automatically checked by
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
@@ -494,17 +471,17 @@ def optimized_inner_product(
     # ----- Fourth step: computations -----
     dft_vals = (signal1 * signal2.conjugate() / psd)
 
-    # Append zeros so that ifft can be used
+    # Append zeros or bring into correct format so that ifft can be used.
+    # The prefactor is added here already because it depends on the given
+    # frequency range
     if np.isclose(0.0, dft_vals.f0.value, atol=0.0, rtol=0.01):
-        logging.debug('PERFORMING RFFT')
-        full_dft_vals = np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
+        full_dft_vals = 4.0 * np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
     else:
-        logging.debug('PERFORMING FFT')
-        full_dft_vals = np.fft.fftshift(dft_vals.value)
+        full_dft_vals = 2.0 * np.fft.fftshift(dft_vals.value)
 
     dt = (1.0 / (full_dft_vals.size * signal1.df)).si
 
-    match_series = 4.0 * TimeSeries(
+    match_series = TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
         unit=(signal1.unit * signal2.unit / psd.unit / dt.unit).si,
         t0=0.0 * dt.unit,

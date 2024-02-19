@@ -4,6 +4,8 @@ from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
+from .test_utils import allclose_quantity
+
 from typing import Optional, Literal, Any
 import logging
 
@@ -272,8 +274,9 @@ def restrict_f_range(
     copy: bool = True
 ) -> FrequencySeries:
     """
-    Pad 'signal' to frequencies specified by `pad_to`, while potentially
-    setting its values in interval `f_range` to a fixed value.
+    Pad 'signal' to frequencies specified by `f_range`, while
+    potentially setting its values in the interval `fill_range` to a
+    fixed value.
 
     Parameters
     ----------
@@ -309,7 +312,7 @@ def restrict_f_range(
     Raises
     ------
     ValueError
-        If `f_range` does not contain exactly two elements.
+        If `f_range`, `fill_range` do not contain exactly two elements.
     """
 
     assert isinstance(signal, FrequencySeries), \
@@ -353,7 +356,7 @@ def restrict_f_range(
     try:
         fill_val = u.Quantity(fill_val, unit=signal_unit)
     except u.UnitConversionError:
-        # Conversion only fails if df is already Quantity and has
+        # Conversion only fails if fill_val is already Quantity and has
         # non-matching unit, so we can assume that fill_val.unit works
         raise ValueError(
             f'Need consistent units for `fill_val` ({fill_val.unit}) and'
@@ -374,16 +377,18 @@ def restrict_f_range(
             epoch=signal.epoch,
             channel=signal.channel,
             dtype=signal.dtype
-        ).append(signal, inplace=True)
+        ).append(signal, inplace=True, pad=fill_val.value)
         # Properties of first series are taken in append, thus need to
         # paste all necessary properties
     elif f_lower > signal.f0:
         signal = signal[lower_number:]
     
 
-    # upper_number = abs(int(np.ceil((f_upper - signal.frequencies[-1]) / signal.df)))
-    upper_number = abs(int(np.floor((f_upper - signal.frequencies[-1]) / signal.df)))
+    upper_number = abs(int(np.ceil((f_upper - signal.frequencies[-1]) / signal.df)))
+    # upper_number = abs(int(np.floor((f_upper - signal.frequencies[-1]) / signal.df)))
+    # upper_number = abs(int(np.abs((f_upper - signal.frequencies[-1]) / signal.df)))
     # Need floor because we do not use indexing here, where 1 is "subtracted"
+    # -> back to ceil because floor for filling makes error, so ceil is perhaps here better too
 
     if f_upper > signal.frequencies[-1]:  # Equivalent to upper_number > 0
         signal = signal.append(
@@ -465,6 +470,7 @@ def restrict_f_range(
     lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
     # upper_number_to_fill = signal.size - int(np.ceil((f_upper - f_fill_upper) / signal.df))
     upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
+    # upper_number_to_fill = int(np.floor((f_upper - f_fill_upper) / signal.df))
 
 
     if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
@@ -546,6 +552,114 @@ def get_signal_at_target_df(
                 name=signal.name,
                 channel=signal.channel
             )
+        
+    
+def get_signal_at_target_frequs(
+    signal: FrequencySeries,
+    target_frequencies: np.ndarray | u.Quantity,
+    fill_val: u.Quantity = np.nan,
+    unfilled_frequencies: Optional[np.ndarray | u.Quantity] = None
+) -> FrequencySeries:
+    """
+    Interpolate and pad input `signal` so that it spans the frequency
+    interval given by `target_frequencies`, while potentially being
+    filled with a specific value outside of the interval given by
+    `unfilled_frequencies`.
+
+    Parameters
+    ----------
+    signal : FrequencySeries
+        _description_
+    target_frequencies : ~numpy.array or ~astropy.units.Quantity
+        _description_
+    fill_val : ~astropy.units.Quantity, optional, default = ~numpy.nan
+        _description_
+    unfilled_frequencies : ~numpy.array or ~astropy.units.Quantity,
+    optional, default = None
+        In case only a certain region inside of `target_frequencies`
+        is supposed to not (!) be filled with `fill_val`, the
+        boundaries of this region can be specified here.
+        Must have length 2 if not None.
+
+    Returns
+    -------
+    FrequencySeries
+        Input signal in required format.
+
+    See also
+    -----
+    numpy.interp : Interpolation and padding routine used.
+    gw_signal_tools.restrict_f_range : Filling routine used.
+    """
+
+    # ----- Handling frequency input -----
+    frequ_unit = signal.frequencies.unit
+
+    try:
+        target_frequencies = u.Quantity(target_frequencies, unit=frequ_unit)
+    except u.UnitConversionError:
+        raise ValueError(
+            # 'Cannot sample to frequencies with different units.'
+            'Need consistent frequency units for `target_frequencies` '
+            f'({target_frequencies.unit}) and signal ({frequ_unit}).'
+        )
+
+
+    if unfilled_frequencies is not None:
+        if len(unfilled_frequencies) != 2:
+            raise ValueError(
+                '`unfilled_frequencies` must contain lower and upper frequency bounds.'
+            )
+
+        try:
+            unfilled_frequencies = u.Quantity(unfilled_frequencies, unit=frequ_unit)
+        except u.UnitConversionError:
+            raise ValueError(
+                'Need consistent frequency units for `unfilled_frequencies` members'
+                f' ({unfilled_frequencies[0].unit}) and `signal` ({frequ_unit}).'
+            )
+
+
+    # ----- Handling fill_val -----
+    signal_unit = signal.unit
+
+    try:
+        fill_val = u.Quantity(fill_val, unit=signal_unit)
+    except u.UnitConversionError:
+        # Conversion only fails if fill_val is already Quantity and has
+        # non-matching unit, so we can assume that fill_val.unit works
+        raise ValueError(
+            f'Need consistent units for `fill_val` ({fill_val.unit}) and'
+            f' `signal` ({signal_unit}).'
+        )
+    
+
+    # ----- Actual computations -----
+    if (signal.frequencies.size == target_frequencies.size
+        and allclose_quantity(signal.frequencies,
+                              target_frequencies,
+                              atol=0.5 * signal.df.value, rtol=0.00)):
+        out = FrequencySeries(
+            signal.value,
+            unit=signal.unit,
+            frequencies=signal.frequencies
+        )
+    else:
+        out = FrequencySeries(
+            np.interp(target_frequencies, signal.frequencies, signal,
+                      left=fill_val.value, right=fill_val.value),
+            unit=signal.unit,
+            frequencies=target_frequencies
+        )
+    
+    if unfilled_frequencies is not None:
+        out = restrict_f_range(
+            out,
+            fill_range=unfilled_frequencies,
+            fill_val=fill_val
+        )
+
+    return out
 
 
 # ---------- Wrapper function for strain generation ----------

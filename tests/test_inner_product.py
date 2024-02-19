@@ -146,16 +146,15 @@ def test_positive_negative_f_range_consistency():
     # h_symm has symmetric spectrum around f=0.0 and the same spectrum as h
     # for positive frequencies
 
-    # f_max = min(h.frequencies[-1], h_symm.frequencies[-1])
-    f_max = 1024.0 * u.Hz
+    f_upper = f_max
 
-    norm1 = norm(h, f_range=[0.0, f_max])
-    _, norm1_opt, time_1 = norm(h, f_range=[0.0, f_max], optimize_time_and_phase=True)
+    norm1 = norm(h, f_range=[0.0, f_upper])
+    _, norm1_opt, time_1 = norm(h, f_range=[0.0, f_upper], optimize_time_and_phase=True)
     assert_allclose_quantity(norm1, norm1_opt, atol=0.0, rtol=1e-12)
     assert_allclose_quantity(0.0 * u.s, time_1, atol=1e-12, rtol=0.0)
 
-    norm2 = norm(h_symm, f_range=[-f_max, f_max])
-    _, norm2_opt, time_2 = norm(h_symm, f_range=[-f_max, f_max], optimize_time_and_phase=True)
+    norm2 = norm(h_symm, f_range=[-f_upper, f_upper])
+    _, norm2_opt, time_2 = norm(h_symm, f_range=[-f_upper, f_upper], optimize_time_and_phase=True)
     assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
     assert_allclose_quantity(0.0 * u.s, time_2, atol=1e-12, rtol=0.0)
 
@@ -164,12 +163,38 @@ def test_positive_negative_f_range_consistency():
     assert_allclose_quantity(norm1_opt, norm2_opt, atol=0.0, rtol=1e-12)
 
 
-    norm_plus = norm(h_symm, f_range=[0.0, f_max])
-    norm_minus = norm(h_symm, f_range=[-f_max, 0.0])
+    norm_plus = norm(h_symm, f_range=[0.0, f_upper])
+    norm_minus = norm(h_symm, f_range=[-f_upper, 0.0])
 
     assert_allclose_quantity(norm_plus, norm_minus, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_plus, norm2, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_minus, norm2, atol=0.0, rtol=1e-15)
+
+
+def test_df_consistency():
+    # Same signal, decreasing df in inner_product
+    norm1 = norm(hp_f_fine, df=hp_f_fine.df)
+    norm2 = norm(hp_f_fine, df=hp_f_fine.df / 2)
+    norm3 = norm(hp_f_fine, df=hp_f_fine.df / 4)
+
+
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=2e-3)
+    assert_allclose_quantity(norm1, norm3, atol=0.0, rtol=2e-3)
+    assert_quantity_equal(norm2, norm3)  # Because linear interpolation the same for them
+
+
+    # Different signals with matching df in inner_product
+    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 2}, gen)
+    hp_f.override_unit(u.s)
+    norm2 = norm(hp_f, df=hp_f_fine.df / 2)
+
+    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 4}, gen)
+    hp_f.override_unit(u.s)
+    norm3 = norm(hp_f, df=hp_f_fine.df / 4)
+
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=5e-4)
+    assert_allclose_quantity(norm1, norm3, atol=0.0, rtol=6e-4)
+    assert_allclose_quantity(norm2, norm3, atol=0.0, rtol=2e-4)
 
 
 def test_df_no_unit():

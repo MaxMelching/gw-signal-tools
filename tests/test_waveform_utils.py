@@ -1,6 +1,7 @@
 from gw_signal_tools.waveform_utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
+    get_signal_at_target_df, get_signal_at_target_frequs,
     get_strain, get_mass_scaled_wf,
     # rescale_with_Mtotal, scale_to_Mtotal,
 )
@@ -10,8 +11,8 @@ import lalsimulation.gwsignal.core.waveform as wfm
 import numpy as np
 from numpy.testing import assert_allclose
 from gw_signal_tools.test_utils import (
-    assert_allclose_quantity, assert_allclose_frequseries,
-    assert_allclose_timeseries
+    allclose_quantity, assert_allclose_quantity,
+    assert_allclose_frequseries, assert_allclose_timeseries
 )
 from gwpy.testing.utils import assert_quantity_equal
 
@@ -180,7 +181,7 @@ def test_pad_to_target_df_exact(df):
     assert_quantity_equal(df, hp_t_f.df)
 
 
-@pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
+@pytest.mark.parametrize('df', [0.007*u.Hz, 0.001*u.Hz])
 # These input values are not exact powers of two and thus cannot be
 # reproduced exactly (thus ensure sufficient accuracy)
 def test_pad_to_target_df_not_exact(df):
@@ -188,6 +189,127 @@ def test_pad_to_target_df_not_exact(df):
     hp_t_f = td_to_fd_waveform(hp_t_padded)
 
     assert_allclose_quantity(df, hp_t_f.df, atol=0.0, rtol=1e-5)
+
+
+@pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, 0.007*u.Hz, 0.001*u.Hz])
+def test_pad_to_target_df_exact(df):
+    hp_f_interp = get_signal_at_target_df(hp_f_fine, df)
+
+    assert_quantity_equal(df, hp_f_interp.df)
+
+
+@pytest.mark.parametrize('df', [hp_f_fine.df, hp_f_fine.df / 2, hp_f_fine.df / 4, 0.007*u.Hz, 0.001*u.Hz])  # hp_f_coarse.df too coarse for comparison to make sense
+@pytest.mark.parametrize('f_low', [0.9 * f_min, f_min])
+@pytest.mark.parametrize('f_high', [f_max, 1.1 * f_max])
+def test_get_signal_at_target_frequs_interp_and_padding(f_low, f_high, df):
+    target_frequs = np.arange(f_low.value, f_high.value , step=df.value) << u.Hz
+    hp_f_at_target_frequs = get_signal_at_target_frequs(hp_f_fine, target_frequs, fill_val=0.0)
+
+    assert_quantity_equal(hp_f_at_target_frequs.frequencies, target_frequs)
+
+
+    hp_f_at_df, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f_at_df.override_unit(u.s)
+
+    hp_f_at_df = hp_f_at_df[
+        (hp_f_at_df.frequencies >= f_min)
+        & (hp_f_at_df.frequencies <= f_max)
+    ]
+
+    hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs[
+        (hp_f_at_target_frequs.frequencies >= f_min)
+        & (hp_f_at_target_frequs.frequencies <= f_max)
+    ]
+
+    assert_allclose_quantity(hp_f_at_df.f0, hp_f_at_target_frequs_restricted_1.f0, atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_at_df.frequencies[-1], hp_f_at_target_frequs_restricted_1.frequencies[-1], atol=df.value, rtol=0.0)
+
+    min_size = min(hp_f_at_df.size, hp_f_at_target_frequs_restricted_1.size)
+
+    if np.abs(hp_f_at_df.f0 - hp_f_at_target_frequs_restricted_1.f0) < 0.5 * df:
+        hp_f_at_df = hp_f_at_df[:min_size]
+        hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[:min_size]
+    else:
+        hp_f_at_df = hp_f_at_df[hp_f_at_df.size - min_size:]
+        hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[hp_f_at_target_frequs_restricted_1.size - min_size:]
+    
+
+    assert_allclose_quantity(hp_f_at_df.frequencies, hp_f_at_target_frequs_restricted_1.frequencies, atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_at_df, hp_f_at_target_frequs_restricted_1, atol=2e-24, rtol=0.0)
+    # Frequencies are slightly shifted, which means we have to allow certain
+    # tolerance. rtol not suited here because we might shift away from zero
+    # to finite value, causing large relative deviations
+    # Could choose 1e-24 for first three, but would be too much replication
+    # just for stricter threshold
+
+
+    hp_f_at_target_frequs_restricted_2 = hp_f_at_target_frequs[
+        hp_f_at_target_frequs.frequencies < (f_min - hp_f_fine.df)
+    ]
+    hp_f_at_target_frequs_restricted_3 = hp_f_at_target_frequs[
+        hp_f_at_target_frequs.frequencies > (f_max + hp_f_fine.df)
+    ]
+    # Otherwise interpolation might be linear between last zero sample and
+    # first non-zero one, leading to values that are not zero
+
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * u.s)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * u.s)
+
+
+@pytest.mark.parametrize('df', [hp_f_fine.df, hp_f_fine.df / 2, hp_f_fine.df / 4, 0.007 * u.Hz, 0.001 * u.Hz])  # hp_f_coarse.df too coarse for comparison to make sense
+@pytest.mark.parametrize('f_low', [1.1 * f_min])
+@pytest.mark.parametrize('f_high', [0.9 * f_max])
+def test_get_signal_at_target_frequs_interp_and_filling(f_low, f_high, df):
+    target_frequs = np.arange(f_min.value, f_max.value , step=df.value) << u.Hz
+    hp_f_at_target_frequs = get_signal_at_target_frequs(hp_f_fine, target_frequs, fill_val=0.0, unfilled_frequencies=[f_low, f_high])
+
+    assert_quantity_equal(hp_f_at_target_frequs.frequencies, target_frequs)
+
+
+    hp_f_at_df, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f_at_df.override_unit(u.s)
+
+    hp_f_at_df = hp_f_at_df[
+        (hp_f_at_df.frequencies >= f_low)
+        & (hp_f_at_df.frequencies <= f_high)
+    ]
+
+    hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs[
+        (hp_f_at_target_frequs.frequencies >= f_low)
+        & (hp_f_at_target_frequs.frequencies <= f_high)
+    ]
+
+    assert_allclose_quantity(hp_f_at_df.f0, hp_f_at_target_frequs_restricted_1.f0, atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_at_df.frequencies[-1], hp_f_at_target_frequs_restricted_1.frequencies[-1], atol=df.value, rtol=0.0)
+
+    min_size = min(hp_f_at_df.size, hp_f_at_target_frequs_restricted_1.size)
+
+    if np.abs(hp_f_at_df.f0 - hp_f_at_target_frequs_restricted_1.f0) < 0.5 * df:
+        hp_f_at_df = hp_f_at_df[:min_size]
+        hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[:min_size]
+    else:
+        hp_f_at_df = hp_f_at_df[hp_f_at_df.size - min_size:]
+        hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[hp_f_at_target_frequs_restricted_1.size - min_size:]
+    
+
+    assert_allclose_quantity(hp_f_at_df.frequencies, hp_f_at_target_frequs_restricted_1.frequencies, atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_at_df, hp_f_at_target_frequs_restricted_1, atol=1e-24, rtol=0.0)
+    # Frequencies are slightly shifted, which means we have to allow certain
+    # tolerance. rtol not suited here because we might shift away from zero
+    # to finite value, causing large relative deviations
+
+
+    hp_f_at_target_frequs_restricted_2 = hp_f_at_target_frequs[
+        hp_f_at_target_frequs.frequencies < f_low
+    ]
+    hp_f_at_target_frequs_restricted_3 = hp_f_at_target_frequs[
+        hp_f_at_target_frequs.frequencies > f_high
+    ]
+    # Otherwise interpolation might be linear between last zero sample and
+    # first non-zero one, leading to values that are not zero
+
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * u.s)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * u.s)
 
 
 def test_restrict_f_range_copy():

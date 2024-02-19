@@ -22,11 +22,16 @@ setuptools.setup(
     url='https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
     project_urls={
         'Source Code': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
-        # "Documentation": '',
-        "Bug Tracker": 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
+        # 'Documentation': '',
+        'Bug Tracker': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
     },
     packages=setuptools.find_packages(),
-    package_data={'gw_signal_tools': ['PSDs/*.txt']},
+    package_data={
+        'gw_signal_tools': [
+            'PSDs/*.txt',
+            'plot_stylesheet.sty'
+        ]
+    },
     include_package_data=True,
     # ----- Dependencies for installation -----
     setup_requires=[

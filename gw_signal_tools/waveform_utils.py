@@ -107,39 +107,12 @@ def fd_to_td_waveform(
             )
 
         signal = restrict_f_range(signal, fill_range=f_range)
-        
-
-    dt = 1 / (2 * (signal.size - 1) * signal.df)
-    # Note: 2*(n-1) follows normalization that happens according to the docs:
-    # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
-    out = TimeSeries(
-        np.fft.irfft(signal / dt),
-        unit=signal.unit / dt.unit,
-        # np.fft.irfft(signal / dt),
-        # t0=0.0 * u.s,
-        # dt=dt.to(u.s),  # Ensure unit is displayed in seconds, not 1/Hz
-        t0=0.0 * dt.unit,
-        dt=dt,  # Units might not be s, thus no use of .to()
-        name=('Inverse Fourier transform of '
-              + signal.name if signal.name is not None else None),
-        channel=signal.channel
-    )
-    # Note: dividing by dt is necessary because irfft uses discrete
-    # Fourier coefficients, but the input is expected to be continuous
-    # (as this is true for the output of waveform generators in lal).
-    # Equivalently, one could say that we first revert the numpy
-    # normalization and then make the transition from continuous to
-    # discrete Fourier coefficients by approximating the corresponding
-    # integral (df comes in)
 
 
-    # TODO: add possibility that ifft is done, based on value of f0
-
+    # Check if irfft can be performed or full ifft needed
     if signal.f0 == 0.0:
-        # Can perform rfft
-
         dt = 1 / (2 * (signal.size - 1) * signal.df)
-        # Note: 2*(n-1) follows normalization that happens according to the docs:
+        # NOTE: 2*(n-1) follows normalization that happens according to the docs:
         # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
 
         out = TimeSeries(
@@ -326,7 +299,6 @@ def restrict_f_range(
         f_range = [None, None]
     elif len(f_range) != 2:
         raise ValueError(
-            # '`f_range` must contain lower and upper frequency bounds.'
             '`f_range` must be None or contain lower and upper frequency bounds.'
         )
 
@@ -385,10 +357,6 @@ def restrict_f_range(
     
 
     upper_number = abs(int(np.ceil((f_upper - signal.frequencies[-1]) / signal.df)))
-    # upper_number = abs(int(np.floor((f_upper - signal.frequencies[-1]) / signal.df)))
-    # upper_number = abs(int(np.abs((f_upper - signal.frequencies[-1]) / signal.df)))
-    # Need floor because we do not use indexing here, where 1 is "subtracted"
-    # -> back to ceil because floor for filling makes error, so ceil is perhaps here better too
 
     if f_upper > signal.frequencies[-1]:  # Equivalent to upper_number > 0
         signal = signal.append(
@@ -400,21 +368,8 @@ def restrict_f_range(
                 dtype=signal.dtype
             ),
             inplace=False  # Otherwise error
-            # inplace=not copy  # Throws error, unfortunately
         )  # Could avoid copy from beginning, right?
-
-
-        # append_series = FrequencySeries(
-        #     np.full(upper_number, fill_value=fill_val.value),
-        #     unit=signal_unit,
-        #     f0=signal.frequencies[-1] + signal.df,
-        #     df=signal.df,
-        #     dtype=signal.dtype
-        # )
-
-        # signal = signal.append(append_series, inplace=False)
     elif f_upper < signal.frequencies[-1]:
-        # signal = signal[:upper_number]
         signal = signal[:signal.size - upper_number]
 
 
@@ -423,7 +378,7 @@ def restrict_f_range(
         fill_range = f_range
     elif len(fill_range) != 2:
         raise ValueError(
-            '`fill_range` must contain lower and upper frequency bounds.'
+            '`fill_range` must be None or contain lower and upper frequency bounds.'
         )
 
     f_fill_lower = fill_range[0] if fill_range[0] is not None else f_lower
@@ -467,9 +422,8 @@ def restrict_f_range(
         f_fill_upper = f_upper
 
 
-    if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
+    if (copy and (lower_number == 0)
         and (f_fill_lower != f_lower) and (f_fill_upper != f_upper)):  # Check if fill_f_range will do something
-    # if copy and (lower_number == 0):
         # Signal shall not be edited inplace and has not been copied in
         # previous beforehand in function
         signal = signal.copy()
@@ -825,36 +779,6 @@ def get_strain(
                     ).append(hp + 1.j * hc, inplace=True)
             case _:
                 raise ValueError('Invalid `mode`.')
-
-
-
-# ---------- Plotting Routine with Labels etc ----------
-# import matplotlib
-# import matplotlib.pyplot as plt
-
-# def plot_wf(
-#     waveform: TimeSeries | FrequencySeries,
-#     label: Optional[str] = None,
-#     ax: Optional[matplotlib.axes.Axes] = None
-# ) -> matplotlib.axes.Axes:
-    
-#     if ax is None:
-#         ax = plt.gca()
-
-#     ax.plot(waveform)
-
-
-#     if isinstance(waveform, TimeSeries):
-#         ax.set_xlabel(f'Times [{waveform.times.unit}]')
-#         ax.set_ylabel(f'Strain [{waveform.unit}]')
-#     elif isinstance(waveform, FrequencySeries):
-#         ax.set_xlabel(f'Frequencies [{waveform.frequencies.unit}]')
-#         ax.set_ylabel(f'Strain [{waveform.unit}]')
-
-
-#     return ax
-# Hmmmm, is this function really useful?
-
 
 
 # ---------- Mass Rescaling ----------

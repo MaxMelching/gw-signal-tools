@@ -104,9 +104,6 @@ def inner_product(
     transform of the involved signals. An indicator this might be
     necessary is a shape mismatch error.
     """
-
-    # TODO: maybe do FT first (move else case back there), then we only need
-    # to check for frequency units
     
     # ----- Handling of units -----
     if isinstance(signal1, FrequencySeries):
@@ -149,13 +146,6 @@ def inner_product(
         psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
         if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
             psd.frequencies *= (frequ_unit / psd_frequ_unit)
-        
-        
-        # V2
-        # psd = FrequencySeries(
-        #     psd_no_noise.value / frequ_unit,
-        #     frequencies=psd_no_noise.frequencies.value * frequ_unit
-        # )
     
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit, \
@@ -242,7 +232,6 @@ def inner_product(
 
         # New lower bound must be greater than current lower bound,
         # otherwise no values for the range are available in signals
-        # TODO: maybe allow this, would increase dt in ifft for optimized version
         if f_lower_new >= f_lower:
             f_lower = f_lower_new
         else:
@@ -370,24 +359,13 @@ def inner_product_computation(
         # Due to unequal sample size. Since this is automatically checked by
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
-    
-    # if (freq_unit := signal1.frequencies.unit) == u.Hz:
-    #     # freq_unit = freq_unit.to(1/u.s)
-    #     freq_unit = freq_unit
 
     return (4.0 if ((signal1.frequencies[0].value >= 0.0)
                     or (signal1.frequencies[-1].value <= 0.0)) else 2.0  # Check if one-sided or not
             ) * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
-    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
-    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).decompose()  # Also resets scale, unwanted
-    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).si  # Also resets scale, unwanted -> uhhh but value unaffected, only scale of unit. I guess that is the best we can do for now
-    # ) * (signal1.unit * signal2.unit / psd.unit * freq_unit)
-    # ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit * u.s / u.s)  # Cancellation works for dimensionless at least
-    # ) * (((signal1.unit * signal2.unit) * signal1.frequencies.unit) / psd.unit)
-    # ) * (((signal1.unit * signal2.unit) / psd.unit) * signal1.frequencies.unit)
-    # ) * (signal1.unit * signal2.unit * 1/psd.unit * signal1.frequencies.unit)  # No way... Things to cancel correctly here if end unit is dimensionless
-    # ) * (signal1.unit * signal2.unit * signal1.frequencies.unit * 1/psd.unit)  # No difference to line above
+    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).si
+        # Resets scale only for units, not for value. Best we can do for now
 
 
 def optimized_inner_product(

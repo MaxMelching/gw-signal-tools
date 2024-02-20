@@ -117,6 +117,8 @@ omit = [
   # don't report coverage for _version.py
   # (generated automatically by setuptools-scm)
   '*/_version.py',
+  '*/__init__.py',
+  '*/test_utils.py',
 ]
 
 branch = true

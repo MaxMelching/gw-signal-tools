@@ -268,9 +268,9 @@ def pad_to_get_target_df(
 
 def restrict_f_range(
     signal: FrequencySeries,
-    f_range: list[float | list[u.Quantity]] = None,
+    f_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
     fill_val: float | u.Quantity = 0.0,
-    fill_range: list[float] | list[u.Quantity] = None,
+    fill_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
     copy: bool = True
 ) -> FrequencySeries:
     """
@@ -467,31 +467,110 @@ def restrict_f_range(
 
         f_fill_upper = f_upper
 
-    lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
-    # upper_number_to_fill = signal.size - int(np.ceil((f_upper - f_fill_upper) / signal.df))
-    upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
-    # upper_number_to_fill = int(np.floor((f_upper - f_fill_upper) / signal.df))
 
-
+    # if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
+    #     and (lower_number_to_fill > 0) and (upper_number_to_fill > 0)):
     if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
-        and (lower_number_to_fill > 0) and (upper_number_to_fill > 0)):
-    # if copy:
-    # if (copy and (lower_number == 0)):
-    # if (copy and (lower_number == 0) and (upper_number == 0)):  # if not copy in append
+        and (f_fill_lower != f_lower > 0) and (f_fill_upper != f_upper)):  # Check if fill_frequ_range will do something
         # Signal shall not be edited inplace and has not been copied in
         # previous beforehand in function
         signal = signal.copy()
-    # Otherwise fill has no effect, so no copying needed
-
-    # print(lower_number, upper_number, lower_number_to_fill, upper_number_to_fill)
 
 
-    signal[:lower_number_to_fill].fill(fill_val)
-    # signal[:lower_number_to_fill] = np.ones(lower_number_to_fill) * fill_val  # Also inplace if copy=False, so using it is pointless
+    signal = fill_frequ_range(signal, fill_val, fill_range)
 
-    # signal[upper_number_to_fill:].fill(fill_val)
-    signal[signal.size - upper_number_to_fill:].fill(fill_val)
-    # signal[upper_number_to_discard:] = np.ones(signal.size - upper_number_to_fill) * fill_val  # Also inplace if copy=False, so using it is pointless
+    return signal
+
+
+def fill_frequ_range(
+    signal: FrequencySeries,
+    fill_val: float | u.Quantity,
+    fill_bounds: tuple[float, float] | tuple[u.Quantity, u.Quantity]
+) -> FrequencySeries:
+    """
+    Fills `signal` with `fill_val` outside of interval provided in
+    `fill_range`. Note that this function operates inplace, i.e. the
+    input is changed.
+
+    Parameters
+    ----------
+    signal : FrequencySeries
+        Signal to be (potentially) filled.
+    fill_val : float or u.Quantity
+        Value to fill with.
+    fill_bounds : tuple[float, float] or tuple[u.Quantity, u.Quantity]
+        signal will be filled with fill_val outside of this range
+
+    Returns
+    -------
+    FrequencySeries
+        Edited input `signal`.
+
+    Raises
+    ------
+    ValueError
+        _description_
+    ValueError
+        _description_
+    ValueError
+        _description_
+    """
+    frequ_unit = signal.frequencies.unit
+
+    f_lower, f_upper = signal.f0, signal.frequencies[-1]
+
+
+    if len(fill_bounds) != 2:
+        raise ValueError(
+            '`fill_bounds` must contain lower and upper frequency bounds.'
+        )
+
+    f_fill_lower = fill_bounds[0] if fill_bounds[0] is not None else f_lower
+    f_fill_upper = fill_bounds[1] if fill_bounds[1] is not None else f_upper
+
+    try:
+        f_fill_lower = u.Quantity(f_fill_lower, unit=frequ_unit)
+    except u.UnitConversionError:
+        raise ValueError(
+            'Need consistent frequency units for `fill_range` members'
+            f' ({f_fill_lower.unit}) and `signal` ({frequ_unit}).'
+        )
+    
+    try:
+        f_fill_upper = u.Quantity(f_fill_upper, unit=frequ_unit)
+    except u.UnitConversionError:
+        raise ValueError(
+            'Need consistent frequency units for `f_range` members'
+            f' ({f_fill_upper.unit}) and `signal` ({frequ_unit}).'
+        )
+    
+
+    # TODO: decide if only info or if error shall be raised
+    if f_fill_lower < f_lower:
+        logging.info(
+            f'The `f_lower` provided is smaller than the signals smallest '
+            'frequency. Please be aware that this function does not nothing '
+            'to change that, i.e. no padding to this lower frequency is '
+            'applied (can be changed by setting `pad_to_zero` to `True`).'
+        )  # TODO: adjust message
+    else:
+        lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
+        signal[:lower_number_to_fill].fill(fill_val)
+    
+    if f_fill_upper > f_upper:
+        logging.info(
+            f'The `f_upper` provided is higher than the signals highest '
+            'frequency. Please be aware that this function does not nothing '
+            'to change that, i.e. no padding to this higher frequency is '
+            'applied (not the scope of this function).'
+        )  # TODO: adjust message
+    else:
+        # upper_number_to_fill = signal.size - int(np.ceil((f_upper - f_fill_upper) / signal.df))
+        upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
+        # upper_number_to_fill = int(np.floor((f_upper - f_fill_upper) / signal.df))
+
+        # signal[upper_number_to_fill:].fill(fill_val)
+        signal[signal.size - upper_number_to_fill:].fill(fill_val)
 
     return signal
 
@@ -558,13 +637,13 @@ def get_signal_at_target_frequs(
     signal: FrequencySeries,
     target_frequencies: np.ndarray | u.Quantity,
     fill_val: u.Quantity = np.nan,
-    unfilled_frequencies: Optional[np.ndarray | u.Quantity] = None
+    fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None
 ) -> FrequencySeries:
     """
     Interpolate and pad input `signal` so that it spans the frequency
     interval given by `target_frequencies`, while potentially being
     filled with a specific value outside of the interval given by
-    `unfilled_frequencies`.
+    `fill_bounds`.
 
     Parameters
     ----------
@@ -574,8 +653,8 @@ def get_signal_at_target_frequs(
         _description_
     fill_val : ~astropy.units.Quantity, optional, default = ~numpy.nan
         _description_
-    unfilled_frequencies : ~numpy.array or ~astropy.units.Quantity,
-    optional, default = None
+    fill_bounds : ~numpy.array or ~astropy.units.Quantity, optional,
+    default = None
         In case only a certain region inside of `target_frequencies`
         is supposed to not (!) be filled with `fill_val`, the
         boundaries of this region can be specified here.
@@ -603,21 +682,6 @@ def get_signal_at_target_frequs(
             'Need consistent frequency units for `target_frequencies` '
             f'({target_frequencies.unit}) and signal ({frequ_unit}).'
         )
-
-
-    if unfilled_frequencies is not None:
-        if len(unfilled_frequencies) != 2:
-            raise ValueError(
-                '`unfilled_frequencies` must contain lower and upper frequency bounds.'
-            )
-
-        try:
-            unfilled_frequencies = u.Quantity(unfilled_frequencies, unit=frequ_unit)
-        except u.UnitConversionError:
-            raise ValueError(
-                'Need consistent frequency units for `unfilled_frequencies` members'
-                f' ({unfilled_frequencies[0].unit}) and `signal` ({frequ_unit}).'
-            )
 
 
     # ----- Handling fill_val -----
@@ -652,11 +716,11 @@ def get_signal_at_target_frequs(
             frequencies=target_frequencies
         )
     
-    if unfilled_frequencies is not None:
-        out = restrict_f_range(
+    if fill_bounds is not None:
+        out = fill_frequ_range(
             out,
-            fill_range=unfilled_frequencies,
-            fill_val=fill_val
+            fill_val=fill_val,
+            fill_bounds=fill_bounds
         )
 
     return out

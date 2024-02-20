@@ -261,7 +261,7 @@ def test_get_signal_at_target_frequs_interp_and_padding(f_low, f_high, df):
 @pytest.mark.parametrize('f_high', [0.9 * f_max])
 def test_get_signal_at_target_frequs_interp_and_filling(f_low, f_high, df):
     target_frequs = np.arange(f_min.value, f_max.value , step=df.value) << u.Hz
-    hp_f_at_target_frequs = get_signal_at_target_frequs(hp_f_fine, target_frequs, fill_val=0.0, unfilled_frequencies=[f_low, f_high])
+    hp_f_at_target_frequs = get_signal_at_target_frequs(hp_f_fine, target_frequs, fill_val=0.0, fill_bounds=[f_low, f_high])
 
     assert_quantity_equal(hp_f_at_target_frequs.frequencies, target_frequs)
 

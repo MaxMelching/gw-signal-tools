@@ -296,21 +296,21 @@ def inner_product(
             signal1,
             target_range,
             fill_val=0.0 * signal_unit,
-            unfilled_frequencies=non_zero_range
+            fill_bounds=non_zero_range
         )
 
         signal2 = get_signal_at_target_frequs(
             signal2,
             target_range,
             fill_val=0.0 * signal_unit,
-            unfilled_frequencies=non_zero_range
+            fill_bounds=non_zero_range
         )
 
         psd = get_signal_at_target_frequs(
             psd,
             target_range,
             fill_val=1.0 * psd.unit,
-            unfilled_frequencies=non_zero_range
+            fill_bounds=non_zero_range
         )
             
 

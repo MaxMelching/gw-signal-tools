@@ -446,43 +446,40 @@ def restrict_f_range(
         )
     
 
-    # TODO: decide if only info or if error shall be raised
     if f_fill_lower < f_lower:
         logging.info(
-            f'The `f_lower` provided is smaller than the signals smallest '
-            'frequency. Please be aware that this function does not nothing '
-            'to change that, i.e. no padding to this lower frequency is '
-            'applied (can be changed by setting `pad_to_zero` to `True`).'
-        )  # TODO: adjust message
+            f'Lower bound {f_fill_lower} in `fill_range` is smaller '
+            f'than the signals smallest frequency {f_lower}. Please be '
+            'aware that this function does nothing to change that, i.e.'
+            ' no padding is applied (adjust `f_range` for that).'
+        )
 
         f_fill_lower = f_lower
     
     if f_fill_upper > f_upper:
         logging.info(
-            f'The `f_upper` provided is higher than the signals highest '
-            'frequency. Please be aware that this function does not nothing '
-            'to change that, i.e. no padding to this higher frequency is '
-            'applied (not the scope of this function).'
-        )  # TODO: adjust message
+            f'Upper bound {f_fill_upper} in `fill_range` is larger '
+            f'than the signals largest frequency {f_upper}. Please be '
+            'aware that this function does nothing to change that, i.e.'
+            ' no padding is applied (adjust `f_range` for that).'
+        )
 
         f_fill_upper = f_upper
 
 
-    # if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
-    #     and (lower_number_to_fill > 0) and (upper_number_to_fill > 0)):
     if (copy and (lower_number == 0) #and (upper_number == 0)  # Have to copy for latter
-        and (f_fill_lower != f_lower > 0) and (f_fill_upper != f_upper)):  # Check if fill_frequ_range will do something
+        and (f_fill_lower != f_lower) and (f_fill_upper != f_upper)):  # Check if fill_f_range will do something
+    # if copy and (lower_number == 0):
         # Signal shall not be edited inplace and has not been copied in
         # previous beforehand in function
         signal = signal.copy()
 
-
-    signal = fill_frequ_range(signal, fill_val, fill_range)
+    signal = fill_f_range(signal, fill_val, [f_fill_lower, f_fill_upper])
 
     return signal
 
 
-def fill_frequ_range(
+def fill_f_range(
     signal: FrequencySeries,
     fill_val: float | u.Quantity,
     fill_bounds: tuple[float, float] | tuple[u.Quantity, u.Quantity]
@@ -496,10 +493,13 @@ def fill_frequ_range(
     ----------
     signal : FrequencySeries
         Signal to be (potentially) filled.
-    fill_val : float or u.Quantity
+    fill_val : float or ~astropy.units.Quantity
         Value to fill with.
-    fill_bounds : tuple[float, float] or tuple[u.Quantity, u.Quantity]
-        signal will be filled with fill_val outside of this range
+    fill_bounds : tuple[float, float] or tuple[~astropy.units.Quantity,
+    ~astropy.units.Quantity]
+        Bounds of interval outside of which `signal` is filled. Must
+        have length 2, but members can be None to indicate that no
+        filling shall be done on the respective end of the interval.
 
     Returns
     -------
@@ -509,11 +509,10 @@ def fill_frequ_range(
     Raises
     ------
     ValueError
-        _description_
+        If `fill_bounds` is does not have two elements.
     ValueError
-        _description_
-    ValueError
-        _description_
+        If members of `fill_bounds` have frequency units that are
+        incompatible with the frequency units of `signal`.
     """
     frequ_unit = signal.frequencies.unit
 
@@ -524,53 +523,49 @@ def fill_frequ_range(
         raise ValueError(
             '`fill_bounds` must contain lower and upper frequency bounds.'
         )
-
-    f_fill_lower = fill_bounds[0] if fill_bounds[0] is not None else f_lower
-    f_fill_upper = fill_bounds[1] if fill_bounds[1] is not None else f_upper
-
-    try:
-        f_fill_lower = u.Quantity(f_fill_lower, unit=frequ_unit)
-    except u.UnitConversionError:
-        raise ValueError(
-            'Need consistent frequency units for `fill_range` members'
-            f' ({f_fill_lower.unit}) and `signal` ({frequ_unit}).'
-        )
-    
-    try:
-        f_fill_upper = u.Quantity(f_fill_upper, unit=frequ_unit)
-    except u.UnitConversionError:
-        raise ValueError(
-            'Need consistent frequency units for `f_range` members'
-            f' ({f_fill_upper.unit}) and `signal` ({frequ_unit}).'
-        )
     
 
-    # TODO: decide if only info or if error shall be raised
-    if f_fill_lower < f_lower:
-        logging.info(
-            f'The `f_lower` provided is smaller than the signals smallest '
-            'frequency. Please be aware that this function does not nothing '
-            'to change that, i.e. no padding to this lower frequency is '
-            'applied (can be changed by setting `pad_to_zero` to `True`).'
-        )  # TODO: adjust message
-    else:
-        lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
-        signal[:lower_number_to_fill].fill(fill_val)
-    
-    if f_fill_upper > f_upper:
-        logging.info(
-            f'The `f_upper` provided is higher than the signals highest '
-            'frequency. Please be aware that this function does not nothing '
-            'to change that, i.e. no padding to this higher frequency is '
-            'applied (not the scope of this function).'
-        )  # TODO: adjust message
-    else:
-        # upper_number_to_fill = signal.size - int(np.ceil((f_upper - f_fill_upper) / signal.df))
-        upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
-        # upper_number_to_fill = int(np.floor((f_upper - f_fill_upper) / signal.df))
+    if (f_fill_lower := fill_bounds[0]) is not None:
+        try:
+            f_fill_lower = u.Quantity(f_fill_lower, unit=frequ_unit)
+        except u.UnitConversionError:
+            raise ValueError(
+                'Need consistent frequency units for `fill_range` members'
+                f' ({f_fill_lower.unit}) and `signal` ({frequ_unit}).'
+            )
+        
+        if f_fill_lower < f_lower:
+            logging.info(
+                f'Lower bound {f_fill_lower} in `fill_bounds` is '
+                f'smaller than the signals smallest frequency {f_lower}'
+                '. Please be aware that this function does nothing to '
+                'change that, i.e. no padding is applied.'
+            )
+        else:
+            lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
+            signal[:lower_number_to_fill].fill(fill_val)
 
-        # signal[upper_number_to_fill:].fill(fill_val)
-        signal[signal.size - upper_number_to_fill:].fill(fill_val)
+
+    if (f_fill_upper := fill_bounds[1]) is not None:
+        try:
+            f_fill_upper = u.Quantity(f_fill_upper, unit=frequ_unit)
+        except u.UnitConversionError:
+            raise ValueError(
+                'Need consistent frequency units for `f_range` members'
+                f' ({f_fill_upper.unit}) and `signal` ({frequ_unit}).'
+            )
+        
+
+        if f_fill_upper > f_upper:
+            logging.info(
+                f'Upper bound {f_fill_upper} in `fill_bounds` is larger'
+                f' than the signals end frequency {f_upper}. Please be'
+                ' aware that this function does nothing to change that,'
+                ' i.e. no padding is applied.'
+            )
+        else:
+            upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
+            signal[signal.size - upper_number_to_fill:].fill(fill_val)
 
     return signal
 
@@ -717,7 +712,7 @@ def get_signal_at_target_frequs(
         )
     
     if fill_bounds is not None:
-        out = fill_frequ_range(
+        out = fill_f_range(
             out,
             fill_val=fill_val,
             fill_bounds=fill_bounds

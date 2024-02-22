@@ -1,8 +1,25 @@
+# ----- Standard Lib Imports -----
+import unittest
+
+# ----- Third Party Imports -----
 import numpy as np
+import astropy.units as u
+from gw_signal_tools.test_utils import (
+    assert_allclose_quantity, assert_allclose_frequseries,
+    assert_allclose_timeseries
+)
+from gwpy.testing.utils import assert_quantity_equal
 
-from gw_signal_tools.fisher_matrix import num_diff, fisher_val_at_point
+# ----- Local Package Imports -----
+from gw_signal_tools.fisher_utils import (
+    num_diff, get_waveform_derivative_1D,
+    get_waveform_derivative_1D_with_convergence,
+    fisher_matrix, fisher_element
+)
+from gw_signal_tools.fisher_matrix import FisherMatrix
 
 
+#%% ---------- Testing Derivative Methods ----------
 def test_num_diff():
     step_size = 0.01
     x_vals = np.arange(0.0, 2.0, step=step_size)
@@ -27,3 +44,58 @@ def test_num_diff():
     assert np.all(np.isclose(derivative_vals[2 : -2], np.cos(x_vals)[2 : -2], atol=0.0, rtol=0.01))
     assert np.all(np.isclose(derivative_vals[:2], np.cos(x_vals)[:2], atol=0.0, rtol=0.01))
     assert np.all(np.isclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02))
+
+
+def test_wf_deriv():
+    # TODO: compare with numdifftools
+    ...
+
+
+#%% Initializing commonly used variables
+f_min = 20.*u.Hz
+f_max = 1024.*u.Hz
+
+wf_params = {
+    'total_mass': 100.*u.solMass,
+    'mass_ratio': 0.42*u.dimensionless_unscaled,
+    'deltaT': 1./2048.*u.s,
+    'f22_start': f_min,
+    'f_max': f_max,
+    'f22_ref': 20.*u.Hz,
+    'phi_ref': 0.*u.rad,
+    'distance': 1.*u.Mpc,
+    'inclination': 0.0*u.rad,
+    'eccentricity': 0.*u.dimensionless_unscaled,
+    'longAscNodes': 0.*u.rad,
+    'meanPerAno': 0.*u.rad,
+    'condition': 0
+}
+
+approximant = 'IMRPhenomXPHM'
+
+phenomx_generator = FisherMatrix.get_wf_generator(approximant, 'frequency')
+
+deriv = get_waveform_derivative_1D_with_convergence(
+    wf_params,
+    'total_mass',
+    phenomx_generator,
+    return_info=False
+)
+
+print(deriv)
+
+fisher_val, info = fisher_matrix(
+    wf_params,
+    # 'total_mass',
+    ['total_mass', 'distance'],
+    phenomx_generator,
+    return_info=True
+)
+
+print(fisher_val)
+print(fisher_val.value)
+print(fisher_val.unit)
+print(fisher_val[0, 0].to(1/(u.Msun)**2))
+
+
+# Do some tests

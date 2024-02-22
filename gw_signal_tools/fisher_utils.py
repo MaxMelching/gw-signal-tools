@@ -1,8 +1,11 @@
+# ----- Standard Lib Imports -----
 import logging
 import warnings
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Callable
 
+# ----- Third Party Imports -----
 import numpy as np
+from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
 
 from gwpy.types import Series
@@ -10,9 +13,10 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm
 
+# ----- Local Package Imports -----
 from .inner_product import inner_product, norm
+from .waveform_utils import get_strain
 from .matrix_with_units import MatrixWithUnits
-
 
 
 def num_diff(
@@ -22,7 +26,9 @@ def num_diff(
     """
     Implementation of five-point stencil method for numerical
     differentiation for numpy arrays and instances of GWpy Series class
-    (which includes instances of TimeSeries, FrequencySeries).
+    (which includes instances of TimeSeries, FrequencySeries). The
+    differentiation is carried out with respect to the respective
+    quantity that spans `signal.xindex`.
 
     At the boundary points, less accurate methods like the central,
     forward and backward difference are used.
@@ -76,15 +82,14 @@ def num_diff(
 def fisher_matrix(
     wf_params_at_point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
-    wf_generator: Any,
-    psd: Optional[FrequencySeries] = None,  # TODO: isn't that caught by inner_prod_kwargs?
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | ArrayLike],
     step_sizes: Optional[list[float]] = None,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: float = None,  # Rename to threshold?
+    convergence_threshold: float = None,  # TODO (potential): rename to threshold?
     break_upon_convergence: bool = True,
     return_info: bool = False,
     **inner_prod_kwargs
-) -> np.ndarray:
+) -> MatrixWithUnits:
     """
     Compute Fisher matrix at a fixed point.
 
@@ -96,11 +101,16 @@ def fisher_matrix(
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-    wf_generator : Any
-        Function that is able to generate a waveform/strain by taking
-        `wf_params_at_point` as input.
-    psd : FrequencySeries, optional, default = None
-        _description_, by default None
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries or ArrayLike]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        `wf_params_at_point`, while the output is either a ``~gwpy.
+        frequencyseries.FrequencySeries`` or of type ``ArrayLike``, so
+        that its subtraction is carried out element-wise. The preferred
+        type is ``FrequencySeries`` because it supports astropy units
+        (and it is the standard output of LAL gwsignal generators).
     step_sizes : list[float], optional, default = None
         _description_
 
@@ -138,12 +148,6 @@ def fisher_matrix(
     param_numb = len(params_to_vary)
 
 
-    if psd is None:
-        from .PSDs import psd_no_noise
-
-        psd = psd_no_noise
-
-
     if convergence_check is None:
         convergence_check = 'diff_norm'
     else:
@@ -169,7 +173,6 @@ def fisher_matrix(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,
-            psd=psd,
             step_sizes=step_sizes,
             convergence_check=convergence_check,
             break_upon_convergence=break_upon_convergence,
@@ -178,7 +181,7 @@ def fisher_matrix(
             **inner_prod_kwargs
         )
 
-        fisher_matrix[i, i] = info['norm']**2
+        fisher_matrix[i, i] = info['norm_squared']
 
         if return_info:
             # Maybe copy selected stuff only?
@@ -196,12 +199,20 @@ def fisher_matrix(
                 unit_j = deriv_series_storage[param_j].unit
 
                 if unit_i == unit_j:
-                    fisher_val = inner_product(deriv_series_storage[param_i], deriv_series_storage[param_j], psd, **inner_prod_kwargs)
+                    fisher_val = inner_product(
+                        deriv_series_storage[param_i],
+                        deriv_series_storage[param_j],
+                        **inner_prod_kwargs
+                    )
                 else:
                     deriv_series_storage[param_i].override_unit(u.dimensionless_unscaled)
                     deriv_series_storage[param_j].override_unit(u.dimensionless_unscaled)
 
-                    fisher_val = inner_product(deriv_series_storage[param_i], deriv_series_storage[param_j], psd, **inner_prod_kwargs)
+                    fisher_val = inner_product(
+                        deriv_series_storage[param_i],
+                        deriv_series_storage[param_j],
+                        **inner_prod_kwargs
+                    )
 
                     deriv_series_storage[param_i].override_unit(unit_i)
                     deriv_series_storage[param_j].override_unit(unit_j)
@@ -223,11 +234,10 @@ def fisher_matrix(
 def get_waveform_derivative_1D_with_convergence(
     wf_params_at_point: dict[str, u.Quantity],
     param_to_vary: str,
-    wf_generator: Any,
-    psd: Optional[FrequencySeries] = None,
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | ArrayLike],
     step_sizes: Optional[list[float]] = None,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: float = None,  # Rename to threshold?
+    convergence_threshold: float = None,  # TODO (potential): rename to threshold?
     break_upon_convergence: bool = True,
     return_info: bool = False,
     **inner_prod_kwargs
@@ -240,13 +250,21 @@ def get_waveform_derivative_1D_with_convergence(
     Parameters
     ----------
     wf_params_at_point : dict[str, u.Quantity]
-        _description_
+        can in principle also be any, but param_to_vary has to be
+        accessible as a key and value has to be value of point that we
+        want to compute derivative around
     param_to_vary : str
         _description_
-    wf_generator : Any
-        _description_
-    psd : FrequencySeries, optional
-        _description_, by default None
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries or ArrayLike]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        `wf_params_at_point`, while the output is either a ``~gwpy.
+        frequencyseries.FrequencySeries`` or of type ``ArrayLike``, so
+        that its subtraction is carried out element-wise. The preferred
+        type is ``FrequencySeries`` because it supports astropy units
+        (and it is the standard output of LAL gwsignal generators).
     step_sizes : list[float], optional, default = None
         _description_
     convergence_check : Literal['diff_norm', 'mismatch'], optional,
@@ -268,12 +286,6 @@ def get_waveform_derivative_1D_with_convergence(
         _description_
     """
     
-    if psd is None:
-        from .PSDs import psd_no_noise
-
-        psd = psd_no_noise
-
-
     if step_sizes is None:
         # step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)  # Seems most reasonable choice at the moment -> testing showed that 1e-6 might be too small for good results :OO
         step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5], [5, 1]), -1)  # 1e-2 might be too large for some parameters
@@ -313,7 +325,9 @@ def get_waveform_derivative_1D_with_convergence(
                 step_size
             )
 
-            derivative_norm = norm(deriv_param, psd, **inner_prod_kwargs)
+            # TODO: catch input domain error with log info message that this step size is skipped?
+
+            derivative_norm = norm(deriv_param, **inner_prod_kwargs)
             if 'optimize_time_and_phase' in inner_prod_kwargs.keys():
                 derivative_norm = derivative_norm[1]**2
             else:
@@ -330,7 +344,7 @@ def get_waveform_derivative_1D_with_convergence(
                 case 'diff_norm':
                     if len(derivative_vals) >= 2:
                         convergence_vals += [
-                            norm(deriv_param - derivative_vals[-2], psd,
+                            norm(deriv_param - derivative_vals[-2],
                                  **inner_prod_kwargs) \
                             / np.sqrt(derivative_norm)
                         ]  # Index -1 is deriv_param
@@ -341,7 +355,7 @@ def get_waveform_derivative_1D_with_convergence(
                     if len(derivative_vals) >= 2:
                         convergence_vals += [
                             1.0 - inner_product(deriv_param, derivative_vals[-2],
-                                                psd, **inner_prod_kwargs) \
+                                                **inner_prod_kwargs) \
                             / np.sqrt(derivative_norm * deriv_norms[-2])
                         ]  # Index -1 is deriv_param
                     else:
@@ -400,7 +414,8 @@ def get_waveform_derivative_1D_with_convergence(
         fig, ax = plt.subplots()
 
         for i in range(len(derivative_vals)):
-            ax.plot(derivative_vals[i], '--', label=f'{step_sizes[i]}')
+            ax.plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]} (Re)')
+            ax.plot(derivative_vals[i].imag, ':', label=f'{step_sizes[i]} (Im)')
 
         ax.legend(title='Step Sizes', ncols=max(1, len(derivative_vals) % 3))
 
@@ -411,7 +426,7 @@ def get_waveform_derivative_1D_with_convergence(
         # plt.close()
 
         return derivative_vals[min_dev_index], {
-            'norm': deriv_norms[min_dev_index],
+            'norm_squared': deriv_norms[min_dev_index],
             'final_step_size': step_sizes[min_dev_index],
             'final_convergence_val': convergence_vals[min_dev_index - 1 if min_dev_index != -1 else -1],
             'number_of_refinements': refine_numb,
@@ -425,7 +440,7 @@ def get_waveform_derivative_1D_with_convergence(
 def get_waveform_derivative_1D(
     wf_params_at_point: dict[str, u.Quantity],
     param_to_vary: str,
-    wf_generator: Any,  # TODO: change type of this? I.e. function that takes -> and then set this with args in fisher?
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | ArrayLike],
     step_size: float
 ) -> FrequencySeries:
     """
@@ -434,43 +449,55 @@ def get_waveform_derivative_1D(
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, u.Quantity]
+    wf_params_at_point : dict[str, ~astropy.units.Quantity]
         Dictionary with parameters that determine point at which
         derivative is calculated.
     param_to_vary : str
         Derivative is taken with respect to this parameter (has to be
         key passed to waveform generators).
-    wf_generator : Any
-        Instance of `~lalsimulation.gwsignal.core.waveform.
-        LALCompactBinaryCoalescenceGenerator` class that is used for
-        waveform generation.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries or ArrayLike]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        `wf_params_at_point`, while the output is either a ``~gwpy.
+        frequencyseries.FrequencySeries`` or of type ``ArrayLike``, so
+        that its subtraction is carried out element-wise. The preferred
+        type is ``FrequencySeries`` because it supports astropy units
+        (and it is the standard output of LAL gwsignal generators).
     step_size : float
         Step size used in numerical differentiation.
 
     Returns
     -------
-    FrequencySeries
+    ~gwpy.frequencyseries.FrequencySeries
         Derivative in frequency domain.
+    
+    Notes
+    -----
+    In case the function throws an error because shape mismatches or so,
+    consider providing fixed starting frequency, end frequency and
+    frequency spacing so that the waveforms are guaranteed to have the
+    same frequency range.
     """
 
     param_center_val = wf_params_at_point[param_to_vary]
-    
-    # TODO: ensure that f_min and f_max are given, otherwise potentially inconsistent waveform lengths, right?
+    step_size = u.Quantity(step_size, unit=param_center_val.unit)
+    param_vals = param_center_val + np.array([-2., -1., 1., 2.]) * step_size
 
-    step_size = step_size * param_center_val.unit    
-    param_vals = param_center_val + np.array([-2.0, -1.0, 1.0, 2.0]) * step_size
 
     waveforms = [
-        wfm.GenerateFDWaveform(
-            wf_params_at_point | {param_to_vary: param_val},
-            wf_generator
-        )[0] for param_val in param_vals
+        wf_generator(wf_params_at_point | {param_to_vary: param_val}
+                     ) for param_val in param_vals
     ]
 
     
     # TODO: change override once lalsuite gets it right!!!
     for wf in waveforms:
-        wf.override_unit(u.s)
+        try:
+            wf.override_unit(u.s)
+        except AttributeError:
+            pass
 
 
     deriv_series = waveforms[0] - 8.0 * waveforms[1] + 8.0 * waveforms[2] - waveforms[3]    
@@ -488,12 +515,13 @@ def get_waveform_derivative_1D(
     return deriv_series
 
 
+# TODO: remove? Just use fisher_matrix return
 def fisher_element(
     wf_params_at_point: dict[str, u.Quantity],
     param_to_vary: str,
     wf_generator: Any,
     **deriv_kwargs
-) -> float | u.Quantity:  # TODO: decide here
+) -> float | u.Quantity:
     
     _, info = get_waveform_derivative_1D_with_convergence(
         wf_params_at_point,
@@ -503,6 +531,6 @@ def fisher_element(
         **deriv_kwargs
     )
 
-    fisher_val = info['norm']**2
+    fisher_val = info['norm_squared']
 
     return fisher_val

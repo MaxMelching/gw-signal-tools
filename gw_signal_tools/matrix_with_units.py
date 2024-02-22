@@ -17,9 +17,9 @@ class MatrixWithUnits:
 
 
     def  __init__(self, value, unit) -> None:
-        assert np.shape(value) == np.shape(unit), \
-                ('`value` and `unit` must have equal shape if unit is an '
-                'array of astropy units.')
+        # assert np.shape(value) == np.shape(unit), \
+        #         ('`value` and `unit` must have equal shape if unit is an '
+        #         'array of astropy units.')
         
 
         # Idea: add support for given unit that is "scalar"
@@ -28,14 +28,19 @@ class MatrixWithUnits:
         # value = np.asarray(value, dtype=np.number)
         # value = np.asarray(value, dtype=float)
 
-        # if isinstance(unit, self._allowed_unit_types):
-        #     if not isinstance(value, self._allowed_numeric_types):
-        #         unit = np.full(np.shape(value), unit, dtype=object)
-        # else:
-        #     assert np.shape(value) == np.shape(unit), \
-        #         ('`value` and `unit` must have equal shape if unit is an '
-        #         'array of astropy units.')
+        if isinstance(unit, self._allowed_unit_types):
+            if not isinstance(value, self._allowed_numeric_types):
+                unit = np.full(np.shape(value), unit, dtype=object)
+        else:
+            assert np.shape(value) == np.shape(unit), \
+                ('`value` and `unit` must have equal shape if unit is an '
+                'array of astropy units.')
             
+        if not isinstance(value, (np.ndarray, u.Quantity)):
+            value = np.asarray(value, dtype=float)
+
+        if not isinstance(unit, (np.ndarray, u.Quantity)):
+            unit = np.asarray(unit, dtype=object)
 
         self.value = value
         self.unit = unit
@@ -98,12 +103,26 @@ class MatrixWithUnits:
 
 
     def __repr__(self) -> str:
-        return (self.value * self.unit).__repr__()
+        # return (self.value * self.unit).__repr__()
+        return (np.array(self.value) * np.array(self.unit)).__repr__()
     
 
     def __float__(self):
         # if np.shape(self.value)
+        # Will throw error in most cases, but not because of our class, but
+        # because of way it has been set by user (e.g. to array)
         return float(self.value)
+    
+
+    def __array__(self):
+        # return self.value.__array__()  # Lists or ints do not have __array__
+        return np.array(self.value)
+    
+
+    # def __array_ufunc__(self, function, method, *inputs, **kwargs):
+    #     return self.value. __array_ufunc__(function, method, *inputs, **kwargs) #* \
+    #         #    self.unit. __array_ufunc__(function, method, *inputs, **kwargs)
+    #     # return np.ndarray.array_ufunc(function, method, *inputs, **kwargs)
     
 
     def __copy__(self):
@@ -114,7 +133,7 @@ class MatrixWithUnits:
     
 
     def __eq__(self, other):
-        return self.value.__eq__(self.other.value) and self.unit.__eq__(self.other.unit)
+        return self.value.__eq__(other.value) and self.unit.__eq__(other.unit)
     
 
     def __hash__(self):
@@ -154,6 +173,11 @@ class MatrixWithUnits:
     
 
     # Add properties for add, sub, mult, truediv, rtruediv; matmul maybe as well?
+    # -> also iadd, isub, imul? For inplace stuff
+    def __neg__(self):
+        return MatrixWithUnits(-self.value, self.unit)
+    
+
     def __add__(self, other):
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value + other, self.unit)
@@ -161,11 +185,11 @@ class MatrixWithUnits:
         #     return MatrixWithUnits(self.value, self.unit + np.asarray(other, dtype=object))
         # Adding just units without values does not make much sense, right?
         elif isinstance(other, u.Quantity):
-            assert np.all(other.unit == self.unit)
+            assert np.all(np.equal(other.unit, self.unit))
 
             return MatrixWithUnits(self.value + other.value, self.unit)
         elif isinstance(other, MatrixWithUnits):
-            assert np.all(other.unit == self.unit)
+            assert np.all(np.equal(other.unit, self.unit))
             
             return MatrixWithUnits(self.value + other.value, self.unit)
         else:

@@ -29,25 +29,38 @@ class FisherMatrix:
     """
     A data type tailored to Fisher matrices. It stores the Fisher matrix
     itself, along with its inverse.
-    its inverse
 
     Parameters
     ----------
-    wf_params_at_point : _type_
-        _description_
-    params_to_vary : _type_
-        _description_
-    wf_generator : _type_
-        _description_
+    wf_params_at_point : dict[str, u.Quantity]
+        Point in parameter space at which the Fisher matrix is
+        evaluated, encoded as key-value-pairs. Input to `wf_generator`.
+    params_to_vary : str or list[str]
+        Parameter(s) with respect to which the derivatives will be
+        computed, the norms of which constitute the Fisher matrix.
+        Must be keys in `wf_params_at_point`.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries or ArrayLike]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        `wf_params_at_point`, while the output is either a ``~gwpy.
+        frequencyseries.FrequencySeries`` or of type ``ArrayLike``, so
+        that its subtraction is carried out element-wise. The preferred
+        type is ``FrequencySeries`` because it supports astropy units
+        (and it is the standard output of LAL gwsignal generators).
 
-        A convenient option to use the method `FisherMatrix.
+        A convenient option is to use the method `FisherMatrix.
         get_wf_generator`, which generates a suitable function from
         a few arguments.
 
     See also
     --------
-    ~gwsignal.fisher_utils.fisher_matrix : Routine used for calculation
-    of the Fisher matrix.
+    ~gwsignal.fisher_utils.fisher_matrix :
+        Routine used for calculation of the Fisher matrix.
+    ~gwsignal.fisher_utils.get_waveform_derivative_1D_with_convergence :
+        Routine used for calculation of involved derivatives. Used by
+        ~gwsignal.fisher_utils.fisher_matrix.
     numpy.linalg.inv : Routine used for inversion of the Fisher matrix.
     """
 
@@ -59,15 +72,14 @@ class FisherMatrix:
 
     def __init__(self,
             wf_params_at_point: dict[str, u.Quantity],
-            params_to_vary: str,
+            params_to_vary: str | list[str],
             wf_generator: Callable[[dict[str, u.Quantity]],
                                    FrequencySeries | ArrayLike],
             **metadata
-        ):
+        ) -> None:
         """
         Initialize a ``FisherMatrix``.
         """
-
         self.wf_params_at_point = wf_params_at_point
         self.params_to_vary = params_to_vary
         self.wf_generator = wf_generator
@@ -87,75 +99,75 @@ class FisherMatrix:
         #     np.full((2, 2), 42),
         #     np.full((2, 2), u.s)
         # )
+        
+        self._calc_fisher()
+    
 
+    def _calc_fisher(self):
+        """
+        Call `~gw_signal_tools.fisher_utils.fisher_matrix` to calculate
+        the Fisher matrix.
+        """
         self._fisher, self._deriv_info = fisher_matrix(
             self.wf_params_at_point,
             self.params_to_vary,
             self.wf_generator,
             **self.metadata
         )
+
         # NOTE: although it may not be good practice to set private attributes
         # like self._fisher, this is our workaround to make self.fisher
         # immutable (has no setter). If we were to set self.fisher here,
         # a setter would be required
         # -> _fisher being set is inevitable, some property has to be settable
 
+        # TODO: decide if this is good idea... Can also be called by user and
+        # thus goes against philosophy of immutable... So maybe remove, put
+        # back into __init__ and return None upon attribute error in fisher?
+        # Perhaps along with message
+
     
     @property
     def fisher(self):
+        """
+        Actual Fisher matrix associated with this class.
+
+        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        """
         try:
-            if self._fisher is not None:
-                return self._fisher
+            return self._fisher
         except AttributeError:
-            pass
-            # return None here?
+            # This case should never be reached, except the matrix was deleted.
+            # In that case, although it must be the users fault, recompute
+            self._calc_fisher()
 
-        # Either it was None or not set. Either way, recompute
-        # self._fisher = fisher_matrix(
-        #     wf_params_at_point=wf_params_at_point,
-        #     params_to_vary=params_to_vary,
-        # )
+            return self._fisher
 
-        # With new structure, just create new class?
-        # -> on the other hand, this should never happen...
-
-
-        return self._fisher
-    
-
-    # @fisher.setter
-    # def fisher(self, value):
-    #     try:
-    #         logging.info('Here we are')
-    #         attr_test = self._fisher
-
-    #         raise AttributeError(
-    #             'Attribute `fisher` may only be set upon initialization of an '
-    #             'instance of ``FisherMatrix``.'
-    #         )
-    #     except (AttributeError) as err:
-    #         err_msg = str(err)
-    #         if not ('upon initialization') in err_msg:
-    #             self._fisher = value
-    #         else:
-    #             raise AssertionError(err_msg)
-            
-    
-    # _fisher = property(self.fisher.__get__)
-    
 
     @property
     def fisher_inverse(self):
+        """
+        Inverse of Fisher matrix associated with this class.
+
+        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        """
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
             return self._fisher_inverse
         except AttributeError:
+            # Inverse is called for the first time or has been deleted
             self._fisher_inverse = MatrixWithUnits(
                 np.linalg.inv(self.fisher.value),
                 self.fisher.unit**-1,
             )
 
             return self._fisher_inverse
+        
+    
+    @property
+    def deriv_info(self):
+        # self._deriv_info is available... Soooo, shall we something with it?
+        raise NotImplementedError
 
 
     def update_metadata(self,
@@ -172,19 +184,42 @@ class FisherMatrix:
 
         Parameters
         ----------
-        new_wf_params_at_point : _type_, optional
-            _description_, by default None
-        new_params_to_vary : _type_, optional
-            _description_, by default None
-        new_wf_generator : _type_, optional
-            _description_, by default None
+        new_wf_params_at_point : dict[str, u.Quantity]
+            Point in parameter space at which the Fisher matrix is
+            evaluated, encoded as key-value-pairs. Given as input to
+            `wf_generator`.
+        new_params_to_vary : str or list[str]
+            Parameter(s) with respect to which the derivatives will be
+            computed, the norms of which constitute the Fisher matrix.
+            can in principle also be any, but param_to_vary has to be
+            accessible as a key and value has to be value of point that
+            we want to compute derivative around. Must be keys in
+            `new_wf_params_at_point`.
+
+            Note that for this function, it is not required to specify a
+            completely novel set. Updating only selected parameters is
+            suppported
+        new_wf_generator : Callable[[dict[str, ~astropy.units.
+        Quantity]], FrequencySeries or ArrayLike]
+            Arbitrary function that is used for waveform generation. The
+            required signature means that it has one non-optional
+            argument, which is expected to accept the input provided in
+            `wf_params_at_point`, while the output is either a ``~gwpy.
+            frequencyseries.FrequencySeries`` or of type ``ArrayLike``,
+            so that its subtraction is carried out element-wise. The
+            preferred type is ``FrequencySeries`` because it supports
+            astropy units (and it is the standard output of LAL gwsignal
+            generators).
+
+            A convenient option is to use the method `FisherMatrix.
+            get_wf_generator`, which generates a suitable function from
+            a few arguments.
 
         Returns
         -------
         ~gw_signal_tools.fisher_matrix.FisherMatrix
             New Fisher matrix, calculated with updated metadata.
         """
-
         if new_wf_params_at_point is None:
             new_wf_params_at_point = self.wf_params_at_point
 
@@ -203,7 +238,8 @@ class FisherMatrix:
 
     
     def condition_number(self,
-                         matrix_norm: float | Literal['fro', 'nuc'] = 'fro'):
+            matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
+        ) -> float:
         """
         Condition number of the Fisher matrix.
 
@@ -268,7 +304,6 @@ class FisherMatrix:
             Function used to get a generator from `approximant`. This is
             passed to the `generator` argument of `get_strain`.
         """
-        print(approximant)
         generator = wfm.LALCompactBinaryCoalescenceGenerator(approximant)
 
         def wf_generator(wf_params):
@@ -289,20 +324,5 @@ class FisherMatrix:
     
 
     def __array__(self):
-        # return self.fisher
-        # return self.fisher.value
+        # Most intuitive behaviour: indeed return a Fisher matrix as array
         return self.fisher.__array__()
-
-
-    # def __float__():
-    #     # Idea: return only matrix with values, not what is usually
-    #     # returned (product of values and matrix with units)
-    #     return 
-    # Does not work, float() wants real float returned, not array with this dtype
-
-
-    # def __getattr__(self, attr):
-    #     # return super().__getattribute__(attr)
-    #     return self._fisher.__getattribute__(attr)
-    # Thought might be a good idea to get stuff like array or repr
-    # from .fisher, which seemed like very intuitive way to do stuff

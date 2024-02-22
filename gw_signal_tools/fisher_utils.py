@@ -15,7 +15,6 @@ import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
 from .inner_product import inner_product, norm
-from .waveform_utils import get_strain
 from .matrix_with_units import MatrixWithUnits
 
 
@@ -79,28 +78,36 @@ def num_diff(
     return signal_deriv
 
 
+# NOTE: removing some of the arguments to pass all kwargs to derivative does
+# not work because we want to be able to pass kwargs to inner_product function
+# in fisher_matrix itself
 def fisher_matrix(
     wf_params_at_point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | ArrayLike],
     step_sizes: Optional[list[float]] = None,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: float = None,  # TODO (potential): rename to threshold?
+    convergence_threshold: float = None,
     break_upon_convergence: bool = True,
     return_info: bool = False,
     **inner_prod_kwargs
 ) -> MatrixWithUnits:
     """
-    Compute Fisher matrix at a fixed point.
+    Compute Fisher matrix at a fixed point. To assess the stability of
+    the result, this function calculates the involved derivatives for
+    several step sizes and compares the results using what we call a
+    convergence checker.
 
     Parameters
     ----------
     wf_params_at_point : dict[str, u.Quantity]
         Point in parameter space at which the Fisher matrix is
-        evaluated, encoded as key-value-pairs. Input to `wf_generator`.
+        evaluated, encoded as key-value-pairs. Given as input to
+        `wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
+        Must be keys in `wf_params_at_point`.
     wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
     FrequencySeries or ArrayLike]
         Arbitrary function that is used for waveform generation. The
@@ -111,26 +118,48 @@ def fisher_matrix(
         that its subtraction is carried out element-wise. The preferred
         type is ``FrequencySeries`` because it supports astropy units
         (and it is the standard output of LAL gwsignal generators).
-    step_sizes : list[float], optional, default = None
-        _description_
 
-        If None, values in the range 5e-2 to 1e-5 are taken
+        A convenient option is to use the method `FisherMatrix.
+        get_wf_generator`, which generates a suitable function from
+        a few arguments.
+    step_sizes : list[float], optional, default = None
+        Step sizes that are used in the numerical differention.
     convergence_check : Optional[Literal['diff_norm', 'mismatch']],
     optional, default = None
-        _description_
-
-
-        diff_norm means we do not loose more than threshold percent of SNR
-        between consecutive derivative calculations
+        Criterion used to asses stability of the result. Currently, two
+        are available:
+        - diff_norm: calculates the norm of the difference of two
+          consecutive derivatives (using the function `~gw_signal_tools.
+          inner_product.norm`). This is compared to the norm of the most
+          recent derivative and if their fraction is smaller than some
+          threshold (specified in `convergence_threshold`), the result
+          is taken to be converged because the differences become
+          negligible on the relevant scales (provided by the norm of
+          the derivative).
+        - mismatch: calculates the mismatch between consecutive
+          derivatives (also using the function `~gw_signal_tools.
+          inner_product.norm`), which is defined as :math:`1 - overlap`.
+          Again, the result is taken to be converged if this mismatch
+          falls under a certain threshold, provided by
+          `convergence_threshold`.
     convergence_threshold : float, optional, default = None
-        _description_
+        Threshold that is used to decide if result is converged. This
+        will be the case once the value of the criterion specified in
+        `convergence_check` is smaller than `convergence_threshold` two
+        iterations in a row.
     break_upon_convergence : bool, optional, default = True
-        _description_
+        Whether to break upon the convergence described previously
+        (difference smaller than given threshold two times in a row) or
+        not. If not, results for all step sizes are calculated and the
+        one with minimal convergence criterion value is selected.
 
     Returns
     -------
     gw_signal_tools.matrix_with_units.MatrixWithUnits
-        Type of the returned matrix.
+        Type of the returned matrix. Entries are Fisher values, where
+        index :math:`i j` corresponds to the inner product of
+        derivatives with respect to the parameters `params_to_vary[i]`,
+        `params_to_vary[j]`.
     
     Notes
     -----
@@ -140,6 +169,13 @@ def fisher_matrix(
     Moreover, "regular" calculations using e.g. numpy arrays can also
     be carried out fairly easily using this type, namely by extracting
     this value using by applying `.value` to the class instance.
+
+    See also
+    --------
+    gw_signal_tools.fisher_utils.
+    get_waveform_derivative_1D_with_convergence : 
+        Method used for numerical differentiation. Almost all arguments
+        are passed straight to this function.
     """
     # ----- Handle some default values -----
     if isinstance(params_to_vary, str):
@@ -148,16 +184,7 @@ def fisher_matrix(
     param_numb = len(params_to_vary)
 
 
-    if convergence_check is None:
-        convergence_check = 'diff_norm'
-    else:
-        if convergence_check not in ['mismatch', 'diff_norm']:
-            raise ValueError(
-                    'Invalid value for `convergence_check`.'
-                )
-
-
-    # ----- Initialize Fisher Matrix as matrix with units in each entry -----
+    # ----- Initialize Fisher Matrix as MatrixWithUnits instance -----
     fisher_matrix = MatrixWithUnits(
         np.zeros((param_numb, param_numb), dtype=float),
         np.full((param_numb, param_numb), u.dimensionless_unscaled, dtype=object)
@@ -184,7 +211,7 @@ def fisher_matrix(
         fisher_matrix[i, i] = info['norm_squared']
 
         if return_info:
-            # Maybe copy selected stuff only?
+            # TODO: maybe copy selected stuff only?
             deriv_info[param] = info
 
 
@@ -237,7 +264,7 @@ def get_waveform_derivative_1D_with_convergence(
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | ArrayLike],
     step_sizes: Optional[list[float]] = None,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: float = None,  # TODO (potential): rename to threshold?
+    convergence_threshold: float = None,
     break_upon_convergence: bool = True,
     return_info: bool = False,
     **inner_prod_kwargs
@@ -252,9 +279,11 @@ def get_waveform_derivative_1D_with_convergence(
     wf_params_at_point : dict[str, u.Quantity]
         can in principle also be any, but param_to_vary has to be
         accessible as a key and value has to be value of point that we
-        want to compute derivative around
+        want to compute derivative around. Given as input to
+        `wf_generator`.
     param_to_vary : str
-        _description_
+        Parameter with respect to which the derivative is taken. Must be
+        a key in `wf_params_at_point`.
     wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
     FrequencySeries or ArrayLike]
         Arbitrary function that is used for waveform generation. The
@@ -265,25 +294,53 @@ def get_waveform_derivative_1D_with_convergence(
         that its subtraction is carried out element-wise. The preferred
         type is ``FrequencySeries`` because it supports astropy units
         (and it is the standard output of LAL gwsignal generators).
+
+        A convenient option is to use the method `FisherMatrix.
+        get_wf_generator`, which generates a suitable function from
+        a few arguments.
     step_sizes : list[float], optional, default = None
-        _description_
-    convergence_check : Literal['diff_norm', 'mismatch'], optional,
-    default = None
-        _description_
-    convergence_threshold : float, optional
-        _description_, by default None
-    break_upon_convergence : bool, optional
-        _description_, by default True
+        Step sizes that are used in the numerical differention.
+    convergence_check : Optional[Literal['diff_norm', 'mismatch']],
+    optional, default = None
+        Criterion used to asses stability of the result. Currently, two
+        are available:
+        - diff_norm: calculates the norm of the difference of two
+          consecutive derivatives (using the function `~gw_signal_tools.
+          inner_product.norm`). This is compared to the norm of the most
+          recent derivative and if their fraction is smaller than some
+          threshold (specified in `convergence_threshold`), the result
+          is taken to be converged because the differences become
+          negligible on the relevant scales (provided by the norm of
+          the derivative).
+        - mismatch: calculates the mismatch between consecutive
+          derivatives (also using the function `~gw_signal_tools.
+          inner_product.norm`), which is defined as :math:`1 - overlap`.
+          Again, the result is taken to be converged if this mismatch
+          falls under a certain threshold, provided by
+          `convergence_threshold`.
+    convergence_threshold : float, optional, default = None
+        Threshold that is used to decide if result is converged. This
+        will be the case once the value of the criterion specified in
+        `convergence_check` is smaller than `convergence_threshold` two
+        iterations in a row.
+    break_upon_convergence : bool, optional, default = True
+        Whether to break upon the convergence described previously
+        (difference smaller than given threshold two times in a row) or
+        not. If not, results for all step sizes are calculated and the
+        one with minimal convergence criterion value is selected.
 
     Returns
     -------
-    FrequencySeries or tuple[FrequencySeries, dict[str, Any]]
-        _description_
+    ~gwpy.frequencyseries.FrequencySeries or tuple[~gwpy.
+    frequencyseries.FrequencySeries, dict[str, Any]]
+        Derivative in frequency space with respect to `param_to_vary`.
+    `~gw_signal_tools.inner_product.norm` :
+        Function used to create the involved inner products.
 
     Raises
     ------
     ValueError
-        _description_
+        If an invalid value for convergence_check is provided.
     """
     
     if step_sizes is None:
@@ -394,19 +451,21 @@ def get_waveform_derivative_1D_with_convergence(
 
             refine_numb += 1
         else:
-            # TODO: check if this one makes sense
             break
 
     logging.debug(min_dev_index)
 
     if not is_converged:
-        # TODO: definitely make remark that despite trying very hard, no convergence was possible. Consider changing starting step sizes
         logging.info(
-            'Calculations using the selected relative step sizes '
-            f'did not converge for parameter `{param_to_vary}` using convergence '
-            f'check method `{convergence_check}`. Last value of criterion '  # Best instead of last?
-            f'was {convergence_vals[-1]}, which is above '  # convergence_vals[min_dev_index]?
+            'Calculations using the selected step sizes did not converge '
+            f'for parameter `{param_to_vary}` using convergence check method '
+            f'`{convergence_check}`, even after {refine_numb} refinements of '
+            'step sizes. The minimal value of the criterion was '
+            f'{convergence_vals[min_dev_index]}, which is above the selected '
             f'threshold of {convergence_threshold}.'
+            'If you are not satisfied with the result (for an eye test, you '
+            'can plot the `convergence_plot` value returned in case '
+            '`return_info=True`), consider changing the initial step sizes.'
         )
     
 
@@ -497,6 +556,7 @@ def get_waveform_derivative_1D(
         try:
             wf.override_unit(u.s)
         except AttributeError:
+            # Could also turn into u.Quantity here... But usecase not there perhaps
             pass
 
 
@@ -506,11 +566,6 @@ def get_waveform_derivative_1D(
     # Central Difference -> make this option in function?
     # deriv_series = waveforms[1] - waveforms[0]
     # deriv_series /= 2.0 * step_size
-    
-    # TODO: catch ValueError: Input domain error? This is caused if we
-    # cross bounds of parameter. In that case we could automatically
-    # decrease step size... On the other hand, this is again something
-    # that happens under the hood, not necessarily good idea...
 
     return deriv_series
 

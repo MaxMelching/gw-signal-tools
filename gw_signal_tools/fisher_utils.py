@@ -344,8 +344,11 @@ def get_waveform_derivative_1D_with_convergence(
     """
     
     if step_sizes is None:
+        # step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5, 1e-6], [5, 1]), -1)  # Back to relative one
+        # step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4], [5, 1]), -1)  # Back to relative one -> testing
         step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)  # Seems most reasonable choice at the moment -> testing showed that 1e-6 might be too small for good results :OO
         # step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5], [5, 1]), -1)  # 1e-2 might be too large for some parameters -> on the other hand, 1e-5 too small for others. So there is no perfect choise
+        # step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8], [5, 1]), -1)  # For more detailed testing of convergence
         # step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8], [5, 1]), -1)  # For more detailed testing of convergence
 
 
@@ -382,6 +385,7 @@ def get_waveform_derivative_1D_with_convergence(
             #     step_size
             # )
 
+
             try:
                 deriv_param = get_waveform_derivative_1D(
                     wf_params_at_point,
@@ -403,7 +407,9 @@ def get_waveform_derivative_1D_with_convergence(
                     # indices become inconsistent with step_sizes
                     derivative_vals += [0.0]
                     deriv_norms += [np.inf]
-                    convergence_vals += [np.inf]
+                    convergence_vals += [np.inf]  # Hmm, but we append below with certain condition, right? -> but that was also wrong...
+                    # if len(derivative_vals) >= 2:
+                    #     convergence_vals += [np.inf]
 
                     continue
                 else:
@@ -430,8 +436,9 @@ def get_waveform_derivative_1D_with_convergence(
                             norm(deriv_param - derivative_vals[-2],
                                  **inner_prod_kwargs) \
                             / np.sqrt(derivative_norm)
-                        ]  # Index -1 is deriv_param
+                        ]
                     else:
+                        convergence_vals += [np.inf]
                         continue
                 case 'mismatch':
                     # Compute mismatch, using that we already know norms
@@ -442,11 +449,12 @@ def get_waveform_derivative_1D_with_convergence(
                             / np.sqrt(derivative_norm * deriv_norms[-2])
                         ]  # Index -1 is deriv_param
                     else:
+                        convergence_vals += [np.inf]
                         continue
 
 
-            logging.debug(convergence_vals)
-            logging.debug([len(derivative_vals), i, len(convergence_vals)])
+            logging.info(convergence_vals)
+            logging.info([len(derivative_vals), i, len(convergence_vals)])
 
 
             if (len(convergence_vals) >= 2
@@ -456,20 +464,27 @@ def get_waveform_derivative_1D_with_convergence(
 
                 if break_upon_convergence:
                     min_dev_index = i  # Then it can also be used to access step_sizes
+                    logging.info([min_dev_index, step_size])
                     break
         
 
-        # Check (i) if we shall break upon convergence and in case yes (ii) if
+        # Check (i) if we shall break upon convergence and in case no (ii) if
         # convergence was reached using these step sizes (refine them if not)
         if not break_upon_convergence or not is_converged:
-            min_dev_index = np.nanargmin(convergence_vals)  # Should not have nan, but who knows
+            # min_dev_index = np.nanargmin(convergence_vals)  # Should not have nan, but who knows
+            # TODO: is this consistent? Because convergence_vals has one less element than other stuff...
             # TODO: rename min_dev_index
+            min_dev_index = np.nanargmin(convergence_vals) #+ 1  # Should not have nan, but who knows
 
             # Cut steps made around step size with best criterion value in half
             # compared to current steps (we take average step size in case
             # difference to left and right is unequl)
             left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
-            right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
+            if min_dev_index < len(step_sizes) - 1:
+                right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
+            else:
+                # Index + 1 is invalid
+                right_step = left_step
             # 4.0 due to factor of two in step_sizes below
             step_sizes = step_sizes[min_dev_index] + np.array(
                 [2.0 * left_step, 1.0 * left_step, 1.0 * right_step, 2.0 * right_step]
@@ -487,7 +502,7 @@ def get_waveform_derivative_1D_with_convergence(
             f'for parameter `{param_to_vary}` using convergence check method '
             f'`{convergence_check}`, even after {refine_numb} refinements of '
             'step sizes. The minimal value of the criterion was '
-            f'{convergence_vals[min_dev_index]}, which is above the selected '
+            f'{convergence_vals[min_dev_index - 1]}, which is above the selected '
             f'threshold of {convergence_threshold}.'
             'If you are not satisfied with the result (for an eye test, you '
             'can plot the `convergence_plot` value returned in case '
@@ -496,11 +511,13 @@ def get_waveform_derivative_1D_with_convergence(
     
 
     if return_info:
+        # TODO: rethink of plot made, seems to create axis each time and
+        # consume quite some memory
         fig, ax = plt.subplots()
 
         for i in range(len(derivative_vals)):
-            ax.plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]} (Re)')
-            ax.plot(derivative_vals[i].imag, ':', label=f'{step_sizes[i]} (Im)')
+            ax.plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]:.6f} (Re)')
+            ax.plot(derivative_vals[i].imag, ':', label=f'{step_sizes[i]:.6f} (Im)')
 
         ax.legend(title='Step Sizes', ncols=max(1, len(derivative_vals) % 3))
 
@@ -515,9 +532,10 @@ def get_waveform_derivative_1D_with_convergence(
         return derivative_vals[min_dev_index], {
             'norm_squared': deriv_norms[min_dev_index],
             'final_step_size': step_sizes[min_dev_index],
-            'final_convergence_val': convergence_vals[min_dev_index - 1 if min_dev_index != -1 else -1],
+            # 'final_convergence_val': convergence_vals[min_dev_index - 1 if min_dev_index != -1 else -1],  # -1 should not occur, right?
+            'final_convergence_val': convergence_vals[min_dev_index],  # -1 should not occur anymore
             'number_of_refinements': refine_numb,
-            'final_set_of_rel_step_sizes': step_sizes,
+            'final_set_of_step_sizes': step_sizes,
             'convergence_plot': ax
         }
     else:
@@ -570,6 +588,7 @@ def get_waveform_derivative_1D(
 
     param_center_val = wf_params_at_point[param_to_vary]
     step_size = u.Quantity(step_size, unit=param_center_val.unit)
+    # step_size = step_size * param_center_val
     param_vals = param_center_val + np.array([-2., -1., 1., 2.]) * step_size
 
 

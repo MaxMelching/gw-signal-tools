@@ -62,6 +62,16 @@ class FisherMatrix:
         Routine used for calculation of involved derivatives. Used by
         ~gwsignal.fisher_utils.fisher_matrix.
     numpy.linalg.inv : Routine used for inversion of the Fisher matrix.
+
+    Notes
+    -----
+    In principle, instances of this class constain much more information
+    than "just" the Fisher matrix ``FisherMatrix.fisher``, for example
+    its inverse ``FisherMatrix.fisher_inverse``. However, to provide an
+    intuitive behaviour, remembering the class name, certain operations
+    return attributes related only to the Fisher matrix. Array-
+    conversion, for example, returns the array representation of
+    ``FisherMatrix.fisher``.
     """
 
     default_metadata = {
@@ -126,6 +136,9 @@ class FisherMatrix:
         # back into __init__ and return None upon attribute error in fisher?
         # Perhaps along with message
 
+    # TODO: decide if properties value and unit might make sense, which return
+    # the corresponding property of the Fisher matrix... (seems to be most
+    # intuitive thing to do)
     
     @property
     def fisher(self):
@@ -274,9 +287,12 @@ class FisherMatrix:
     
 
     @staticmethod
-    def get_wf_generator(approximant: str, domain: str, *args, **kwargs
-                         ) -> Callable[[dict[str, u.Quantity]],
-                                       FrequencySeries | ArrayLike]:
+    def get_wf_generator(
+        approximant: str,
+        domain: str = 'frequency',
+        *args, **kwargs
+    ) -> Callable[[dict[str, u.Quantity]],
+                  FrequencySeries | ArrayLike]:
         """
         Generates a function that fulfils the requirements of the
         `wf_generator` argument of a ``FisherMatrix``.
@@ -286,7 +302,8 @@ class FisherMatrix:
         approximant : _type_
             _description_
         domain : _type_
-            _description_
+            Default is 'frequency', the domain where the Fisher matrix
+            is computed.
 
         Returns
         -------

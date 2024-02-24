@@ -344,8 +344,8 @@ def get_waveform_derivative_1D_with_convergence(
     """
     
     if step_sizes is None:
-        # step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)  # Seems most reasonable choice at the moment -> testing showed that 1e-6 might be too small for good results :OO
-        step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5], [5, 1]), -1)  # 1e-2 might be too large for some parameters
+        step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)  # Seems most reasonable choice at the moment -> testing showed that 1e-6 might be too small for good results :OO
+        # step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5], [5, 1]), -1)  # 1e-2 might be too large for some parameters -> on the other hand, 1e-5 too small for others. So there is no perfect choise
         # step_sizes = np.reshape(np.outer([1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8], [5, 1]), -1)  # For more detailed testing of convergence
 
 
@@ -375,14 +375,40 @@ def get_waveform_derivative_1D_with_convergence(
         convergence_vals = []
 
         for i, step_size in enumerate(step_sizes):  # Maybe better than jumping to very small value quickly (numerical errors)
-            deriv_param = get_waveform_derivative_1D(
-                wf_params_at_point,
-                param_to_vary,
-                wf_generator,
-                step_size
-            )
+            # deriv_param = get_waveform_derivative_1D(
+            #     wf_params_at_point,
+            #     param_to_vary,
+            #     wf_generator,
+            #     step_size
+            # )
 
-            # TODO: catch input domain error with log info message that this step size is skipped?
+            try:
+                deriv_param = get_waveform_derivative_1D(
+                    wf_params_at_point,
+                    param_to_vary,
+                    wf_generator,
+                    step_size
+                )
+            except ValueError as err:
+                err_msg = str(err)
+
+                if 'Input domain error' in err_msg:
+                    logging.info(
+                        f'{step_size} is not a valid step size for a parameter'
+                        f'value of {wf_params_at_point[param_to_vary]}. '
+                        'Skipping this step size.'
+                    )
+
+                    # Still have to append something to lists, otherwise
+                    # indices become inconsistent with step_sizes
+                    derivative_vals += [0.0]
+                    deriv_norms += [np.inf]
+                    convergence_vals += [np.inf]
+
+                    continue
+                else:
+                    raise ValueError(err_msg)
+
 
             derivative_norm = norm(deriv_param, **inner_prod_kwargs)
             if 'optimize_time_and_phase' in inner_prod_kwargs.keys():
@@ -484,6 +510,8 @@ def get_waveform_derivative_1D_with_convergence(
 
         # plt.close()
 
+        # TODO: check if this has unwanted effect, like having an open axis flying around after function call
+
         return derivative_vals[min_dev_index], {
             'norm_squared': deriv_norms[min_dev_index],
             'final_step_size': step_sizes[min_dev_index],
@@ -568,24 +596,3 @@ def get_waveform_derivative_1D(
     # deriv_series /= 2.0 * step_size
 
     return deriv_series
-
-
-# TODO: remove? Just use fisher_matrix return
-def fisher_element(
-    wf_params_at_point: dict[str, u.Quantity],
-    param_to_vary: str,
-    wf_generator: Any,
-    **deriv_kwargs
-) -> float | u.Quantity:
-    
-    _, info = get_waveform_derivative_1D_with_convergence(
-        wf_params_at_point,
-        param_to_vary,
-        wf_generator,
-        return_info=True,
-        **deriv_kwargs
-    )
-
-    fisher_val = info['norm_squared']
-
-    return fisher_val

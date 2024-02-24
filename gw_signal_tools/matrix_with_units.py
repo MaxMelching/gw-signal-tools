@@ -14,6 +14,19 @@ class MatrixWithUnits:
     Class for a matrix where entries can have differing units, following
     the spirit of astropy Quantities.
 
+    Parameters
+    ----------
+    value : 
+        ...
+    unit : 
+        ...
+        Note that no care is taken to produce irreducible units (i.e.
+        unscaled ones, while applying the scale from units to the
+        values). This is because units of sun masses etc. that are
+        given as numbers of the kind 10e30*kg would then also be
+        converted. For our usecases of this class, such a behaviour is
+        unwanted.
+
     Notes
     -----
     This class was written to represent a Fisher matrix, which is a
@@ -32,6 +45,13 @@ class MatrixWithUnits:
     with or without units by using either `MatrixWithUnits.value` or
     `MatrixWithUnits.value * MatrixWithUnits.unit` (where the latter
     is also the output when printing a class instance).
+
+    An important point of emphasis, however, is that unit handling is
+    not an easy task, especially not for matrices. For this reason,
+    operations like matrix multiplication are not supported, which means
+    one has to resort to applying these operations to `MatrixWithUnits.
+    value`. Simpler operations like addition and multiplication, on the
+    other hand, are defined.
 
     Examples
     --------
@@ -52,6 +72,8 @@ class MatrixWithUnits:
     >>> np.array(matrix)
     array([[42, 96],
            [96, 42]])
+    
+    This enables operations like matrix inversion because
     
     In order to get the printed representation, we can simply multiply
     values and units:
@@ -74,6 +96,7 @@ class MatrixWithUnits:
     >>> np.linalg.inv(matrix)
     array([[-0.00563607,  0.01288245],
            [ 0.01288245, -0.00563607]])
+    This is due to 
 
     Note, of course, that this requires the user to figure out if the
     operations make sense physically, e.g. if the units allow for a
@@ -99,10 +122,21 @@ class MatrixWithUnits:
         # value = np.asarray(value, dtype=float)
 
         if isinstance(unit, self._allowed_unit_types):
-            if not isinstance(value, self._allowed_numeric_types):
-                unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else u.Quantity(1.0, unit.unit)
-                unit = np.full(np.shape(value), unit, dtype=object)
+            # Quantities are not accepted as elements of array, except unit is
+            # dimensionless_unscaled, so we convert them to CompositeUnits
+            if isinstance(unit, u.Quantity):
+                unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
+            # elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
+            #     unit = u.CompositeUnit(1.0, [unit], [1.0])
+
+            # Scalar
+            # if isinstance(value, self._allowed_numeric_types):
+            # unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else unit
+            # unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else u.Quantity(unit)
+            unit = np.full(np.shape(value), unit, dtype=object)
             # Quantity is valid as long as value is one
+        elif isinstance(unit, self._allowed_numeric_types):
+            unit = np.full(np.shape(value), u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0]), dtype=object)
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
@@ -119,19 +153,6 @@ class MatrixWithUnits:
         # NOTE: setting "private" properties here already is not good practice.
         # Instead go through setters of attributes, where these are set
         
-
-    # def __new__(cls, value, unit):
-    #     cls._value = value
-    #     cls._unit = unit
-
-    #     """
-    #     TODOS
-    #     - make sure they have same shape
-    #     - maybe make sure unit has dtype object? Or that all members are of type u.Quantity?
-    #     """
-        
-    #     return cls._value * cls._unit
-
 
     @property
     def value(self):
@@ -172,12 +193,24 @@ class MatrixWithUnits:
             assert isinstance(val, self._allowed_unit_types), \
                 f'Need valid unit types for all members of `unit` (not {type(val)}).'
 
-            if isinstance(val, u.Quantity):
-                reshaped_unit[i] = u.Quantity(1.0, val.unit)
-            else:
-                reshaped_unit[i] = u.Quantity(1.0, val)
+            # if isinstance(val, u.Quantity):
+            #     # reshaped_unit[i] = u.Quantity(1.0, val.unit)
+            #     # IMPORTANT: scale can also be part of unit (e.g. in Quantity),
+            #     # so we better not replace value with 1, right?
+            #     reshaped_unit[i] = val
+            # else:
+            #     reshaped_unit[i] = u.Quantity(1.0, val)
+            if isinstance(unit, u.Quantity):
+                reshaped_unit[i] = u.CompositeUnit(unit.value, [unit.unit], [1.0])
+            elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
+                reshaped_unit[i] = u.CompositeUnit(1.0, [unit], [1.0])
         
         unit = np.reshape(reshaped_unit, unit.shape)
+
+        # TODO (potentially): handle this in self._unit_to_quantity?
+        # And rather store as Unit or ComposedUnit only? E.g. using self._unit_from quantity function
+        # -> should then adjust unit handling in matrix mult,
+        # self.unit_to_quantity * other.unit_to_quantity, then call .unit_from_quantity in init?
 
         # for i, val in enumerate(reshaped_unit):
         #     # print(val, np.reshape(self.value, -1)[i])
@@ -251,7 +284,7 @@ class MatrixWithUnits:
     
 
     def __eq__(self, other):
-        return self.value.__eq__(other.value) and self.unit.__eq__(other.unit)
+        return self.value.__eq__(other.value) & self.unit.__eq__(other.unit)
     
 
     def __hash__(self):
@@ -347,9 +380,13 @@ class MatrixWithUnits:
         return self.__mul__(other)
     
 
-    def __matmul__(self, other):
-        return MatrixWithUnits(self.value.__matmul__(other.value),
-                               self.unit.__matmul__(other.unit))
+    # def __matmul__(self, other):
+    #     return MatrixWithUnits(self.value.__matmul__(other.value),
+    #                            self.unit.__matmul__(other.unit))
+    # Problem: adding units of same quantity should not result in overall
+    # factor of two to be added to unit, but controlling this by setting the
+    # scale to 1 would disallow adding u.Msun.si for example (what we want)
+    #-> thus not supporting it seems to be best choice
 
 
     def __truediv__(self, other):

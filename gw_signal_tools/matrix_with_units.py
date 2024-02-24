@@ -1,17 +1,87 @@
+# ----- Standard Lib Imports -----
+import logging
+import warnings
+from typing import Optional, Any, Literal
+
+# ----- Third Party Imports -----
 import numpy as np
 import astropy.units as u
 
 
-# class MatrixWithUnit(np.ndarray):
-#     def __new__(cls, value, **kwargs):
-#         new.value = super().__new__(np.shape(value), dtype=float, **kwargs)
-
-#         new.unit = super().__new__(np.shape(value), dtype=object)
-        # return self._value * self._unit
-
-
 
 class MatrixWithUnits:
+    """
+    Class for a matrix where entries can have differing units, following
+    the spirit of astropy Quantities.
+
+    Notes
+    -----
+    This class was written to represent a Fisher matrix, which is a
+    matrix that has units. Astropy quanitities do not allow for an
+    object that carries different units and while it is possible to do
+    in numpy by creating arrays with dtype=object, this does not allow
+    for further calculations like matrix inversion etc.
+
+    The idea of this class is to allow for both and this is achieved
+    by separating values and units into different class properties. Upon
+    reasonable initialization as numpy arrays of the same shape, one
+    can then access the values only using `MatrixWithUnits.value`, while
+    the units are stored in `MatrixWithUnits.unit` (where the names are
+    chosen to match the corresponding astropy Quantity names). This
+    allows for a flexible usage, where operations can be carried out
+    with or without units by using either `MatrixWithUnits.value` or
+    `MatrixWithUnits.value * MatrixWithUnits.unit` (where the latter
+    is also the output when printing a class instance).
+
+    Examples
+    --------
+    >>> value_matrix = np.array([[42, 96], [96, 42]])
+    >>> unit_matrix = np.array([[u.s, u.m], [u.m, u.s]], dtype=object)
+    >>> matrix = MatrixWithUnits(value_matrix, unit_matrix)
+    >>> print(matrix)
+    array([[<Quantity 42. s>, <Quantity 96. m>],
+           [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    >>> np.all(matrix.value == value_matrix)
+    True
+    >>> np.all(matrix.unit == unit_matrix)
+    True
+
+    Alternatively, one can extract the values by converting to an array,
+    which is supposed to simplify usage and provide an easy way to
+    convert this class into more common data types:
+    >>> np.array(matrix)
+    array([[42, 96],
+           [96, 42]])
+    
+    In order to get the printed representation, we can simply multiply
+    values and units:
+    >>> matrix.value * matrix.unit
+    array([[<Quantity 42. s>, <Quantity 96. m>],
+           [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    
+    Note, however, that this only works because the class has been
+    initialized from two numpy arrays, where multiplication is
+    supported, and also that the object printed here is now also a
+    numpy array, not a ``MatrixWithUnits`` anymore.
+
+    It is also possible to initialize using a single unit, e.g.
+    >>> matrix2 = MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
+    
+    The advantage of using ``MatrixWithUnits`` over an astropy Quantity
+    is that operations like matrix inversion would throw an error for
+    them due to the units not being dimensionless, while this is not
+    the case here:
+    >>> np.linalg.inv(matrix)
+    array([[-0.00563607,  0.01288245],
+           [ 0.01288245, -0.00563607]])
+
+    Note, of course, that this requires the user to figure out if the
+    operations make sense physically, e.g. if the units allow for a
+    meaningful inversion (which would not be the case in the example
+    above; for physically motivated matrices like the Fisher matrix,
+    however, this is guaranteed).
+    """
+
     _allowed_numeric_types = (int, float, complex, np.number)
     _allowed_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
 
@@ -31,13 +101,18 @@ class MatrixWithUnits:
         if isinstance(unit, self._allowed_unit_types):
             if not isinstance(value, self._allowed_numeric_types):
                 unit = np.full(np.shape(value), unit, dtype=object)
+            # else everything alright
+        elif isinstance(unit, u.Quantity):
+            assert unit.value == 1.0, \
+                'If `unit` is an astropy Quantity'
+            # Another representation as quantity with value 1.0
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
                 'array of astropy units.')
             
         if not isinstance(value, (np.ndarray, u.Quantity)):
-            value = np.asarray(value, dtype=float)
+            value = np.asarray(value, dtype=float)  # TODO: take value.dtype instead of float?
 
         if not isinstance(unit, (np.ndarray, u.Quantity)):
             unit = np.asarray(unit, dtype=object)
@@ -95,8 +170,35 @@ class MatrixWithUnits:
         except AttributeError:
             pass  # New class instance is created, nothing to check
         
-        for val in np.reshape(unit, -1):
-            assert isinstance(val, self._allowed_unit_types), \
+        for i, val in enumerate(np.reshape(unit, -1)):
+            # print(val, np.reshape(self.value, -1)[i])
+            
+            # assert (isinstance(val, self._allowed_unit_types)
+            #         or (isinstance(val, u.Quantity)
+            #             and (val.value == 1.0) or np.isclose(np.reshape(self.value, -1)[i], 0.0, rtol=0.0, atol=1e-15))), \
+            #     f'Need valid unit types for all members of `unit` (not {type(val)}).'
+
+            if isinstance(val, u.Quantity):
+                if val.value != 1.0:
+                    # self.value *= val.value  # Hm, how to map back to index?
+                    # val.value /= val.value
+
+                    # # Have to access indices
+                    # new_val = np.reshape(self.value, -1)
+                    # new_val[i] *= val.value
+                    # self.value = np.reshape(new_val, self.value.shape)
+
+                    # new_unit = np.reshape(unit, -1)
+                    # new_unit[i] /= val.value
+                    # unit = np.reshape(new_unit, unit.shape)
+
+
+                    # Ahhh no, values are already added, adding units is "bug"
+                    new_unit = np.reshape(unit, -1)
+                    new_unit[i] = 1.0
+                    unit = np.reshape(new_unit, unit.shape)
+            else:
+                assert isinstance(val, self._allowed_unit_types), \
                 f'Need valid unit types for all members of `unit` (not {type(val)}).'
         
         self._unit = unit
@@ -109,9 +211,16 @@ class MatrixWithUnits:
 
     def __float__(self):
         # if np.shape(self.value)
-        # Will throw error in most cases, but not because of our class, but
-        # because of way it has been set by user (e.g. to array)
-        return float(self.value)
+        # Will throw TypeError in most cases, but not because of our class,
+        # but because of way it has been set by user (e.g. to array)
+        return float(self.value * self.unit)
+
+        # if np.all(np.equal(np.shape(self.value), 1)):
+        #     return np.reshape(self.value, -1)[0] * np.reshape(self.unit, -1)[0]
+        # else:
+        #     raise TypeError(
+        #         'Cannot convert arrays with more than one value to a scalar.'
+        #         )
     
 
     def __array__(self):
@@ -227,6 +336,11 @@ class MatrixWithUnits:
 
     def __rmul__(self, other):
         return self.__mul__(other)
+    
+
+    def __matmul__(self, other):
+        return MatrixWithUnits(self.value.__matmul__(other.value),
+                               self.unit.__matmul__(other.unit))
 
 
     def __truediv__(self, other):
@@ -342,3 +456,7 @@ class MatrixWithUnits:
 #         return out
     
 #     # TODO: make setters and getters
+        
+
+import doctest
+doctest.testmod()

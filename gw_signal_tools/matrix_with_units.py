@@ -83,7 +83,7 @@ class MatrixWithUnits:
     """
 
     _allowed_numeric_types = (int, float, complex, np.number)
-    _allowed_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
+    _allowed_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit, u.Quantity)
 
 
     def  __init__(self, value, unit) -> None:
@@ -100,12 +100,9 @@ class MatrixWithUnits:
 
         if isinstance(unit, self._allowed_unit_types):
             if not isinstance(value, self._allowed_numeric_types):
+                unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else u.Quantity(1.0, unit.unit)
                 unit = np.full(np.shape(value), unit, dtype=object)
-            # else everything alright
-        elif isinstance(unit, u.Quantity):
-            assert unit.value == 1.0, \
-                'If `unit` is an astropy Quantity'
-            # Another representation as quantity with value 1.0
+            # Quantity is valid as long as value is one
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
@@ -170,36 +167,48 @@ class MatrixWithUnits:
         except AttributeError:
             pass  # New class instance is created, nothing to check
         
-        for i, val in enumerate(np.reshape(unit, -1)):
-            # print(val, np.reshape(self.value, -1)[i])
-            
-            # assert (isinstance(val, self._allowed_unit_types)
-            #         or (isinstance(val, u.Quantity)
-            #             and (val.value == 1.0) or np.isclose(np.reshape(self.value, -1)[i], 0.0, rtol=0.0, atol=1e-15))), \
-            #     f'Need valid unit types for all members of `unit` (not {type(val)}).'
+        reshaped_unit = np.reshape(unit, -1)
+        for i, val in enumerate(reshaped_unit):
+            assert isinstance(val, self._allowed_unit_types), \
+                f'Need valid unit types for all members of `unit` (not {type(val)}).'
 
             if isinstance(val, u.Quantity):
-                if val.value != 1.0:
-                    # self.value *= val.value  # Hm, how to map back to index?
-                    # val.value /= val.value
-
-                    # # Have to access indices
-                    # new_val = np.reshape(self.value, -1)
-                    # new_val[i] *= val.value
-                    # self.value = np.reshape(new_val, self.value.shape)
-
-                    # new_unit = np.reshape(unit, -1)
-                    # new_unit[i] /= val.value
-                    # unit = np.reshape(new_unit, unit.shape)
-
-
-                    # Ahhh no, values are already added, adding units is "bug"
-                    new_unit = np.reshape(unit, -1)
-                    new_unit[i] = 1.0
-                    unit = np.reshape(new_unit, unit.shape)
+                reshaped_unit[i] = u.Quantity(1.0, val.unit)
             else:
-                assert isinstance(val, self._allowed_unit_types), \
-                f'Need valid unit types for all members of `unit` (not {type(val)}).'
+                reshaped_unit[i] = u.Quantity(1.0, val)
+        
+        unit = np.reshape(reshaped_unit, unit.shape)
+
+        # for i, val in enumerate(reshaped_unit):
+        #     # print(val, np.reshape(self.value, -1)[i])
+            
+        #     # assert (isinstance(val, self._allowed_unit_types)
+        #     #         or (isinstance(val, u.Quantity)
+        #     #             and (val.value == 1.0) or np.isclose(np.reshape(self.value, -1)[i], 0.0, rtol=0.0, atol=1e-15))), \
+        #     #     f'Need valid unit types for all members of `unit` (not {type(val)}).'
+
+        #     if isinstance(val, u.Quantity):
+        #         if val.value != 1.0:
+        #             # self.value *= val.value  # Hm, how to map back to index?
+        #             # val.value /= val.value
+
+        #             # # Have to access indices
+        #             # new_val = np.reshape(self.value, -1)
+        #             # new_val[i] *= val.value
+        #             # self.value = np.reshape(new_val, self.value.shape)
+
+        #             # new_unit = np.reshape(unit, -1)
+        #             # new_unit[i] /= val.value
+        #             # unit = np.reshape(new_unit, unit.shape)
+
+
+        #             # Ahhh no, values are already added, adding units is "bug"
+        #             new_unit = np.reshape(unit, -1)
+        #             new_unit[i] = 1.0
+        #             unit = np.reshape(new_unit, unit.shape)
+        #     else:
+        #         assert isinstance(val, self._allowed_unit_types), \
+        #         f'Need valid unit types for all members of `unit` (not {type(val)}).'
         
         self._unit = unit
 

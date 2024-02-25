@@ -4,8 +4,12 @@ import unittest
 # ----- Third Party Imports -----
 import numpy as np
 from numpy.testing import assert_allclose
+import numdifftools as nd
 import matplotlib.pyplot as plt
 import astropy.units as u
+from gwpy.frequencyseries import FrequencySeries
+
+from gw_signal_tools.inner_product import norm
 from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allclose_MatrixWithUnits,
     assert_allclose_frequseries
@@ -84,9 +88,69 @@ phenomx_generator = FisherMatrix.get_wf_generator(approximant)
 
 
 #%% ----- Derivative consistency checks -----
-def test_wf_deriv_numdifftools():
-    # TODO: compare with numdifftools
-    ...
+@pytest.mark.parametrize('param_to_vary', test_params)
+@pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
+def test_wf_deriv_numdifftools(param_to_vary, crit):
+    def deriv_wrapper_real(param_val):
+        return phenomx_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).real
+
+    def deriv_wrapper_imag(param_val):
+        return phenomx_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).imag
+
+
+    center_val = wf_params[param_to_vary]
+    max_step_size = 1e-2
+
+    nd_deriv_real = nd.Derivative(deriv_wrapper_real, full_output=False, base_step=max_step_size)
+
+    nd_deriv_imag = nd.Derivative(deriv_wrapper_imag, full_output=False, base_step=max_step_size)
+
+
+    deriv = get_waveform_derivative_1D_with_convergence(
+        wf_params,
+        param_to_vary,
+        phenomx_generator,
+        convergence_check=crit
+    )
+    plt.close()
+
+    nd_deriv = nd_deriv_real(center_val) + 1.j * nd_deriv_imag(center_val)
+    
+
+    mask = deriv.frequencies <= 256.0 * u.Hz
+
+    assert_allclose(deriv.value[mask], nd_deriv[mask], atol=0.0, rtol=0.05)
+    # Once again, the problems seem to occur mostly around zeros, which is
+    # also the reason why we exclude values where derivative is close to zero
+
+
+    # Check Fisher values
+    nd_deriv = FrequencySeries(
+        nd_deriv,
+        frequencies=deriv.frequencies,
+        unit=deriv.unit
+    )
+
+    assert_allclose_quantity(
+        norm(deriv),
+        norm(nd_deriv),
+        atol=0.0,
+        rtol=5e-4
+    )
+    # Very good agreement, supports claim above that most severe relative
+    # differences occur around zeros, where impact is not very high.
+    # Note that no frequency regions are excluded here
+    
+
+    # Eye test: here are plots of the derivatives
+    # plt.plot(deriv.real)
+    # plt.plot(deriv.imag)
+    # plt.plot(deriv.frequencies, nd_deriv.real, '--')
+    # plt.plot(deriv.frequencies, nd_deriv.imag, '--')
+
+    # plt.title(param_to_vary)
+    # plt.show()
+
 
 
 @pytest.mark.parametrize('param', test_params)

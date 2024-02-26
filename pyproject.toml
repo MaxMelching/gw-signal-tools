@@ -96,7 +96,12 @@ ignore_missing_imports = true
 # Syntax: https://docs.pytest.org/en/7.3.x/reference/customize.html#pyproject-toml
 [tool.pytest.ini_options]
 testpaths = [
+  'gw_signal_tools',  # For doctests
   'tests',
+]
+
+addopts = [
+  '--doctest-modules',
 ]
 
 filterwarnings = [

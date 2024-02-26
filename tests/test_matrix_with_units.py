@@ -1,51 +1,294 @@
+# ----- Standard Lib Imports -----
 import unittest
 
+# ----- Third Party Imports -----
 import numpy as np
 from numpy.testing import assert_allclose
+
 import astropy.units as u
 
 import pytest
 
+# ----- Local Package Imports -----
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
-from gw_signal_tools.test_utils import assert_allclose_quantity
+from gw_signal_tools.test_utils import (
+    assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
+)
 
 
 example_values = np.array([[42, 24], [18, 96]])
 example_units = np.array([[u.s, u.m], [u.m, u.s]])
 example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)], [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)]], dtype=object)
 
-print(example_scaled_units)
-print(MatrixWithUnits(example_values, example_scaled_units))
-print(MatrixWithUnits(example_values, 2.0 * u.s))
 
-
-
+# ----- Test cornerstone properties, value and unit -----
 @pytest.mark.parametrize('units', [example_units, example_scaled_units])
 def test_unit_matrix_reading(units):
     matrix = MatrixWithUnits(example_values, units)
 
-    assert np.all(matrix.unit == units)
-
+    np.all(matrix.unit == units)
 
 @pytest.mark.parametrize('unit', [u.s, 2.0 * u.s])
 def test_unit_scalar_reading(unit):
-    # matrix1 = MatrixWithUnits(example_values, unit)
-    
-    # if isinstance(unit, u.Quantity):
-    #     scale = unit.value
-    #     unit = u.Quantity(1.0, unit.unit)
-    # else:
-    #     scale = 1.0
-    #     unit = u.Quantity(1.0, unit)
-    
-    # matrix2 = MatrixWithUnits(scale * example_values, unit)
-
-    # # assert np.all(matrix1 == matrix2)
-    # # assert np.all(np.equal(matrix1, matrix2))
-
     matrix = MatrixWithUnits(example_values, unit)
 
     if isinstance(unit, u.Quantity):
         unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
 
-    assert np.all(matrix.unit == np.full(example_values.shape, unit, dtype=object))
+    np.all(matrix.unit == np.full(example_values.shape, unit, dtype=object))
+
+
+# ----- Test standard class functions -----
+def test_slicing():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    assert_allequal_MatrixWithUnits(matrix[0], MatrixWithUnits([42, 24], [u.s, u.m]))
+
+    assert_allequal_MatrixWithUnits(matrix[0, 0], MatrixWithUnits(42, u.s))
+
+    assert_allequal_MatrixWithUnits(matrix[:1, :], MatrixWithUnits([42, 24], [u.s, u.m]))
+    assert_allequal_MatrixWithUnits(matrix[:, :1], MatrixWithUnits([[42], [18]], [[u.s], [u.m]]))
+
+def test_copy():
+    ...
+
+
+# ----- Test common operations -----
+def test_addition():
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix + 2.0,
+        MatrixWithUnits(example_values + 2.0, example_units)
+    )
+
+    assert_allequal_MatrixWithUnits(
+        2.0 + matrix,
+        MatrixWithUnits(2.0 + example_values, example_units)
+    )
+
+
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s + 2.0 * u.s,
+        MatrixWithUnits(example_values + 2.0, u.s)
+    )
+    
+    # Following produces astropy error
+    # assert_allequal_MatrixWithUnits(
+    #     2.0 * u.s  + matrix_in_s,
+    #     MatrixWithUnits(2.0 + example_values, u.s)
+    # )
+
+    assert_allequal_MatrixWithUnits(matrix + matrix, 2 * matrix)
+
+def test_subtraction():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    assert_allequal_MatrixWithUnits(
+        matrix - 2.0,
+        MatrixWithUnits(example_values - 2.0, example_units)
+    )
+
+    assert_allequal_MatrixWithUnits(
+        2.0 - matrix,
+        MatrixWithUnits(2.0 - example_values, example_units)
+    )
+
+
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s - 2.0 * u.s,
+        MatrixWithUnits(example_values - 2.0, u.s)
+    )
+    
+    # Following produces astropy error
+    # assert_allequal_MatrixWithUnits(
+    #     2.0 * u.s - matrix_in_s,
+    #     MatrixWithUnits(2.0 - example_values, u.s)
+    # )
+
+    assert_allequal_MatrixWithUnits(matrix - 0.5 * matrix, 0.5 * matrix)
+
+def test_multiplication():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    # Float multiplication
+    assert_allequal_MatrixWithUnits(
+        matrix * 2.0,
+        MatrixWithUnits(example_values * 2.0, example_units)
+    )
+
+    assert_allequal_MatrixWithUnits(
+        2.0 * matrix,
+        MatrixWithUnits(2.0 * example_values, example_units)
+    )
+
+    # Quantity multiplication -> only works with scalar unit
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s * (2.0 * u.s),
+        MatrixWithUnits(example_values * 2.0, u.s * u.s)
+    )
+    
+    assert_allequal_MatrixWithUnits(
+        (2.0 * u.s) * matrix_in_s,
+        MatrixWithUnits(2.0 * example_values, u.s * u.s)
+    )
+
+    # MatrixWithUnit Multiplication -> similar to test_power
+    assert_allequal_MatrixWithUnits(
+        matrix * matrix,
+        MatrixWithUnits(example_values**2, example_units**2)
+    )
+
+def test_division():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    # Float division
+    assert_allequal_MatrixWithUnits(
+        matrix / 2.0,
+        MatrixWithUnits(example_values / 2.0, example_units)
+    )
+
+    assert_allequal_MatrixWithUnits(
+        2.0 / matrix,
+        MatrixWithUnits(2.0 / example_values, 1 / example_units)
+    )
+
+    # Quantity multiplication -> only works with scalar unit
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s / (2.0 * u.s),
+        MatrixWithUnits(example_values / 2.0, u.dimensionless_unscaled)
+    )
+    
+    assert_allequal_MatrixWithUnits(
+        (2.0 * u.s) / matrix_in_s,
+        MatrixWithUnits(2.0 / example_values, u.dimensionless_unscaled)
+    )
+
+
+    # MatrixWithUnit Division -> similar to test_power
+    assert_allequal_MatrixWithUnits(
+        matrix / matrix,
+        MatrixWithUnits(np.ones((2, 2)),
+                        np.full((2, 2), u.dimensionless_unscaled))
+    )
+
+def test_power():
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    assert_allequal_MatrixWithUnits(
+        matrix**2,
+        MatrixWithUnits(example_values**2, example_units**2)
+    )
+
+    assert_allequal_MatrixWithUnits(matrix * matrix, matrix**2)
+
+
+    assert_allequal_MatrixWithUnits(
+        matrix**0,
+        MatrixWithUnits(np.ones((2, 2)),
+                        np.full((2, 2), u.dimensionless_unscaled))
+    )
+
+
+    assert_allclose_MatrixWithUnits(
+        matrix**(1/2),
+        MatrixWithUnits(example_values**(1/2), example_units**(1/2))
+    )
+
+
+
+# ----- Test numpy functions -----
+def test_array_conversion():
+    matrix = MatrixWithUnits(example_values, example_units)
+    matrix_array = np.array(matrix)
+
+    np.all(matrix_array == matrix.value)
+
+def test_shape():
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    assert matrix.shape == (2, 2)
+
+
+@pytest.mark.parametrize('new_shape', [(2, 2), (1, 4), (4, 1), -1])
+def test_reshape(new_shape):
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    matrix2 = MatrixWithUnits(np.reshape(example_values, new_shape),
+                              np.reshape(example_units, new_shape))
+    
+    assert_allequal_MatrixWithUnits(
+        matrix.reshape(new_shape),
+        matrix2
+    )
+
+def test_ndim():
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    assert matrix.ndim == 2
+
+def test_dtype():
+    matrix = MatrixWithUnits(example_values, example_units)
+    
+    assert matrix.dtype == example_values.dtype
+
+
+# ----- Test error raising -----
+class Errors(unittest.TestCase):
+    matrix = MatrixWithUnits(example_values, example_units)
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+    
+    def test_quantitiy_addition(self):
+        # Test that unequal units throw error
+        with self.assertRaises(AssertionError):
+            self.matrix + (2.0 * u.s)
+
+        # astropy throws AttributeError
+        with self.assertRaises(AttributeError):
+            (2.0 * u.s) + self.matrix
+    
+    def test_quantitiy_subtraction(self):
+        # Test that unequal units throw error
+        with self.assertRaises(AssertionError):
+            self.matrix - (2.0 * u.s)
+
+        # astropy throws AttributeError
+        with self.assertRaises(AttributeError):
+            (2.0 * u.s) - self.matrix
+    
+    def test_quantitiy_multiplication(self):
+        # astropy throws UnitConversionError
+        with self.assertRaises(u.UnitConversionError):
+            (2.0 * u.s) * self.matrix
+    
+    def test_matmul(self):
+        with self.assertRaises(TypeError):
+            self.matrix @ self.matrix
+
+
+matrix = MatrixWithUnits(example_values, u.s)
+
+# print(type(u.s))
+
+# print(matrix)
+# print(matrix * 2.0)
+# print(matrix * u.Quantity(2.0, u.s))
+# print(matrix * (2.0 * u.s))
+# print(matrix * (u.s))
+# print(matrix[0, 0])
+# matrix[0, 0] = 24 * u.s
+# print(matrix)
+# # print(u.Quantity(2.0, u.s) * matrix)
+            
+# matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+# print((2.0 * u.s) * matrix_in_s)
+# print(MatrixWithUnits(2.0 * example_values, u.s * u.s))

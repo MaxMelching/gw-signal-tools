@@ -1,15 +1,17 @@
 # ----- Standard Lib Imports -----
+from __future__ import annotations  # Enables type hinting own type in a class
 import logging
 import warnings
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Self
 
 # ----- Third Party Imports -----
 import numpy as np
+from numpy.typing import ArrayLike
 import astropy.units as u
 
 
-
 class MatrixWithUnits:
+# class MatrixWithUnits(u.Quantity):
     """
     Class for a matrix where entries can have differing units, following
     the spirit of astropy Quantities.
@@ -73,8 +75,22 @@ class MatrixWithUnits:
     array([[42, 96],
            [96, 42]])
     
-    This enables operations like matrix inversion because
+    This enables calling numpy functions directly on instances of
+    ``MatrixWithUnits``, e.g.
+    >>> np.linalg.inv(matrix)
+    array([[-0.00563607,  0.01288245],
+           [ 0.01288245, -0.00563607]])
     
+    Note, however, that this only uses the values and does not check
+    whether such an operation would make sense to do with the units
+    of matrix. Figuring out if this is the case is left to the user
+    because implementing a consistent matrix multiplication for units
+    is beyond the scope of this class, which is mainly made to provide
+    a convenient representation with units. For physically motivated
+    matrices like the Fisher matrix, however, this consistency is
+    usually given, so that an inversion is indeed meaningful.
+    
+
     In order to get the printed representation, we can simply multiply
     values and units:
     >>> matrix.value * matrix.unit
@@ -87,80 +103,102 @@ class MatrixWithUnits:
     numpy array, not a ``MatrixWithUnits`` anymore.
 
     It is also possible to initialize using a single unit, e.g.
-    >>> matrix2 = MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
-    
-    The advantage of using ``MatrixWithUnits`` over an astropy Quantity
-    is that operations like matrix inversion would throw an error for
-    them due to the units not being dimensionless, while this is not
-    the case here:
-    >>> np.linalg.inv(matrix)
-    array([[-0.00563607,  0.01288245],
-           [ 0.01288245, -0.00563607]])
-    This is due to 
-
-    Note, of course, that this requires the user to figure out if the
-    operations make sense physically, e.g. if the units allow for a
-    meaningful inversion (which would not be the case in the example
-    above; for physically motivated matrices like the Fisher matrix,
-    however, this is guaranteed).
+    >>> MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
+    array([[<Quantity 42. s>, <Quantity 96. s>],
+           [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
     """
 
     _allowed_numeric_types = (int, float, complex, np.number)
-    _allowed_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit, u.Quantity)
+    _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
+    _allowed_unit_types = _pure_unit_types + (u.Quantity,)
+
+    # def __new__(cls, value, unit):
+    #     # return MatrixWithUnits(value, unit)
+    #     return super().__new__(cls, value)
 
 
-    def  __init__(self, value, unit) -> None:
-        # assert np.shape(value) == np.shape(unit), \
+    def  __init__(self, value: ArrayLike, unit: ArrayLike) -> None:
+        # Internally, value and unit are stored as numpy arrays due to their
+        # versatility. Now we have to make sure the conversion works
+        try:
+            # Will work for arrays
+            value_dtype = value.dtype  # type: ignore
+            # Explanation of ignore: we cover case where no dtype exists
+        except AttributeError:
+            if type(value) in self._allowed_numeric_types:
+                value_dtype = type(value)
+            else:
+                # Default numeric type
+                value_dtype = float
+
+        value = np.asarray(value, dtype=value_dtype)
+
+
+        # Scalar unit is allowed input even for value array, handled here
+        # if isinstance(unit, self._allowed_unit_types):
+        #     # Quantities are not accepted as elements of array, except unit is
+        #     # dimensionless_unscaled, so we convert them to CompositeUnits
+        #     if isinstance(unit, u.Quantity):
+        #         unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
+            
+        #     unit = np.full(np.shape(value), unit, dtype=object)
+        # elif isinstance(unit, self._allowed_numeric_types):
+        #     # Could occur as result of performing operations
+        #     unit = np.full(
+        #         np.shape(value),
+        #         u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0]),
+        #         dtype=object
+        #     )
+        # else:
+        #     assert np.shape(value) == np.shape(unit), \
         #         ('`value` and `unit` must have equal shape if unit is an '
         #         'array of astropy units.')
-        
 
-        # Idea: add support for given unit that is "scalar"
-        # -> should we also make sure value is np.array?
+        # unit = np.asarray(unit, dtype=object)
 
-        # value = np.asarray(value, dtype=np.number)
-        # value = np.asarray(value, dtype=float)
 
+        # V2, allowing for scalar units as well
         if isinstance(unit, self._allowed_unit_types):
-            # Quantities are not accepted as elements of array, except unit is
-            # dimensionless_unscaled, so we convert them to CompositeUnits
             if isinstance(unit, u.Quantity):
                 unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
-            # elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
-            #     unit = u.CompositeUnit(1.0, [unit], [1.0])
-
-            # Scalar
-            # if isinstance(value, self._allowed_numeric_types):
-            # unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else unit
-            # unit = u.Quantity(1.0, unit) if not isinstance(unit, u.Quantity) else u.Quantity(unit)
-            unit = np.full(np.shape(value), unit, dtype=object)
-            # Quantity is valid as long as value is one
+            
+            # unit = np.array([unit], dtype=object)
         elif isinstance(unit, self._allowed_numeric_types):
-            unit = np.full(np.shape(value), u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0]), dtype=object)
+            # Could occur as result of performing operations
+            # unit = np.array(
+            #     [u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0])],
+            #     dtype=object
+            # )
+            unit = u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0])
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
                 'array of astropy units.')
             
-        if not isinstance(value, (np.ndarray, u.Quantity)):
-            value = np.asarray(value, dtype=float)  # TODO: take value.dtype instead of float?
-
-        if not isinstance(unit, (np.ndarray, u.Quantity)):
             unit = np.asarray(unit, dtype=object)
 
+        # Setters will take care of checking each element for correct type
         self.value = value
         self.unit = unit
         # NOTE: setting "private" properties here already is not good practice.
         # Instead go through setters of attributes, where these are set
         
 
+    # ----- Define cornerstone properties, value and unit -----
+    # TODO: add deleters?
     @property
-    def value(self):
-        ...
-        return self._value
+    def value(self) -> np.ndarray:
+        """
+        Numeric values of the matrix.
+
+        :type:`~numpy.ndarray`
+        """
+        return self._value  # type: ignore
+        # Explanation of ignore: we convert to array in __init__, but mypy
+        # performs static type checking and does not recognize this
     
     @value.setter
-    def value(self, value):
+    def value(self, value: ArrayLike) -> None:
         try:
             assert np.shape(value) == np.shape(self.value), \
                 'New and old `value` must have equal shape'
@@ -174,38 +212,44 @@ class MatrixWithUnits:
         
         self._value = value
 
-
     @property
-    def unit(self):
-        ...
+    def unit(self) -> np.ndarray:
+        """
+        Units of the matrix.
+
+        :type:`~numpy.ndarray`
+        """
         return self._unit
     
     @unit.setter
-    def unit(self, unit):
+    def unit(self, unit: ArrayLike):
         try:
             assert np.shape(unit) == np.shape(self.unit), \
                 'New and old `unit` must have equal shape'
         except AttributeError:
-            pass  # New class instance is created, nothing to check
-        
-        reshaped_unit = np.reshape(unit, -1)
-        for i, val in enumerate(reshaped_unit):
-            assert isinstance(val, self._allowed_unit_types), \
-                f'Need valid unit types for all members of `unit` (not {type(val)}).'
+            pass  # New class instance is created, nothing to check -> or scalar unit, also ok
 
-            # if isinstance(val, u.Quantity):
-            #     # reshaped_unit[i] = u.Quantity(1.0, val.unit)
-            #     # IMPORTANT: scale can also be part of unit (e.g. in Quantity),
-            #     # so we better not replace value with 1, right?
-            #     reshaped_unit[i] = val
-            # else:
-            #     reshaped_unit[i] = u.Quantity(1.0, val)
-            if isinstance(unit, u.Quantity):
-                reshaped_unit[i] = u.CompositeUnit(unit.value, [unit.unit], [1.0])
-            elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
-                reshaped_unit[i] = u.CompositeUnit(1.0, [unit], [1.0])
         
-        unit = np.reshape(reshaped_unit, unit.shape)
+        if not isinstance(unit, self._pure_unit_types):  # array version was without instance check
+            reshaped_unit = np.reshape(unit, -1)
+            for i, val in enumerate(reshaped_unit):
+                assert isinstance(val, self._allowed_unit_types), \
+                    f'Need valid unit types for all members of `unit` (not {type(val)}).'
+
+                # if isinstance(val, u.Quantity):
+                #     # reshaped_unit[i] = u.Quantity(1.0, val.unit)
+                #     # IMPORTANT: scale can also be part of unit (e.g. in Quantity),
+                #     # so we better not replace value with 1, right?
+                #     reshaped_unit[i] = val
+                # else:
+                #     reshaped_unit[i] = u.Quantity(1.0, val)
+
+                if isinstance(unit, u.Quantity):
+                    reshaped_unit[i] = u.CompositeUnit(unit.value, [unit.unit], [1.0])
+                elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
+                    reshaped_unit[i] = u.CompositeUnit(1.0, [unit], [1.0])
+            
+            unit = np.reshape(reshaped_unit, np.shape(unit))
 
         # TODO (potentially): handle this in self._unit_to_quantity?
         # And rather store as Unit or ComposedUnit only? E.g. using self._unit_from quantity function
@@ -245,13 +289,12 @@ class MatrixWithUnits:
         
         self._unit = unit
 
-
+    # ----- Deal with certain standard class functions -----
     def __repr__(self) -> str:
         # return (self.value * self.unit).__repr__()
-        return (np.array(self.value) * np.array(self.unit)).__repr__()
+        return (np.array(self.value) * np.array(self.unit)).__repr__()  # Are converted in init -> now not anymore
     
-
-    def __float__(self):
+    def __float__(self) -> float:
         # if np.shape(self.value)
         # Will throw TypeError in most cases, but not because of our class,
         # but because of way it has been set by user (e.g. to array)
@@ -264,41 +307,37 @@ class MatrixWithUnits:
         #         'Cannot convert arrays with more than one value to a scalar.'
         #         )
     
-
-    def __array__(self):
-        # return self.value.__array__()  # Lists or ints do not have __array__
-        return np.array(self.value)
-    
-
-    # def __array_ufunc__(self, function, method, *inputs, **kwargs):
-    #     return self.value. __array_ufunc__(function, method, *inputs, **kwargs) #* \
-    #         #    self.unit. __array_ufunc__(function, method, *inputs, **kwargs)
-    #     # return np.ndarray.array_ufunc(function, method, *inputs, **kwargs)
-    
-
-    def __copy__(self):
+    def __copy__(self) -> MatrixWithUnits:
         return MatrixWithUnits(self.value.__copy__(), self.unit.__copy__())
     
-    def copy(self):
+    def copy(self) -> MatrixWithUnits:
         return self.__copy__()
     
-
-    def __eq__(self, other):
-        return self.value.__eq__(other.value) & self.unit.__eq__(other.unit)
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, MatrixWithUnits):
+            return NotImplemented
+        else:
+            return self.value.__eq__(other.value) & self.unit.__eq__(other.unit)
     
-
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.value) ^ hash(self.unit)
     
-
-    def __getitem__(self, key):
-        return self.value.__getitem__(key) * self.unit.__getitem__(key)
+    def __getitem__(self, key: Any) -> MatrixWithUnits:
+        # return self.value.__getitem__(key) * self.unit.__getitem__(key)
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(self.value.__getitem__(key), self.unit)
+        else:
+            return MatrixWithUnits(self.value.__getitem__(key), self.unit.__getitem__(key))
     
-
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Any, value: Any) -> None:
         try:
             self.value.__setitem__(key, value.value)
-            self.unit.__setitem__(key, value.unit)
+            # self.unit.__setitem__(key, value.unit)  # From array version
+        
+            if isinstance(self.unit, self._pure_unit_types):
+                self.unit = value.unit
+            else:
+                self.unit.__setitem__(key, value.unit)
         except AttributeError:
             # if isinstance(value, u.core.IrreducibleUnit):
             #     # raise TypeError(
@@ -323,20 +362,21 @@ class MatrixWithUnits:
             self.unit.__setitem__(key, value.unit)
     
 
-    # Add properties for add, sub, mult, truediv, rtruediv; matmul maybe as well?
-    # -> also iadd, isub, imul? For inplace stuff
-    def __neg__(self):
+    # ----- Common operations -----
+    def __neg__(self) -> MatrixWithUnits:
         return MatrixWithUnits(-self.value, self.unit)
     
-
-    def __add__(self, other):
+    def __add__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value + other, self.unit)
+            # TODO: rethink if this should be allowed
         # elif isinstance(other, self._allowed_unit_types):
         #     return MatrixWithUnits(self.value, self.unit + np.asarray(other, dtype=object))
         # Adding just units without values does not make much sense, right?
         elif isinstance(other, u.Quantity):
             assert np.all(np.equal(other.unit, self.unit))
+            # assert np.all(np.equal(MatrixWithUnits(other.value, other.unit).unit, self.unit))
+            # -> not even needed, above works for more complicated shapes too
 
             return MatrixWithUnits(self.value + other.value, self.unit)
         elif isinstance(other, MatrixWithUnits):
@@ -344,56 +384,70 @@ class MatrixWithUnits:
             
             return MatrixWithUnits(self.value + other.value, self.unit)
         else:
-            try:
-                return MatrixWithUnits(self.value * other, self.unit)
-            except:
-                raise TypeError(
-                    f'Addition between {type(other)} and `MatrixWithUnit`'
-                    ' is not supported.'
-                )
+            raise TypeError(
+                f'Addition between {type(other)} and `MatrixWithUnit` is not '
+                'supported.'
+            )
     
-
-    def __radd__(self, other):
+    def __radd__(self, other: Any) -> MatrixWithUnits:
+        # if isinstance(other, u.Quantity):
+        #     raise NotImplementedError(
+        #         'Right addition with astropy Quantities is currently not '
+        #         'supported. Consider changing this to left addition.'
+        #     )
+        # else:
+        #     return self.__add__(other)
+        # Not raised anyway, astropy tries to do it and fails
         return self.__add__(other)
+    
+    def __sub__(self, other: Any) -> MatrixWithUnits:
+        return self.__add__(other.__neg__())
+    
+    def __rsub__(self, other: Any) -> MatrixWithUnits:
+        # if isinstance(other, u.Quantity):
+        #     raise NotImplementedError(
+        #         'Right subtraction with astropy Quantities is currently not '
+        #         'supported. Consider changing this to left addition.'
+        #     )
+        # else:
+        #     return self.__neg__().__add__(other)
+        # Not raised anyway, astropy tries to do it and fails
+        return self.__neg__().__add__(other)
             
-
-    def __mul__(self, other):
+    def __mul__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value * other, self.unit)
-        elif isinstance(other, self._allowed_unit_types):
-            return MatrixWithUnits(self.value, self.unit * np.asarray(other, dtype=object))
+        elif isinstance(other, self._pure_unit_types):
+            # return MatrixWithUnits(self.value, self.unit * np.asarray(other, dtype=object))  # From array version
+            return MatrixWithUnits(self.value, self.unit * other)
         elif isinstance(other, u.Quantity):
-            return MatrixWithUnits(self.value * other.value, self.unit * other.unit)
+            # return MatrixWithUnits(self.value * other.value, self.unit * other.unit)
+            # Fall back to multiplication with unit and value
+            return self * other.value * other.unit
+        # Harder to implement than it seems
         elif isinstance(other, MatrixWithUnits):
             return MatrixWithUnits(self.value * other.value, self.unit * other.unit)
         else:
-            try:
-                return MatrixWithUnits(self.value * other, self.unit)
-            except:
-                raise TypeError(
-                    f'Multiplication between {type(other)} and `MatrixWithUnit`'
-                    ' is not supported.'
-                )
-    
+            raise TypeError(
+                f'Multiplication between {type(other)} and `MatrixWithUnit`'
+                ' is not supported.'
+            )
 
-    def __rmul__(self, other):
+    def __rmul__(self, other: Any) -> MatrixWithUnits:
+        # if isinstance(other, u.Quantity):
+        #     raise NotImplementedError(
+        #         'Right multiplication with astropy Quantities is currently '
+        #         'not supported. Consider changing this to left addition.'
+        #     )
+        # else:
+        #     return self.__mul__(other)
         return self.__mul__(other)
-    
-
-    # def __matmul__(self, other):
-    #     return MatrixWithUnits(self.value.__matmul__(other.value),
-    #                            self.unit.__matmul__(other.unit))
-    # Problem: adding units of same quantity should not result in overall
-    # factor of two to be added to unit, but controlling this by setting the
-    # scale to 1 would disallow adding u.Msun.si for example (what we want)
-    #-> thus not supporting it seems to be best choice
-
 
     def __truediv__(self, other):
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value / other, self.unit)
-        elif isinstance(other, self._allowed_unit_types):
-            return MatrixWithUnits(self.value, self.unit / np.asarray(other, dtype=object))
+        elif isinstance(other, self._pure_unit_types):
+            return MatrixWithUnits(self.value, self.unit / np.asarray(other, dtype=object))  # from array version
         elif isinstance(other, u.Quantity):
             return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
         elif isinstance(other, MatrixWithUnits):
@@ -407,14 +461,13 @@ class MatrixWithUnits:
                     ' is not supported.'
                 )
     
-
-    def __rtruediv__(self, other):
+    def __rtruediv__(self, other: Any) -> MatrixWithUnits:
         # Important: 1/u.Unit becomes quantity, we have to use power -1 so that
         # unit actually remains a unit
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(other / self.value, self.unit**-1)
-        elif isinstance(other, self._allowed_unit_types):
-            return MatrixWithUnits(1.0 / self.value, np.asarray(other, dtype=object) / self.unit)
+        elif isinstance(other, self._pure_unit_types):
+            return MatrixWithUnits(1.0 / self.value, np.asarray(other, dtype=object) / self.unit)  # from array version
         elif isinstance(other, u.Quantity):
             return MatrixWithUnits(other.value / self.value, other.unit / self.unit)
         elif isinstance(other, MatrixWithUnits):
@@ -428,7 +481,7 @@ class MatrixWithUnits:
                     ' is not supported.'
                 )
             
-    def __pow__(self, other):
+    def __pow__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value.__pow__(other), self.unit.__pow__(other))
         else:
@@ -436,73 +489,52 @@ class MatrixWithUnits:
                 'Raising of `MatrixWithUnit` to a non-numeric type like '
                 f'{type(other)} is not supported.'
             )
-
-    # Do we have to make manual slicing?
-        
-
-
-
-# ---------- First version ----------
-# class MatrixWithUnit():
-# # class MatrixWithUnit(np.ndarray):
-#     # def __init__(self, shape):
-#     #     self._values = np.ndarray(shape, dtype=float)
-#     #     self._units = np.ndarray(shape, dtype=object)
-
-#     #     # return self._values * self._units
     
-#     # def __new__(cls, shape, **kwargs) -> Self:
-#     #     cls._values = np.ndarray(shape, dtype=float, **kwargs)
-#     #     cls._units = np.ndarray(shape, dtype=object, **kwargs)
-#     #     return cls._values * cls._units
+    # def __matmul__(self, other):
+    #     return MatrixWithUnits(self.value.__matmul__(other.value),
+    #                            self.unit.__matmul__(other.unit))
+    # Problem: adding units of same quantity should not result in overall
+    # factor of two to be added to unit, but controlling this by setting the
+    # scale to 1 would disallow adding u.Msun.si for example (what we want)
+    # -> thus, not supporting it seems to be best choice
+
+    # TODO: implement iadd, isub, imul etc. for inplace operations
     
-#     def __new__(cls, values, units, **kwargs):
-#         # cls._values = np.ndarray(values, dtype=float, **kwargs)
-#         # cls._units = np.ndarray(units, dtype=object, **kwargs)
-#         cls._values = np.array(values, dtype=float, **kwargs)
-#         cls._units = np.array(units, dtype=object, **kwargs)
-#         return cls._values * cls._units
+    # ----- Deal with selected useful numpy functions/attributes -----
+    def __array__(self) -> np.ndarray:
+        # return self.value.__array__()  # Lists or ints do not have __array__
+        # return np.array(self.value)
+        return self.value
 
-#     # def __new__(cls: type[_ArraySelf], shape: SupportsIndex | Sequence[SupportsIndex], dtype: dtype[Any] | type[Any] | _SupportsDType[dtype[Any]] | str | tuple[Any, int] | tuple[Any, SupportsIndex | Sequence[SupportsIndex]] | list[Any] | _DTypeDict | tuple[Any, Any] | None = ..., buffer: Buffer | None = ..., offset: np.SupportsIndex = ..., strides: SupportsIndex | Sequence[SupportsIndex] | None = ..., order: Literal['K', 'A', 'C', 'F'] | None = ...) -> _ArraySelf:
-#     #     return super().__new__(shape, dtype, buffer, offset, strides, order)
+    # def __array_ufunc__(self, function, method, *inputs, **kwargs):
+    #     return self.value. __array_ufunc__(function, method, *inputs, **kwargs) #* \
+    #         #    self.unit. __array_ufunc__(function, method, *inputs, **kwargs)
+    #     # return np.ndarray.array_ufunc(function, method, *inputs, **kwargs)
+
+    @property
+    def shape(self):
+        value_shape = self.value.shape
+        unit_shape = self.unit.shape
+
+        assert value_shape == unit_shape, \
+            'Instance is invalid, `value` and `unit` have incompatible shapes.'
+
+        return value_shape
     
-#     def __float__(self):
-#         return self._values
+    def reshape(self, new_shape: Any) -> MatrixWithUnits:
+        return MatrixWithUnits(np.reshape(self.value, new_shape),
+                               np.reshape(self.unit, new_shape))
+
+    @property
+    def ndim(self) -> int:
+        value_ndim = self.value.ndim
+        unit_ndim = self.unit.ndim
+
+        assert value_ndim == unit_ndim, \
+            'Instance is invalid, `value` and `unit` have incompatible ndim.'
+
+        return value_ndim
     
-#     def __add__(self, other):
-#         if np.all(self._units == other._units):
-#             return (self._values + other._values) * self._units
-#         else:
-#             raise ValueError(
-#                 'Cannot add matrices with different units.'
-#             )
-
-#     def __sub__(self, other):
-#         if np.all(self._units == other._units):
-#             return (self._values - other._values) * self._units
-#         else:
-#             raise ValueError(
-#                 'Cannot add matrices with different units.'
-#             )
-        
-#     def __mult__(self, other):
-#         out = MatrixWithUnit()
-
-#         out._values = self._values * other._values
-#         out._units = self._units * other._units
-
-#         return out
-    
-#     def __truediv__(self, other):
-#         out = MatrixWithUnit()
-
-#         out._values = self._values * other._values
-#         out._units = self._units * other._units
-
-#         return out
-    
-#     # TODO: make setters and getters
-        
-
-import doctest
-doctest.testmod()
+    @property
+    def dtype(self) -> Any:
+        return self.value.dtype  # TODO: do this or Quantity?

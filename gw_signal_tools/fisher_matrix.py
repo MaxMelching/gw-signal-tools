@@ -1,13 +1,11 @@
 # ----- Standard Lib Imports -----
+from __future__ import annotations  # Enables type hinting own type in a class
 import logging
 import warnings
 from typing import Optional, Any, Literal, Self, Callable
-# from __future__ import annotations  # Hack for type hinting inside a class
-                                    # -> https://stackoverflow.com/a/42845998
 
 # ----- Third Party Imports -----
 import numpy as np
-from numpy.typing import ArrayLike
 import matplotlib.pyplot as plt
 
 from gwpy.types import Series
@@ -38,17 +36,17 @@ class FisherMatrix:
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be keys in `wf_params_at_point`.
+        Must be `'time'`, `'phase'` or keys in `wf_params_at_point`.
     wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
-    FrequencySeries or ArrayLike]
+    ~gwpy.frequencyseries.FrequencySeries]
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
-        `wf_params_at_point`, while the output is either a ``~gwpy.
-        frequencyseries.FrequencySeries`` or of type ``ArrayLike``, so
-        that its subtraction is carried out element-wise. The preferred
-        type is ``FrequencySeries`` because it supports astropy units
-        (and it is the standard output of LAL gwsignal generators).
+        `wf_params_at_point`, while the output must be a ``~gwpy.
+        frequencyseries.FrequencySeries`` (the standard output of
+        LAL gwsignal generators) because it carries information about
+        value, frequencies and units, which are all required for the
+        calculations that are carried out.
 
         A convenient option is to use the method `FisherMatrix.
         get_wf_generator`, which generates a suitable function from
@@ -83,8 +81,8 @@ class FisherMatrix:
     def __init__(self,
             wf_params_at_point: dict[str, u.Quantity],
             params_to_vary: str | list[str],
-            wf_generator: Callable[[dict[str, u.Quantity]],
-                                   FrequencySeries | ArrayLike],
+            wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+            _copy: bool = False,
             **metadata
         ) -> None:
         """
@@ -95,22 +93,23 @@ class FisherMatrix:
         self.wf_generator = wf_generator
         self.metadata = self.default_metadata | metadata
 
-        if ('return_info' in metadata.keys()) and metadata['return_info']:
+        if ('return_info' in metadata.keys()) and not metadata['return_info']:
             logging.info(
                 'The `return_info` key is set to true to collect information '
                 'for further use in the class.'
             )
 
-            self.metadata['return_info'] = True
+        self.metadata['return_info'] = True
     
 
-        # Dummy Fisher, speed up when testing
-        # self._fisher = MatrixWithUnits(
-        #     np.full((2, 2), 42),
-        #     np.full((2, 2), u.s)
-        # )
-        
-        self._calc_fisher()
+        if not _copy:
+            # Dummy Fisher, speed up when testing
+            # self._fisher = MatrixWithUnits(
+            #     np.full((2, 2), 42),
+            #     np.full((2, 2), u.s)
+            # )
+            
+            self._calc_fisher()
     
 
     def _calc_fisher(self):
@@ -141,7 +140,7 @@ class FisherMatrix:
     # intuitive thing to do)
     
     @property
-    def fisher(self):
+    def fisher(self) -> MatrixWithUnits:
         """
         Actual Fisher matrix associated with this class.
 
@@ -158,7 +157,7 @@ class FisherMatrix:
 
 
     @property
-    def fisher_inverse(self):
+    def fisher_inverse(self) -> MatrixWithUnits:
         """
         Inverse of Fisher matrix associated with this class.
 
@@ -166,7 +165,8 @@ class FisherMatrix:
         """
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
-            return self._fisher_inverse
+            return self._fisher_inverse  # type: ignore
+            # Explanation of ignore: type cannot be inferred and not hinted
         except AttributeError:
             # Inverse is called for the first time or has been deleted
             self._fisher_inverse = MatrixWithUnits(
@@ -188,7 +188,7 @@ class FisherMatrix:
             new_params_to_vary: Optional[str | list[str]] = None,
             new_wf_generator: Optional[Any] = None,
             **new_metadata
-        ) -> Self:
+        ) -> FisherMatrix:
         """
         Generate a Fisher matrix with properties like the current
         instance has, but selected updates.
@@ -206,23 +206,22 @@ class FisherMatrix:
             computed, the norms of which constitute the Fisher matrix.
             can in principle also be any, but param_to_vary has to be
             accessible as a key and value has to be value of point that
-            we want to compute derivative around. Must be keys in
-            `new_wf_params_at_point`.
+            we want to compute derivative around. Must be `'time'`,
+            `'phase'` or keys in `wf_params_at_point`.
 
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
             suppported
         new_wf_generator : Callable[[dict[str, ~astropy.units.
-        Quantity]], FrequencySeries or ArrayLike]
+        Quantity]], ~gwpy.frequencyseries.FrequencySeries]
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
             argument, which is expected to accept the input provided in
-            `wf_params_at_point`, while the output is either a ``~gwpy.
-            frequencyseries.FrequencySeries`` or of type ``ArrayLike``,
-            so that its subtraction is carried out element-wise. The
-            preferred type is ``FrequencySeries`` because it supports
-            astropy units (and it is the standard output of LAL gwsignal
-            generators).
+            `wf_params_at_point`, while the output must be a ``~gwpy.
+            frequencyseries.FrequencySeries`` (the standard output of
+            LAL gwsignal generators) because it carries information
+            about value, frequencies and units, which are all required
+            for the calculations that are carried out.
 
             A convenient option is to use the method `FisherMatrix.
             get_wf_generator`, which generates a suitable function from
@@ -275,10 +274,69 @@ class FisherMatrix:
         return np.linalg.cond(self.fisher.value, p=matrix_norm)
 
 
-    def project_fisher(self, projection_params):
-        # Idea: pply projection onto certain parameters
+    # def project_fisher(self, projection_params):
+        # Idea: apply projection onto certain parameters
         # -> can this be applied to multiple ones?
-        raise NotImplementedError
+        # raise NotImplementedError
+    @property
+    def projected_fisher(self) -> MatrixWithUnits:
+        params_array = np.array(self.params_to_vary)
+        # time_index = np.where(params_array == 'time')#[0][0]
+        # phase_index = np.where(params_array == 'phase')#[0][0]
+        # print(time_index, phase_index)
+
+        # if len(time_index) != 1 or len(phase_index) != 1:
+        #     raise ValueError(
+        #         'Need keys `time` and `phase` in `self.params_to_vary`.'
+        #     )
+        # else:
+        #     time_index = time_index[0][0]
+        #     phase_index = phase_index[0][0]
+
+        if 'time' not in params_array or 'phase' not in params_array:
+            raise ValueError(
+                'Need keys `time` and `phase` in `self.params_to_vary`.'
+            )
+        else:
+            time_index = np.where(params_array == 'time')[0][0]
+            phase_index = np.where(params_array == 'phase')[0][0]
+            # print(time_index, phase_index)
+        
+        # The following is just testing, should not actually be neededs
+        # time_index, phase_index = min(time_index, phase_index), max(time_index, phase_index)
+        # time_index, phase_index = phase_index, time_index
+
+        n = len(self.params_to_vary)
+        gamma = self.fisher.value
+        # assert that gamma is (n x n) matrix?
+        submatr = np.array([[gamma[time_index, time_index],
+                             gamma[time_index, phase_index]],
+                            [gamma[phase_index, time_index],
+                             gamma[phase_index, phase_index]]])
+        sub_matr_inv = np.linalg.inv(submatr)
+        print(submatr, sub_matr_inv)
+
+        self._projected_fisher = MatrixWithUnits(
+            # self.fisher.value - np.sum(),
+            # gamma - (
+            #     gamma[:, 0] * sub_matr_inv[0, 0] * gamma[0, :]
+            # ),
+            np.array(
+                [[gamma[i, j] - (
+                        gamma[i, 0] * sub_matr_inv[0, 0] * gamma[0, j]
+                        + gamma[i, 0] * sub_matr_inv[0, 1] * gamma[1, j]
+                        + gamma[i, 1] * sub_matr_inv[1, 0] * gamma[0, j]
+                        + gamma[i, 1] * sub_matr_inv[1, 1] * gamma[1, j]
+                        ) for i in range(n)
+                    ] for j in range(n)]
+                    #     ) for i in range(n) if i not in [time_index, phase_index]
+                    # ] for j in range(n) if j not in [time_index, phase_index]]
+            ),
+            # self.fisher.unit
+            u.dimensionless_unscaled
+        )
+
+        return self._projected_fisher
     
 
     def plot(self):
@@ -291,8 +349,7 @@ class FisherMatrix:
         approximant: str,
         domain: str = 'frequency',
         *args, **kwargs
-    ) -> Callable[[dict[str, u.Quantity]],
-                  FrequencySeries | ArrayLike]:
+    ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
         """
         Generates a function that fulfils the requirements of the
         `wf_generator` argument of a ``FisherMatrix``.
@@ -340,6 +397,28 @@ class FisherMatrix:
         # '''
     
 
-    def __array__(self):
+    def __array__(self) -> np.ndarray:
         # Most intuitive behaviour: indeed return a Fisher matrix as array
         return self.fisher.__array__()
+    
+    def __copy__(self) -> FisherMatrix:
+        # Not even easy because we compute directly...
+        # -> handling it right now via argument _copy
+        new_matrix = FisherMatrix(
+            self.wf_params_at_point,
+            self.params_to_vary,
+            self.wf_generator,
+            _copy=True,
+            **self.metadata
+        )
+        
+        new_matrix._fisher = self.fisher
+        new_matrix._fisher_inverse = self.fisher_inverse
+
+        # TODO: decide if other attributes like condition number or
+        # deriv_info shall be copied
+
+        return new_matrix
+    
+    def copy(self) -> FisherMatrix:
+        return self.__copy__()

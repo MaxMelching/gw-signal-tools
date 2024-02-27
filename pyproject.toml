@@ -69,11 +69,14 @@
 # ]
 
 
-# how versioning is handled
-# [tool.setuptools_scm]
-# version_file = 'gw_signal_tools/_version.py'
-
-# fallback_version = 'unknown'  # what is done if no version found
+# How versioning is handled
+# -> important when running 'python -m setuptools_scm', installation
+#    uses one from setup.py because this file has no instructions for that
+[tool.setuptools_scm]
+version_file = 'gw_signal_tools/_version.py'
+version_scheme = 'no-guess-dev'
+local_scheme = 'dirty-tag'
+fallback_version = 'unknown'  # what is done if no version found -> or ''?
 
 
 # Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file

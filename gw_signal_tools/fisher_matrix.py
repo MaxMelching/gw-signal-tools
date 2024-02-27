@@ -8,19 +8,14 @@ from typing import Optional, Any, Literal, Self, Callable
 import numpy as np
 import matplotlib.pyplot as plt
 
-from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
-from .inner_product import inner_product, inner_product_computation, norm
 from .waveform_utils import get_strain
 from .matrix_with_units import MatrixWithUnits
-from .fisher_utils import (
-    fisher_matrix, get_waveform_derivative_1D,
-    get_waveform_derivative_1D_with_convergence
-)
+from .fisher_utils import fisher_matrix
 
 
 class FisherMatrix:
@@ -102,42 +97,20 @@ class FisherMatrix:
         self.metadata['return_info'] = True
     
 
-        if not _copy:
-            # Dummy Fisher, speed up when testing
-            # self._fisher = MatrixWithUnits(
-            #     np.full((2, 2), 42),
-            #     np.full((2, 2), u.s)
-            # )
-            
-            self._calc_fisher()
-    
+        if not _copy:            
+            self._fisher, self._deriv_info = fisher_matrix(
+                self.wf_params_at_point,
+                self.params_to_vary,
+                self.wf_generator,
+                **self.metadata
+            )
 
-    def _calc_fisher(self):
-        """
-        Call `~gw_signal_tools.fisher_utils.fisher_matrix` to calculate
-        the Fisher matrix.
-        """
-        self._fisher, self._deriv_info = fisher_matrix(
-            self.wf_params_at_point,
-            self.params_to_vary,
-            self.wf_generator,
-            **self.metadata
-        )
+            # NOTE: although it may not be good practice to set private
+            # attributes like self._fisher, this is our workaround to make
+            # self.fisher immutable (has no setter). If we were to set
+            # self.fisher here, a setter would be required
+            # -> _fisher being set inevitable, some property has to be settable
 
-        # NOTE: although it may not be good practice to set private attributes
-        # like self._fisher, this is our workaround to make self.fisher
-        # immutable (has no setter). If we were to set self.fisher here,
-        # a setter would be required
-        # -> _fisher being set is inevitable, some property has to be settable
-
-        # TODO: decide if this is good idea... Can also be called by user and
-        # thus goes against philosophy of immutable... So maybe remove, put
-        # back into __init__ and return None upon attribute error in fisher?
-        # Perhaps along with message
-
-    # TODO: decide if properties value and unit might make sense, which return
-    # the corresponding property of the Fisher matrix... (seems to be most
-    # intuitive thing to do)
     
     @property
     def fisher(self) -> MatrixWithUnits:
@@ -149,11 +122,25 @@ class FisherMatrix:
         try:
             return self._fisher
         except AttributeError:
-            # This case should never be reached, except the matrix was deleted.
-            # In that case, although it must be the users fault, recompute
-            self._calc_fisher()
+            return None  # User has deleted matrix, cannot happen otherwise
+    
+    @property
+    def value(self) -> np.ndarray:
+        """
+        Value of Fisher matrix associated with this class.
 
-            return self._fisher
+        :type:`~numpy.ndarray`
+        """
+        return self.fisher.value
+    
+    @property
+    def unit(self) -> np.ndarray:
+        """
+        Unit of Fisher matrix associated with this class.
+
+        :type:`~numpy.ndarray`
+        """
+        return self.fisher.unit
 
 
     @property
@@ -274,24 +261,9 @@ class FisherMatrix:
         return np.linalg.cond(self.fisher.value, p=matrix_norm)
 
 
-    # def project_fisher(self, projection_params):
-        # Idea: apply projection onto certain parameters
-        # -> can this be applied to multiple ones?
-        # raise NotImplementedError
     @property
     def projected_fisher(self) -> MatrixWithUnits:
         params_array = np.array(self.params_to_vary)
-        # time_index = np.where(params_array == 'time')#[0][0]
-        # phase_index = np.where(params_array == 'phase')#[0][0]
-        # print(time_index, phase_index)
-
-        # if len(time_index) != 1 or len(phase_index) != 1:
-        #     raise ValueError(
-        #         'Need keys `time` and `phase` in `self.params_to_vary`.'
-        #     )
-        # else:
-        #     time_index = time_index[0][0]
-        #     phase_index = phase_index[0][0]
 
         if 'time' not in params_array or 'phase' not in params_array:
             raise ValueError(
@@ -309,31 +281,36 @@ class FisherMatrix:
         n = len(self.params_to_vary)
         gamma = self.fisher.value
         # assert that gamma is (n x n) matrix?
+        # submatr = np.zeros((n, n))
+        # submatr[time_index, time_index] = gamma[time_index, time_index]
+        # submatr[time_index, phase_index] = gamma[time_index, phase_index]
+        # submatr[phase_index, time_index] = gamma[phase_index, time_index]
+        # submatr[phase_index, phase_index] = gamma[phase_index, phase_index]
+        # Cannot invert in this case, singular matrix
+
         submatr = np.array([[gamma[time_index, time_index],
                              gamma[time_index, phase_index]],
                             [gamma[phase_index, time_index],
                              gamma[phase_index, phase_index]]])
+        # TODO: check if indices are consistent. Should not matter anyway due to symmetry of Fisher, though
+
         sub_matr_inv = np.linalg.inv(submatr)
-        print(submatr, sub_matr_inv)
+        # print(submatr, sub_matr_inv)
+
+        full_inv = np.zeros((n, n))
+        full_inv[time_index, time_index] = sub_matr_inv[0, 0]
+        full_inv[time_index, phase_index] = sub_matr_inv[0, 1]
+        full_inv[phase_index, time_index] = sub_matr_inv[1, 0]
+        full_inv[phase_index, phase_index] = sub_matr_inv[1, 1]
 
         self._projected_fisher = MatrixWithUnits(
-            # self.fisher.value - np.sum(),
-            # gamma - (
-            #     gamma[:, 0] * sub_matr_inv[0, 0] * gamma[0, :]
-            # ),
-            np.array(
-                [[gamma[i, j] - (
-                        gamma[i, 0] * sub_matr_inv[0, 0] * gamma[0, j]
-                        + gamma[i, 0] * sub_matr_inv[0, 1] * gamma[1, j]
-                        + gamma[i, 1] * sub_matr_inv[1, 0] * gamma[0, j]
-                        + gamma[i, 1] * sub_matr_inv[1, 1] * gamma[1, j]
-                        ) for i in range(n)
-                    ] for j in range(n)]
-                    #     ) for i in range(n) if i not in [time_index, phase_index]
-                    # ] for j in range(n) if j not in [time_index, phase_index]]
-            ),
-            # self.fisher.unit
-            u.dimensionless_unscaled
+            # gamma - np.tensordot(np.tensordot(gamma, full_inv, axes=(1, 0)), gamma, axes=(1, 0)),
+            # gamma - gamma @ full_inv @ gamma,
+            # gamma - np.tensordot(np.tensordot(gamma, full_inv, axes=(0, 1)), gamma, axes=(0, 1)),
+            # gamma - gamma[:, [time_index, phase_index]] @ sub_matr_inv @ gamma[[time_index, phase_index], :],
+            gamma - np.einsum('ij, jk, kl', gamma, full_inv, gamma),
+            self.fisher.unit**-1
+            # u.dimensionless_unscaled
         )
 
         return self._projected_fisher

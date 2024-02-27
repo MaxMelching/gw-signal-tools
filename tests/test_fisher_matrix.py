@@ -10,10 +10,7 @@ import astropy.units as u
 from gw_signal_tools.inner_product import norm
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher_matrix import FisherMatrix
-from gw_signal_tools.fisher_utils import (
-    fisher_matrix, get_waveform_derivative_1D,
-    get_waveform_derivative_1D_with_convergence
-)
+from gw_signal_tools.fisher_utils import fisher_matrix
 
 
 #%% Initializing commonly used variables
@@ -38,7 +35,7 @@ wf_params = {
 
 approximant = 'IMRPhenomXPHM'
 
-phenomx_generator = FisherMatrix.get_wf_generator(approximant, 'frequency')
+phenomx_generator = FisherMatrix.get_wf_generator(approximant)
 
 
 fisher_tot_mass = FisherMatrix(
@@ -51,7 +48,9 @@ fisher_tot_mass = FisherMatrix(
 
 #%% Simple consistency tests
 def test_unit():
+    # Both ways of accessing must work
     assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
+    assert fisher_tot_mass.fisher.unit[0, 0] == 1/u.solMass**2
 
 def test_inverse():
     assert np.all(np.equal(np.linalg.inv(fisher_tot_mass.fisher.value),
@@ -60,13 +59,11 @@ def test_inverse():
     assert np.all(np.equal(fisher_tot_mass.fisher.unit**-1,
                            fisher_tot_mass.fisher_inverse.unit))
     
-
 def test_fisher_calc():
     fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
                                       phenomx_generator)
 
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
-
 
 def test_criterion_consistency():
     fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',

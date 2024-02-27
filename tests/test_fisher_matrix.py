@@ -1,29 +1,85 @@
+# ----- Standard Lib Imports -----
+import unittest
+
+# ----- Third Party Imports -----
 import numpy as np
 
-from gw_signal_tools.fisher_matrix import num_diff, fisher_val_at_point
+import astropy.units as u
+
+# ----- Local Package Imports -----
+from gw_signal_tools.inner_product import norm
+from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.fisher_matrix import FisherMatrix
+from gw_signal_tools.fisher_utils import fisher_matrix
 
 
-def test_num_diff():
-    step_size = 0.01
-    x_vals = np.arange(0.0, 2.0, step=step_size)
+#%% Initializing commonly used variables
+f_min = 20.*u.Hz
+f_max = 1024.*u.Hz
 
-    derivative_vals = num_diff(x_vals, h=step_size)
+wf_params = {
+    'total_mass': 100.*u.solMass,
+    'mass_ratio': 0.42*u.dimensionless_unscaled,
+    'deltaT': 1./2048.*u.s,
+    'f22_start': f_min,
+    'f_max': f_max,
+    'f22_ref': 20.*u.Hz,
+    'phi_ref': 0.*u.rad,
+    'distance': 1.*u.Mpc,
+    'inclination': 0.0*u.rad,
+    'eccentricity': 0.*u.dimensionless_unscaled,
+    'longAscNodes': 0.*u.rad,
+    'meanPerAno': 0.*u.rad,
+    'condition': 0
+}
 
-    assert np.all(np.isclose(derivative_vals, np.ones(derivative_vals.size), atol=0.0, rtol=0.01))
+approximant = 'IMRPhenomXPHM'
 
-    func_vals = 0.5 * x_vals**2
-    derivative_vals = num_diff(func_vals, h=step_size)
+phenomx_generator = FisherMatrix.get_wf_generator(approximant)
 
-    assert np.all(np.isclose(derivative_vals[2 : -2], x_vals[2 : -2], atol=0.0, rtol=0.01))
-    assert np.all(np.isclose(derivative_vals[1:2], x_vals[1:2], atol=0.0, rtol=0.01))  # First correct value is zero, thus relative deviation is always 1
-    assert np.all(np.isclose(derivative_vals[-2:], x_vals[-2:], atol=0.0, rtol=0.01))
-    # NOTE: for values at border of interval, rule is not applicable.
-    # Thus we make separate checks, methods could be less accurate there
 
-    func_vals = np.sin(x_vals)
+fisher_tot_mass = FisherMatrix(
+    wf_params,
+    'total_mass',
+    wf_generator=phenomx_generator,
+    return_info=True
+)
 
-    derivative_vals = num_diff(func_vals, h=step_size)
 
-    assert np.all(np.isclose(derivative_vals[2 : -2], np.cos(x_vals)[2 : -2], atol=0.0, rtol=0.01))
-    assert np.all(np.isclose(derivative_vals[:2], np.cos(x_vals)[:2], atol=0.0, rtol=0.01))
-    assert np.all(np.isclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02))
+#%% Simple consistency tests
+def test_unit():
+    # Both ways of accessing must work
+    assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
+    assert fisher_tot_mass.fisher.unit[0, 0] == 1/u.solMass**2
+
+def test_inverse():
+    assert np.all(np.equal(np.linalg.inv(fisher_tot_mass.fisher.value),
+                           fisher_tot_mass.fisher_inverse.value))
+    
+    assert np.all(np.equal(fisher_tot_mass.fisher.unit**-1,
+                           fisher_tot_mass.fisher_inverse.unit))
+    
+def test_fisher_calc():
+    fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
+                                      phenomx_generator)
+
+    assert fisher_tot_mass.fisher == fisher_tot_mass_2
+
+def test_criterion_consistency():
+    fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
+                                      phenomx_generator, convergence_check='mismatch')
+    
+    assert fisher_tot_mass.fisher == fisher_tot_mass_2
+    # Interesting, even equal. Roughly equal would also be sufficient, might
+    # converge at different step sizes and thus have slightly different results
+
+
+#%% Confirm that certain errors are raised
+class ErrorRaising(unittest.TestCase):
+    def test_immutable(self):
+        # Setting Fisher matrix related attributes should throw error
+        with self.assertRaises(AttributeError):
+            fisher_tot_mass.fisher = 42
+    
+        with self.assertRaises(AttributeError):
+            fisher_tot_mass.fisher_inverse = 42

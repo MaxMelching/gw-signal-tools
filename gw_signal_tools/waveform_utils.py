@@ -683,7 +683,7 @@ import lalsimulation.gwsignal.core.waveform as wfm
 def get_strain(
     intrinsic_params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
-    wf_generator: Any,
+    generator: Any,
     extrinsic_params: Optional[dict[str, str | u.Quantity]] = None,
     mode: Optional[Literal['plus', 'cross', 'mixed']] = None
 ) -> Any:
@@ -700,7 +700,7 @@ def get_strain(
         depending on the value of `domain`.
     domain : Literal['time', 'frequency']
         Determines domain that waveform is generated in.
-    wf_generator : Any
+    generator : Any
         Instance of `~lalsimulation.gwsignal.core.waveform.
         LALCompactBinaryCoalescenceGenerator` class that is used for
         waveform generation.
@@ -754,15 +754,15 @@ def get_strain(
     
 
     if return_detector_output:
-        return generator_func(intrinsic_params, wf_generator).strain(**extrinsic_params)
+        return generator_func(intrinsic_params, generator).strain(**extrinsic_params)
     else:
         match mode:
             case 'plus':
-                return generator_func(intrinsic_params, wf_generator)[0]
+                return generator_func(intrinsic_params, generator)[0]
             case 'cross':
-                return generator_func(intrinsic_params, wf_generator)[1]
+                return generator_func(intrinsic_params, generator)[1]
             case 'mixed':
-                hp, hc = generator_func(intrinsic_params, wf_generator)
+                hp, hc = generator_func(intrinsic_params, generator)
 
                 # NOTE: we choose to construct strain according to the LAL
                 # convention, i.e. as h_+ + i * h_x and not according to

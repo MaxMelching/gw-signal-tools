@@ -623,19 +623,19 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
 def test_get_strain_no_extrinsic():
     # Not sure we can capture this in parametrize, problem is how to
     # automatically get array we want to compare with
-    hp_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='plus')
-    hc_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='cross')
-    h_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='mixed')
+    hp_t_test = get_strain(wf_params, 'time', generator=gen, mode='plus')
+    hc_t_test = get_strain(wf_params, 'time', generator=gen, mode='cross')
+    h_t_test = get_strain(wf_params, 'time', generator=gen, mode='mixed')
 
     assert_quantity_equal(hp_t, hp_t_test)
     assert_quantity_equal(hc_t, hc_t_test)
     assert_quantity_equal(hp_t + 1.j * hc_t, h_t_test)
 
-    hp_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='plus')
+    hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
     hp_f_test.override_unit(u.s)
-    hc_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='cross')
+    hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
     hc_f_test.override_unit(u.s)
-    h_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='mixed')
+    h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
     h_f_test.override_unit(u.s)
     
     assert_quantity_equal(hp_f_fine, hp_f_test)
@@ -652,19 +652,19 @@ def test_get_strain_no_extrinsic():
 def test_get_strain_extrinsic():
     # Not sure we can capture this in parametrize, problem is how to
     # automatically get array we want to compare with
-    hp_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='plus')
-    hc_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='cross')
-    h_t_test = get_strain(wf_params, 'time', wf_generator=gen, mode='mixed')
+    hp_t_test = get_strain(wf_params, 'time', generator=gen, mode='plus')
+    hc_t_test = get_strain(wf_params, 'time', generator=gen, mode='cross')
+    h_t_test = get_strain(wf_params, 'time', generator=gen, mode='mixed')
 
     assert_quantity_equal(hp_t, hp_t_test)
     assert_quantity_equal(hc_t, hc_t_test)
     assert_quantity_equal(hp_t + 1.j * hc_t, h_t_test)
 
-    hp_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='plus')
+    hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
     hp_f_test.override_unit(u.s)
-    hc_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='cross')
+    hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
     hc_f_test.override_unit(u.s)
-    h_f_test = get_strain(wf_params, 'frequency', wf_generator=gen, mode='mixed')
+    h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
     h_f_test.override_unit(u.s)
     
     assert_quantity_equal(hp_f_fine, hp_f_test)

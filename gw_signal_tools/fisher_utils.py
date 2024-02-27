@@ -198,7 +198,6 @@ def fisher_matrix(
         if param == 'time':
             wf = wf_generator(wf_params_at_point)
             deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
-            # deriv = wf * 2.0 * np.pi * wf.frequencies
             deriv_series_storage[param] = deriv
             info = {'description': 'This derivative is exact.'}
 
@@ -213,8 +212,7 @@ def fisher_matrix(
             fisher_matrix[i, i] = fisher_val
         elif param == 'phase':
             wf = wf_generator(wf_params_at_point)
-            deriv = wf * -1.j #* 2.0 * np.pi
-            # deriv = wf #* 2.0 * np.pi
+            deriv = wf * -1.j
             deriv_series_storage[param] = deriv
             info = {'description': 'This derivative is exact.'}
 

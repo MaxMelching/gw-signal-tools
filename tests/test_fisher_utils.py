@@ -5,20 +5,21 @@ import unittest
 import numpy as np
 from numpy.testing import assert_allclose
 import numdifftools as nd
+
 import matplotlib.pyplot as plt
 import astropy.units as u
-from gwpy.frequencyseries import FrequencySeries
 
-from gw_signal_tools.inner_product import norm
-from gw_signal_tools.test_utils import (
-    assert_allclose_quantity, assert_allclose_MatrixWithUnits,
-    assert_allclose_frequseries
-)
+from gwpy.frequencyseries import FrequencySeries
 from gwpy.testing.utils import assert_quantity_equal
 
 import pytest
 
 # ----- Local Package Imports -----
+from gw_signal_tools.test_utils import (
+    assert_allclose_quantity, assert_allclose_MatrixWithUnits,
+    assert_allclose_frequseries
+)
+from gw_signal_tools.inner_product import norm
 from gw_signal_tools.fisher_utils import (
     num_diff, get_waveform_derivative_1D,
     get_waveform_derivative_1D_with_convergence,
@@ -151,6 +152,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
     # plt.title(param_to_vary)
     # plt.show()
 
+# TODO: test how things behave with smaller df!!!
 
 
 @pytest.mark.parametrize('param', test_params)

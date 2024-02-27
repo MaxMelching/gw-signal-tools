@@ -266,9 +266,6 @@ def fisher_matrix(
                         # Optimization is carried out in inner product
                         fisher_val = fisher_val[1]
                 else:
-                    deriv_series_storage[param_i].override_unit(u.dimensionless_unscaled)
-                    deriv_series_storage[param_j].override_unit(u.dimensionless_unscaled)
-
                     fisher_val = inner_product(
                         deriv_series_storage[param_i],
                         deriv_series_storage[param_j],
@@ -279,14 +276,6 @@ def fisher_matrix(
                         # Optimization is carried out in inner product
                         fisher_val = fisher_val[1]
 
-                    deriv_series_storage[param_i].override_unit(unit_i)
-                    deriv_series_storage[param_j].override_unit(unit_j)
-
-                    # fisher_val *= unit_i * unit_j
-                    fisher_val *= (unit_i * unit_j).si  # Also transform to SI for consistency with results from norm
-
-                # if 'optimize_time_and_phase' in inner_prod_kwargs.keys():
-                #     fisher_val = fisher_val[1]
 
                 fisher_matrix[i, j] = fisher_matrix[j, i] = fisher_val
 

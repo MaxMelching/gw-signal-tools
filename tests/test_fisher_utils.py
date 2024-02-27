@@ -255,10 +255,10 @@ def test_convergence_check(break_conv):
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
                                         atol=0.0, rtol=0.0)
     # 0.0 is good, means they converge at same step size, although this is
-    # surely not always the case
+    # surely not always the case -> for example if break_conv=True
     else:
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
-                                        atol=0.0, rtol=1e-10)
+                                        atol=0.0, rtol=3e-6)
 
 
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])

@@ -108,10 +108,8 @@ def inner_product(
     # ----- Handling of units -----
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
-        signal_unit = signal1.unit
     elif isinstance(signal1, TimeSeries):
         frequ_unit = signal1.times.unit * u.Hz / u.s
-        signal_unit = signal1.unit * u.s
     else:
         raise TypeError(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
@@ -120,15 +118,9 @@ def inner_product(
     if isinstance(signal2, FrequencySeries):
         assert frequ_unit == signal2.frequencies.unit, \
             'Need consistent frequency/time units for `signal1` and `signal2`.'
-        
-        assert signal_unit == signal2.unit, \
-            'Need consistent units of `signal1` and `signal2`.'
     elif isinstance(signal2, TimeSeries):
         assert frequ_unit == signal2.times.unit * u.Hz / u.s, \
             'Need consistent frequency/time units for `signal1` and `signal2`.'
-        
-        assert signal_unit == signal2.unit * u.s, \
-            'Need consistent signal units for `signal1` and `signal2`.'
     else:
         raise TypeError(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
@@ -152,8 +144,7 @@ def inner_product(
             'Need consistent frequency/time units for `psd` and other signals.'
         
         assert 1 / frequ_unit == psd.unit, \
-            ('Need consistent signal units for psd and `signal1`, `signal2`,'
-            'i.e. psd unit has to be strain per frequency.')
+            ('Need valid psd units for psd, has to be strain per frequency.')
         # TODO: change to strain/Hz once lal updates are incorporated
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
@@ -182,8 +173,6 @@ def inner_product(
     if isinstance(signal2, TimeSeries):
         signal2 = td_to_fd_waveform(pad_to_get_target_df(signal2, df))
         
-    logging.debug(f'{signal_unit}, {signal1.unit}, {signal2.unit}, {psd.unit}')
-    
 
     # ----- Handling frequency range -----
     f_lower, f_upper = [
@@ -263,9 +252,9 @@ def inner_product(
         target_range = np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
 
         signal1 = get_signal_at_target_frequs(signal1, target_range,
-                                              fill_val=0.0 * signal_unit)
+                                              fill_val=0.0 * signal1.unit)
         signal2 = get_signal_at_target_frequs(signal2, target_range,
-                                              fill_val=0.0 * signal_unit)
+                                              fill_val=0.0 * signal2.unit)
         psd = get_signal_at_target_frequs(psd, target_range,
                                           fill_val=1.0 * psd.unit)
 
@@ -284,14 +273,14 @@ def inner_product(
         signal1 = get_signal_at_target_frequs(
             signal1,
             target_range,
-            fill_val=0.0 * signal_unit,
+            fill_val=0.0 * signal1.unit,
             fill_bounds=non_zero_range
         )
 
         signal2 = get_signal_at_target_frequs(
             signal2,
             target_range,
-            fill_val=0.0 * signal_unit,
+            fill_val=0.0 * signal2.unit,
             fill_bounds=non_zero_range
         )
 
@@ -518,7 +507,7 @@ def norm(
 
     out = inner_product(signal, signal, *args, **kwargs)
 
-    if isinstance(out, (float, u.Quantity)):
+    if isinstance(out, u.Quantity):
         return np.sqrt(out)
     else:
         return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
@@ -568,18 +557,18 @@ def overlap(
 
     normalization = 1.0  # Default value
 
-    if isinstance(norm1 := norm(signal1, *args, **kwargs), (float, u.Quantity)):
+    if isinstance(norm1 := norm(signal1, *args, **kwargs), u.Quantity):
         normalization *= norm1
     else:
         normalization *= norm1[1]
 
-    if isinstance(norm2 := norm(signal2, *args, **kwargs), (float, u.Quantity)):
+    if isinstance(norm2 := norm(signal2, *args, **kwargs), u.Quantity):
         normalization *= norm2
     else:
         normalization *= norm2[1]
 
 
-    if isinstance(out, (float, u.Quantity)):
+    if isinstance(out, u.Quantity):
         return out / normalization
     else:
         return out[0] / normalization, out[1] / normalization, out[2]

@@ -220,7 +220,7 @@ def test_different_units():
     norm1 = norm(hp_f_fine)
     norm2 = norm(hp_f_fine_rescaled)
 
-    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.01)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.001)
     
     new_frequ_unit = hp_f_fine_rescaled.frequencies.unit
 
@@ -234,7 +234,15 @@ def test_different_units():
     norm1 = norm(hp_f_fine_rescaled, psd=psd_no_noise_rescaled)
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
 
-    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.01)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.001)
+
+
+    hp_f_fine_rescaled_2 = hp_f_fine.copy()
+    hp_f_fine_rescaled_2 *= u.m**2
+
+    norm3 = np.sqrt(inner_product(hp_f_fine, hp_f_fine_rescaled_2))
+
+    assert_allclose_quantity(norm1 * u.m, norm3, atol=0.0, rtol=0.001)
 
 # TODO (maybe): test with mass rescaled waveforms?
 
@@ -251,21 +259,12 @@ class ErrorRaising(unittest.TestCase):
         with self.assertRaises(TypeError):
             inner_product(hp_f_fine, hp_f_fine, psd=np.array([42]))
 
-    
-    def test_signal_unit_checking(self):
-        with self.assertRaises(AssertionError):
-            inner_product(hp_f_fine, hp_f_fine * u.m)
-        
-        with self.assertRaises(AssertionError):
-            inner_product(hp_f_fine, hp_f_fine, psd=psd_no_noise * u.m)
-
-
     def test_frequ_unit_checking(self):
         with self.assertRaises(AssertionError):
             hp_f_fine_wrong = hp_f_fine.copy()
             hp_f_fine_wrong.frequencies *= u.m
 
-            inner_product(hp_f_fine, hp_f_fine * u.m)
+            inner_product(hp_f_fine, hp_f_fine_wrong)
 
         with self.assertRaises(AssertionError):
             psd_no_noise_wrong = psd_no_noise.copy()
@@ -273,11 +272,9 @@ class ErrorRaising(unittest.TestCase):
 
             norm(hp_f_fine, psd=psd_no_noise_wrong)
     
-
     def test_df_unit_testing(self):
         with self.assertRaises(ValueError):
             norm(hp_f_fine, df=0.0625 * u.m)
-
 
     # def test_optimize_requirements(self):
     #     with self.assertRaises(ValueError):

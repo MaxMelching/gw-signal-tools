@@ -3,7 +3,6 @@ import unittest
 
 # ----- Third Party Imports -----
 import numpy as np
-from numpy.testing import assert_allclose
 
 import astropy.units as u
 
@@ -37,6 +36,23 @@ def test_unit_scalar_reading(unit):
 
     np.all(matrix.unit == np.full(example_values.shape, unit, dtype=object))
 
+def test_scalar_unit_setting():
+    matrix = MatrixWithUnits(example_values, example_units)
+    matrix.unit = u.s
+
+    assert_allequal_MatrixWithUnits(
+        matrix,
+        MatrixWithUnits(example_values, u.s)
+    )
+
+    matrix = MatrixWithUnits(example_values, u.s)
+    matrix.unit = example_units
+
+    assert_allequal_MatrixWithUnits(
+        matrix,
+        MatrixWithUnits(example_values, example_units)
+    )
+
 
 # ----- Test standard class functions -----
 def test_slicing():
@@ -57,6 +73,7 @@ def test_copy():
 def test_addition():
     matrix = MatrixWithUnits(example_values, example_units)
     
+    # Float addition
     assert_allequal_MatrixWithUnits(
         matrix + 2.0,
         MatrixWithUnits(example_values + 2.0, example_units)
@@ -67,7 +84,7 @@ def test_addition():
         MatrixWithUnits(2.0 + example_values, example_units)
     )
 
-
+    # Quantitiy addition -> only works with scalar unit
     matrix_in_s = MatrixWithUnits(example_values, u.s)
     
     assert_allequal_MatrixWithUnits(
@@ -81,11 +98,16 @@ def test_addition():
     #     MatrixWithUnits(2.0 + example_values, u.s)
     # )
 
-    assert_allequal_MatrixWithUnits(matrix + matrix, 2 * matrix)
+    # MatrixWithUnits addition -> similar to test_multiplcation
+    assert_allequal_MatrixWithUnits(
+        matrix + matrix,
+        MatrixWithUnits(example_values + example_values, example_units)
+    )
 
 def test_subtraction():
     matrix = MatrixWithUnits(example_values, example_units)
 
+    # Float subtraction
     assert_allequal_MatrixWithUnits(
         matrix - 2.0,
         MatrixWithUnits(example_values - 2.0, example_units)
@@ -96,7 +118,7 @@ def test_subtraction():
         MatrixWithUnits(2.0 - example_values, example_units)
     )
 
-
+    # Quantity subtraction
     matrix_in_s = MatrixWithUnits(example_values, u.s)
     
     assert_allequal_MatrixWithUnits(
@@ -106,11 +128,15 @@ def test_subtraction():
     
     # Following produces astropy error
     # assert_allequal_MatrixWithUnits(
-    #     2.0 * u.s - matrix_in_s,
-    #     MatrixWithUnits(2.0 - example_values, u.s)
+    #     2.0 * u.s  + matrix_in_s,
+    #     MatrixWithUnits(2.0 + example_values, u.s)
     # )
 
-    assert_allequal_MatrixWithUnits(matrix - 0.5 * matrix, 0.5 * matrix)
+    # MatrixWithUnits subtraction -> similar to test_multiplication
+    assert_allequal_MatrixWithUnits(
+        matrix - 0.5 * matrix,
+        MatrixWithUnits(0.5 * example_values, example_units)
+    )
 
 def test_multiplication():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -125,6 +151,11 @@ def test_multiplication():
         2.0 * matrix,
         MatrixWithUnits(2.0 * example_values, example_units)
     )
+
+    # Also verify results of float multiplcation coincide with add/sub
+    assert_allequal_MatrixWithUnits(2 * matrix, matrix + matrix)
+
+    assert_allequal_MatrixWithUnits(0.5 * matrix, matrix - 0.5 * matrix)
 
     # Quantity multiplication -> only works with scalar unit
     matrix_in_s = MatrixWithUnits(example_values, u.s)
@@ -275,20 +306,3 @@ class Errors(unittest.TestCase):
 
 
 matrix = MatrixWithUnits(example_values, u.s)
-
-# print(type(u.s))
-
-# print(matrix)
-# print(matrix * 2.0)
-# print(matrix * u.Quantity(2.0, u.s))
-# print(matrix * (2.0 * u.s))
-# print(matrix * (u.s))
-# print(matrix[0, 0])
-# matrix[0, 0] = 24 * u.s
-# print(matrix)
-# # print(u.Quantity(2.0, u.s) * matrix)
-            
-# matrix_in_s = MatrixWithUnits(example_values, u.s)
-
-# print((2.0 * u.s) * matrix_in_s)
-# print(MatrixWithUnits(2.0 * example_values, u.s * u.s))

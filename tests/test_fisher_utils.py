@@ -83,9 +83,18 @@ approximant = 'IMRPhenomXPHM'
 
 phenomx_generator = FisherMatrix.get_wf_generator(approximant)
 
-# plt.plot(phenomx_generator(wf_params).real)
-# plt.plot(phenomx_generator(wf_params).imag)
-# plt.show()
+# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+import lalsimulation.gwsignal.core.parameter_conventions as pc
+
+try:
+    pc.default_dict.pop('mass1')
+except KeyError:
+    pass
+
+try:
+    pc.default_dict.pop('mass2')
+except KeyError:
+    pass
 
 
 #%% ----- Derivative consistency checks -----

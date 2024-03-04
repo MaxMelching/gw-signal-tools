@@ -132,10 +132,10 @@ class MatrixWithUnits:
 
 
         # Scalar unit is allowed input even for value array, handled here
-        if isinstance(unit, self._allowed_unit_types):
-            if isinstance(unit, u.Quantity):
-                unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
-            
+        if isinstance(unit, self._pure_unit_types):
+            unit = u.CompositeUnit(1.0, [unit], [1.0])
+        elif isinstance(unit, u.Quantity):
+            unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
         elif isinstance(unit, self._allowed_numeric_types):
             # Could occur as result of performing operations
             unit = u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0])
@@ -173,8 +173,9 @@ class MatrixWithUnits:
                 'New and old `value` must have equal shape'
         except AttributeError:
             pass  # New class instance is created, nothing to check
-            
-        for val in np.reshape(value, -1):
+        
+
+        for _, val in np.ndenumerate(value):
             assert (isinstance(val, self._allowed_numeric_types)
                     and not isinstance(val, bool)), \
                 f'Need valid numeric types for all members of `value` (not {type(val)}).'
@@ -200,22 +201,37 @@ class MatrixWithUnits:
         except AttributeError:
             pass  # New class instance is created, nothing to check
                   # or unit is scalar, also ok
-
         
-        if not isinstance(unit, self._pure_unit_types):  # array version was without instance check
-            reshaped_unit = np.reshape(unit, -1)
-            for i, val in enumerate(reshaped_unit):
+
+        if not isinstance(unit, self._pure_unit_types):
+            # Unit is also array (otherwise would have been converted
+            # in __init__)
+            for i, val in np.ndenumerate(unit):
                 assert isinstance(val, self._allowed_unit_types), \
                     f'Need valid unit types for all members of `unit` (not {type(val)}).'
+                
+                if isinstance(val, self._pure_unit_types):
+                    unit[i] = u.CompositeUnit(1.0, [val], [1.0])
+                else:
+                    unit[i] = u.CompositeUnit(val.value, [val.unit], [1.0])
 
-                if isinstance(unit, u.Quantity):
-                    reshaped_unit[i] = u.CompositeUnit(unit.value, [unit.unit], [1.0])
-                elif isinstance(unit, (u.Unit, u.IrreducibleUnit)):
-                    reshaped_unit[i] = u.CompositeUnit(1.0, [unit], [1.0])
             
-            unit = np.reshape(reshaped_unit, np.shape(unit))
-
         self._unit = unit
+    
+    @property
+    def T(self):
+        """
+        Transposed Matrix.
+
+        Returns
+        -------
+        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        """
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(self.value.T, self.unit)
+        else:
+            return MatrixWithUnits(self.value.T, self.unit.T)
+
 
     # ----- Deal with certain standard class functions -----
     def __repr__(self) -> str:
@@ -395,6 +411,154 @@ class MatrixWithUnits:
                 f'{type(other)} is not supported.'
             )
     
+    def __matmul__(self, other):
+        # Problem we have to circumvent:
+        # return MatrixWithUnits(self.value @ other.value, self.unit @ other.unit)
+        # does not work because CompositeUnits cannot be added (and adding
+        # them would also change value, which is not intended). Thus we have
+        # to handle unit manually (also for compatibility with scalar unit)
+
+        if isinstance(other, MatrixWithUnits):
+            # Step 1: apply to values. This is useful because it already checks
+            # compatibility of shapes
+            new_value = self.value @ other.value
+            new_shape = new_value.shape
+
+            # Hack for 1D output
+            new_shape_1 = new_shape
+            if len(new_shape) == 1:
+                if len(self.value.shape) == 1:
+                    # self is row vector
+                    new_shape = (1, new_shape[0])
+                else:
+                    # other is column vector
+                    new_shape = (new_shape[0], 1)
+            
+
+            # print(new_shape)
+
+            # Step 2: handle unit.
+            # TODO: handle case of scalar unit for one of them
+            new_unit = np.empty(new_shape, dtype=object)
+
+            # V1, not suitable for scalar units
+            # for i in range(new_shape[0]):
+            #     for j in range(new_shape[1]):
+            #         unit_test = self.unit[i, 0] * other.unit[0, j]
+
+            #         # print(unit_test)
+            #         # print(type(unit_test))
+
+            #         assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
+            #             'Need consistent units for matrix multiplication.'
+            #             # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+            #         # NOTE: do NOT replace with == here, does not what we want
+                    
+            #         new_unit[i, j] = unit_test
+            
+            # V2, trying to account for scalar unit
+            # try:
+            #     # test_unit_shape = self.unit.shape
+            #     # test_unit_shape = other.unit.shape
+
+            #     # If we can access both, they are not scalar
+            #     # -> would not be proof against setting unit to [u.s] or so, right?
+            #     # -> just apply test from unit property
+
+            #     for i in range(new_shape[0]):
+            #         for j in range(new_shape[1]):
+            #             unit_test = self.unit[i, 0] * other.unit[0, j]
+
+            #             # print(unit_test)
+            #             # print(type(unit_test))
+
+            #             assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
+            #                 'Need consistent units for matrix multiplication.'
+            #                 # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+            #             # NOTE: do NOT replace with == here, does not what we want
+                        
+            #             new_unit[i, j] = unit_test
+            # except AttributeError:
+            #     ...
+            
+            # We have to distinguish several cases
+            # TODO (idea): reduce scalar unit cases for only one of the
+            # matrices to first one by following:
+            # new_self_unit = np.full(new_shape, self.unit, dtype=object)
+            # return MatrixWithUnits(self.value, new_self_unit) @ other
+            # -> not strictly necessary, though
+            # print(isinstance(self.unit, self._pure_unit_types))
+            # print(isinstance(other.unit, other._pure_unit_types))
+
+            if (not isinstance(self.unit, self._pure_unit_types) and
+                not isinstance(other.unit, other._pure_unit_types)):
+                # Both arrays
+
+                # for i in range(new_shape[0]):
+                #     for j in range(new_shape[1]):
+                for index in np.ndindex(new_shape):
+                    i, j = index
+                    unit_test = self.unit[i, 0] * other.unit[0, j]
+
+                    # print(unit_test)
+                    # print(type(unit_test))
+
+                    assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
+                        'Need consistent units for matrix multiplication.'
+                        # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+                    # NOTE: do NOT replace with == here, does not what we want
+                    
+                    new_unit[i, j] = unit_test
+            elif (isinstance(self.unit, self._pure_unit_types) and
+                  isinstance(other.unit, self._pure_unit_types)):
+                # Both scalar units
+                new_unit = np.full(new_shape, self.unit * other.unit, dtype=object)
+                # new_unit = self.unit * other.unit
+            elif isinstance(self.unit, self._pure_unit_types):
+                # One scalar unit
+                # for i in range(new_shape[0]):
+                #     for j in range(new_shape[1]):
+                for index in np.ndindex(new_shape):
+                    i, j = index
+                    unit_test = other.unit[0, j]
+
+                    # print(unit_test)
+                    # print(type(unit_test))
+
+                    assert np.all(np.equal(other.unit[:, j], unit_test)), \
+                        'Need consistent units for matrix multiplication.'
+                        # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+                    # NOTE: do NOT replace with == here, does not what we want
+                    
+                    new_unit[i, j] = self.unit * unit_test
+            elif isinstance(other.unit, self._pure_unit_types):
+                # One scalar unit
+                # for i in range(new_shape[0]):
+                #     for j in range(new_shape[1]):
+                for index in np.ndindex(new_shape):
+                    i, j = index
+                    unit_test = self.unit[i, 0]
+
+                    # print(unit_test)
+                    # print(type(unit_test))
+
+                    assert np.all(np.equal(self.unit[i, :], unit_test)), \
+                        'Need consistent units for matrix multiplication.'
+                        # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+                    # NOTE: do NOT replace with == here, does not what we want
+                    
+                    new_unit[i, j] = unit_test * other.unit
+
+            if new_shape != new_shape_1:
+                new_unit = np.reshape(new_unit, new_shape_1)
+
+            return MatrixWithUnits(new_value, new_unit)
+        else:
+            raise TypeError(
+                'Cannot perform matrix multiplication between '
+                f'``MatrixWithUnits`` and ``{type(other)}``.'
+                )
+    
     # TODO: implement iadd, isub, imul etc. for inplace operations
     
     # ----- Deal with selected useful numpy functions/attributes -----
@@ -409,12 +573,22 @@ class MatrixWithUnits:
     @property
     def shape(self):
         value_shape = self.value.shape
-        unit_shape = self.unit.shape
 
-        assert value_shape == unit_shape, \
-            'Instance is invalid, `value` and `unit` have incompatible shapes.'
+        try:
+            unit_shape = self.unit.shape
 
-        return value_shape
+            assert value_shape == unit_shape, \
+                'Instance is invalid, `value` and `unit` have incompatible shapes.'
+
+            return value_shape
+        except AttributeError:
+            # Might be scalar unit, then everything is fine
+            if isinstance(self.unit, self._pure_unit_types):
+                return value_shape
+            else:
+                raise ValueError(
+                    'Instance is invalid, `value` and `unit` have incompatible shapes.'
+                )
     
     def reshape(self, new_shape: Any) -> MatrixWithUnits:
         return MatrixWithUnits(np.reshape(self.value, new_shape),

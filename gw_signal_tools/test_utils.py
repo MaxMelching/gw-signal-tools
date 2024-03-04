@@ -146,7 +146,8 @@ def assert_allclose_MatrixWithUnits(
     https://github.com/gwpy/gwpy/blob/v3.0.7/gwpy/testing/utils.py#L131.
     """
     
-    assert np.all(arr1.unit == arr2.unit)
+    assert np.all(np.equal(arr1.unit, arr2.unit))
+    # NOT equivalent to ==, equal has better behaviour
 
     assert_allclose(arr1.value, arr2.value, *args, **kwargs)
 
@@ -166,8 +167,10 @@ def assert_allequal_MatrixWithUnits(
         Second value to compare.
     """
     
+    assert np.all(np.equal(arr1.unit, arr2.unit))
+    # NOT equivalent to ==, equal has better behaviour
+
     assert np.all(arr1.value == arr2.value)
-    assert np.all(arr1.unit == arr2.unit)
 
 
 def assert_allclose_frequseries(

@@ -217,20 +217,6 @@ class MatrixWithUnits:
 
             
         self._unit = unit
-    
-    @property
-    def T(self):
-        """
-        Transposed Matrix.
-
-        Returns
-        -------
-        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
-        """
-        if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value.T, self.unit)
-        else:
-            return MatrixWithUnits(self.value.T, self.unit.T)
 
 
     # ----- Deal with certain standard class functions -----
@@ -287,6 +273,9 @@ class MatrixWithUnits:
             
             self.value.__setitem__(key, value.value)
             self.unit.__setitem__(key, value.unit)
+    
+    def __len__(self):
+        return self.value.__len__()
     
 
     # ----- Common operations -----
@@ -565,10 +554,39 @@ class MatrixWithUnits:
     def __array__(self) -> np.ndarray:
         return self.value
 
-    # def __array_ufunc__(self, function, method, *inputs, **kwargs):
-    #     return self.value. __array_ufunc__(function, method, *inputs, **kwargs) #* \
-    #         #    self.unit. __array_ufunc__(function, method, *inputs, **kwargs)
-    #     # return np.ndarray.array_ufunc(function, method, *inputs, **kwargs)
+    @property
+    def T(self):
+        """
+        Transposed Matrix.
+
+        Returns
+        -------
+        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        """
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(self.value.T, self.unit)
+        else:
+            return MatrixWithUnits(self.value.T, self.unit.T)
+        
+    @property
+    def size(self):
+        value_size = self.value.size
+
+        try:
+            unit_size = self.unit.size
+
+            assert value_size == unit_size, \
+                'Instance is invalid, `value` and `unit` have incompatible sizes.'
+
+            return value_size
+        except AttributeError:
+            # Might be scalar unit, then everything is fine
+            if isinstance(self.unit, self._pure_unit_types):
+                return value_size
+            else:
+                raise ValueError(
+                    'Instance is invalid, `value` and `unit` have incompatible sizes.'
+                )
 
     @property
     def shape(self):
@@ -589,21 +607,43 @@ class MatrixWithUnits:
                 raise ValueError(
                     'Instance is invalid, `value` and `unit` have incompatible shapes.'
                 )
-    
-    def reshape(self, new_shape: Any) -> MatrixWithUnits:
-        return MatrixWithUnits(np.reshape(self.value, new_shape),
-                               np.reshape(self.unit, new_shape))
 
     @property
     def ndim(self) -> int:
         value_ndim = self.value.ndim
-        unit_ndim = self.unit.ndim
 
-        assert value_ndim == unit_ndim, \
-            'Instance is invalid, `value` and `unit` have incompatible ndim.'
+        try:
+            unit_ndim = self.unit.ndim
 
-        return value_ndim
+            assert value_ndim == unit_ndim, \
+                'Instance is invalid, `value` and `unit` have incompatible ndim.'
+
+            return value_ndim
+        except AttributeError:
+            # Might be scalar unit, then everything is fine
+            if isinstance(self.unit, self._pure_unit_types):
+                return value_ndim
+            else:
+                raise ValueError(
+                    'Instance is invalid, `value` and `unit` have incompatible ndim.'
+                )
     
     @property
     def dtype(self) -> Any:
-        return self.value.dtype  # TODO: do this or Quantity?
+        return u.Quantity
+    
+    @staticmethod
+    def from_numpy_array(arr: np.ndarray) -> MatrixWithUnits:
+        return MatrixWithUnits(arr, u.dimensionless_unscaled)
+    
+    @staticmethod
+    def reshape(matrix: MatrixWithUnits, new_shape: Any) -> MatrixWithUnits:
+        return MatrixWithUnits(np.reshape(matrix.value, new_shape),
+                               np.reshape(matrix.unit, new_shape))
+
+    @staticmethod
+    def inv(matrix: MatrixWithUnits) -> MatrixWithUnits:
+        assert np.all(np.equal(matrix.unit, matrix.T.unit)), \
+            'Need symmetric unit for inversion.'
+
+        return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)

@@ -3,6 +3,7 @@ import unittest
 
 # ----- Third Party Imports -----
 import numpy as np
+from numpy.testing import assert_allclose
 
 import astropy.units as u
 
@@ -352,8 +353,15 @@ def test_array_conversion():
 
     np.all(matrix_array == matrix.value)
 
-def test_shape():
-    matrix = MatrixWithUnits(example_values, example_units)
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_size(units):
+    matrix = MatrixWithUnits(example_values, units)
+
+    assert matrix.size == 4
+
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_shape(units):
+    matrix = MatrixWithUnits(example_values, units)
     
     assert matrix.shape == (2, 2)
 
@@ -366,19 +374,60 @@ def test_reshape(new_shape):
                               np.reshape(example_units, new_shape))
     
     assert_allequal_MatrixWithUnits(
-        matrix.reshape(new_shape),
+        MatrixWithUnits.reshape(matrix, new_shape),
         matrix2
     )
 
-def test_ndim():
-    matrix = MatrixWithUnits(example_values, example_units)
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_ndim(units):
+    matrix = MatrixWithUnits(example_values, units)
     
     assert matrix.ndim == 2
 
-def test_dtype():
-    matrix = MatrixWithUnits(example_values, example_units)
+@pytest.mark.parametrize('values', [example_values, np.array([42], dtype=int),
+    np.array([42.], dtype=float), np.array([42.j], dtype=complex)])
+def test_dtype(values):
+    matrix = MatrixWithUnits(values, u.s)
     
-    assert matrix.dtype == example_values.dtype
+    assert matrix.value.dtype == values.dtype
+    assert matrix.dtype == u.Quantity
+
+def test_reading_from_array():
+    matrix = MatrixWithUnits.from_numpy_array(example_values)
+
+    assert np.all(np.equal(matrix.value, example_values))
+    assert np.all(np.equal(matrix.unit, u.dimensionless_unscaled))
+
+def test_inv():
+    matrix = MatrixWithUnits(example_values, u.s)
+    matrix_inv = MatrixWithUnits.inv(matrix)
+
+    assert_allclose_MatrixWithUnits(
+        matrix @ matrix_inv,
+        MatrixWithUnits.from_numpy_array(np.eye(2))
+    )
+
+
+    test_units_arr = np.array([u.s, u.m, u.kg], dtype=object)
+    test_units = np.outer(test_units_arr, test_units_arr)
+    test_values = [[1, 2, 1], [5, 6, 7], [9, 8, 7]]
+    matrix2 = MatrixWithUnits(test_values, test_units)
+    # matrix2_inv = MatrixWithUnits(np.linalg.inv(test_values), test_units**-1)
+    matrix2_inv = MatrixWithUnits.inv(matrix2)
+
+    # assert_allclose(np.eye(3), matrix2 @ matrix2_inv, atol=1e-15, rtol=0.0)
+    assert_allclose_MatrixWithUnits(
+        matrix2 @ matrix2_inv,
+        MatrixWithUnits(
+            np.eye(3), 
+            np.array([[u.dimensionless_unscaled, u.s / u.m, u.s / u.kg],
+                      [u.m / u.s, u.dimensionless_unscaled, u.m / u.kg],
+                      [u.kg / u.s, u.kg / u.m, u.dimensionless_unscaled]]),
+            # Unit result calculated by hand
+        ),
+        atol=1e-15,  # Account for numerical errors
+        rtol=0.0
+    )
 
 
 # ----- Test error raising -----
@@ -426,3 +475,9 @@ class Errors(unittest.TestCase):
 
         with self.assertRaises(TypeError):
             self.matrix @ u.Quantity([42, 96], unit=u.s)
+    
+    def test_inv_wrong_units(self):
+        with self.assertRaises(AssertionError):
+            matrix2 = self.matrix.copy()
+            matrix2.unit = example_non_si_units
+            MatrixWithUnits.inv(matrix2)

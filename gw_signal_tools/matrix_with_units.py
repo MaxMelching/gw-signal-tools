@@ -254,10 +254,20 @@ class MatrixWithUnits:
     
     def __getitem__(self, key: Any) -> MatrixWithUnits:
         # return self.value.__getitem__(key) * self.unit.__getitem__(key)
+        new_value = self.value.__getitem__(key)
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value.__getitem__(key), self.unit)
+            # if len(new_value) == 1:
+            if isinstance(new_value, self._allowed_numeric_types):
+                # Scalar
+                return new_value * self.unit
+            else:
+                return MatrixWithUnits(new_value, self.unit)
         else:
-            return MatrixWithUnits(self.value.__getitem__(key), self.unit.__getitem__(key))
+            # if len(new_value) == 1:
+            if isinstance(new_value, self._allowed_numeric_types):
+                return new_value * self.unit.__getitem__(key)
+            else:
+                return MatrixWithUnits(new_value, self.unit.__getitem__(key))
     
     def __setitem__(self, key: Any, value: Any) -> None:
         try:
@@ -273,7 +283,7 @@ class MatrixWithUnits:
                 value = u.Quantity(value)
             except TypeError:
                 raise TypeError(
-                    'Can only set items to data types that have members'
+                    'Can only set items to data types that have members '
                     '`value` and `unit` (such as astropy Quantities or '
                     'MatrixWithUnits) or can be converted into a Quantity.'
                 )
@@ -666,4 +676,12 @@ class MatrixWithUnits:
                 new_unit[index] = val.to_system(system)[0]
             
             return MatrixWithUnits(self.value, new_unit)
-
+        
+        # Trying to set values as well -> to_system only operates on units,
+        # so while syntax is correct now, code is not working
+        # new_matrix = self.copy()
+        # for index in np.ndindex(new_matrix.shape):
+        #     new_matrix[index] = new_matrix[index].to_system(system)[0]
+        #     # new_matrix[index] = (self.value[index] * self.unit[index]).to_system(system)[0]
+        
+        # return new_matrix

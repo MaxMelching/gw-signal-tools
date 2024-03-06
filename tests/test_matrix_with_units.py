@@ -392,6 +392,10 @@ def test_dtype(values):
     
     assert matrix.value.dtype == values.dtype
     assert matrix.dtype == u.Quantity
+    try:
+        assert type(matrix[0, 0]) == u.Quantity
+    except IndexError:
+        assert type(matrix[0]) == u.Quantity
 
 def test_reading_from_array():
     matrix = MatrixWithUnits.from_numpy_array(example_values)

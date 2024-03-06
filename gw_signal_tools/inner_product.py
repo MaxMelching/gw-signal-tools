@@ -15,6 +15,8 @@ from .waveform_utils import (
 )
 from .test_utils import allclose_quantity, assert_allclose_quantity
 
+import gw_signal_tools.cosmo as cosmo
+
 
 __doc__ = """
 Implementation of noise-weighted inner product that is
@@ -30,12 +32,12 @@ def inner_product(
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False  # Call it 'compute_match'?
 ) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
-    """
+    r"""
     Calculates the noise-weighted inner product
-    .. math:: \\langle a, b \\rangle = 2 \\Re \\int_{-\\infty}^{\\infty}
-        \\frac{\\tilde{a(f) \\tilde{b}(f)}{S_n(f)} \\, df
+    .. math:: \langle a, b \rangle = 2 \Re \int_{-\infty}^{\infty}
+        \frac{\tilde{a(f) \tilde{b}(f)}{S_n(f)} \, df
     of two signals using their representations
-    :math:`\\tilde{a}(f), \\tilde{b}(f)` in frequency domain.
+    :math:`\tilde{a}(f), \tilde{b}(f)` in frequency domain.
     
     In case of a `psd` :math:`S_n(f)` that is equal to 1 at all
     frequencies (the default case), this corresponds to the :math:`L^2`
@@ -348,13 +350,20 @@ def inner_product_computation(
         # Due to unequal sample size. Since this is automatically checked by
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
         raise ValueError(custom_error_msg)
+    
+    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
+    try:
+        output_unit = output_unit.to_system(cosmo)[0]
+        # .compose(units=u.astrophys)[0]
+    except u.UnitsError:
+        output_unit = output_unit.si
+        # Resets scale only for units, not for value. Best we can do in that case
 
     return (4.0 if ((signal1.frequencies[0].value >= 0.0)
                     or (signal1.frequencies[-1].value <= 0.0)) else 2.0  # Check if one-sided or not
             ) * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
-    ) * (signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit).si
-        # Resets scale only for units, not for value. Best we can do for now
+    ) * output_unit
 
 
 def optimized_inner_product(
@@ -448,9 +457,17 @@ def optimized_inner_product(
 
     dt = (1.0 / (full_dft_vals.size * signal1.df)).si
 
+    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
+    try:
+        output_unit = output_unit.to_system(cosmo)[0]
+        # .compose(units=u.astrophys)[0]
+    except u.UnitsError:
+        output_unit = output_unit.si
+        # Resets scale only for units, not for value. Best we can do in that case
+
     match_series = TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
-        unit=(signal1.unit * signal2.unit / psd.unit / dt.unit).si,
+        unit=output_unit,
         t0=0.0 * dt.unit,
         dt=dt
     )

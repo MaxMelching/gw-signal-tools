@@ -14,6 +14,7 @@ from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
 )
+import gw_signal_tools.cosmo as cosmo
 
 
 example_values = np.array([[42, 24], [18, 96]])
@@ -428,6 +429,14 @@ def test_inv():
         atol=1e-15,  # Account for numerical errors
         rtol=0.0
     )
+
+
+# ----- Test numpy functions -----
+def test_to_system():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    matrix.to_system(u.si)
+    matrix.to_system(cosmo)
 
 
 # ----- Test error raising -----

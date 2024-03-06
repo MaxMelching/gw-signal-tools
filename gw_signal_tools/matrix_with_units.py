@@ -108,6 +108,9 @@ class MatrixWithUnits:
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
     """
+    # __array_priority__ = 100 * u.core.UnitBase.__array_priority__
+    # Does not help for radd etc. because problem is that IrreducibleUnit
+    # is not compatible with numpy array.
 
     _allowed_numeric_types = (int, float, complex, np.number)
     _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
@@ -171,6 +174,10 @@ class MatrixWithUnits:
         try:
             assert np.shape(value) == np.shape(self.value), \
                 'New and old `value` must have equal shape'
+
+            # TODO: also check that len of shape (thus ndim) is not greater than 2?
+            # This class is not really made to handle more than that, not
+            # sure how this could be handled
         except AttributeError:
             pass  # New class instance is created, nothing to check
         
@@ -322,7 +329,8 @@ class MatrixWithUnits:
         # else:
         #     return self.__neg__().__add__(other)
         # Not raised anyway, astropy tries to do it and fails
-        return self.__neg__().__add__(other)
+        # return self.__neg__().__add__(other)
+        return (self.__sub__(other)).__neg__()
             
     def __mul__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
@@ -647,3 +655,15 @@ class MatrixWithUnits:
             'Need symmetric unit for inversion.'
 
         return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
+
+    # ----- Deal with selected useful numpy functions/attributes -----
+    def to_system(self, system: Any) -> MatrixWithUnits:
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(self.value, self.unit.to_system(system))
+        else:
+            new_unit = self.unit
+            for index, val in np.ndenumerate(self.unit):
+                new_unit[index] = val.to_system(system)[0]
+            
+            return MatrixWithUnits(self.value, new_unit)
+

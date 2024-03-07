@@ -724,8 +724,10 @@ def get_strain(
     
     if domain == 'time':
         generator_func = wfm.GenerateTDWaveform
+        temp_factor = 1.0  # TODO: change unit once lal gets it right
     elif domain == 'frequency':
         generator_func = wfm.GenerateFDWaveform
+        temp_factor = u.s  # TODO: change unit once lal gets it right
     else:
         raise ValueError(
             'Invalid domain, select either `\'time\'` or `\'frequency\'`.'
@@ -754,13 +756,13 @@ def get_strain(
     
 
     if return_detector_output:
-        return generator_func(intrinsic_params, generator).strain(**extrinsic_params)
+        return generator_func(intrinsic_params, generator).strain(**extrinsic_params) * temp_factor  # TODO: change unit once lal gets it right
     else:
         match mode:
             case 'plus':
-                return generator_func(intrinsic_params, generator)[0]
+                return generator_func(intrinsic_params, generator)[0] * temp_factor  # TODO: change unit once lal gets it right
             case 'cross':
-                return generator_func(intrinsic_params, generator)[1]
+                return generator_func(intrinsic_params, generator)[1] * temp_factor  # TODO: change unit once lal gets it right
             case 'mixed':
                 hp, hc = generator_func(intrinsic_params, generator)
 
@@ -776,7 +778,7 @@ def get_strain(
                         np.flip((np.conjugate(hp) + 1.j * np.conjugate(hc))[1:]),
                         f0=-hp.frequencies[-1],
                         df=hp.df
-                    ).append(hp + 1.j * hc, inplace=True)
+                    ).append(hp + 1.j * hc, inplace=True) * temp_factor  # TODO: change unit once lal gets it right
             case _:
                 raise ValueError('Invalid `mode`.')
 

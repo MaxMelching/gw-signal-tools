@@ -632,11 +632,8 @@ def test_get_strain_no_extrinsic():
     assert_quantity_equal(hp_t + 1.j * hc_t, h_t_test)
 
     hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
-    hp_f_test.override_unit(u.s)
     hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
-    hc_f_test.override_unit(u.s)
     h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
-    h_f_test.override_unit(u.s)
     
     assert_quantity_equal(hp_f_fine, hp_f_test)
     assert_quantity_equal(hc_f_fine, hc_f_test)
@@ -661,11 +658,8 @@ def test_get_strain_extrinsic():
     assert_quantity_equal(hp_t + 1.j * hc_t, h_t_test)
 
     hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
-    hp_f_test.override_unit(u.s)
     hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
-    hc_f_test.override_unit(u.s)
     h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
-    h_f_test.override_unit(u.s)
     
     assert_quantity_equal(hp_f_fine, hp_f_test)
     assert_quantity_equal(hc_f_fine, hc_f_test)

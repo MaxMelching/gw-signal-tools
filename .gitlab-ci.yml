@@ -14,6 +14,7 @@ before_script:  # Enabling virtual environment is recommended
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
+# Also possible: use extends. If venv not needed for every script, for example
 
 
 stages:
@@ -28,19 +29,43 @@ installation:
   stage: install
   script:
     - pip install '.[dev, jupyter]'
+    - python -m setuptools_scm  # Print package version for debugging
   artifacts:
     paths:
       - build/*
-
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
+    - if: $CI_COMMIT_BRANCH
+      # when: manual  # Also possible for certain tests
 
 
 # Verify code is running correctly
 testing:
   stage: test
-  dependencies:
-    - installation
+  # dependencies:
+  #   - installation
+  needs:
+    - jobs: installation
+      artifacts: true
+    # - stage: install
+    #   artifacts: true
+    # Does this also work? Would perhaps be more general
+    # -> but mybe cannot have artifacts from that?
+    # -> pipeline editor says does invalid
   script:
-    - pip install .[dev]
+    # - pip install .[dev]  # Should be unnecessary with needs keyword
+    - python -m setuptools_scm  # Print package version for debugging
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     - coverage report
+    - coverage html
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'  # From https://gitlab.aei.uni-hannover.de/help/ci/testing/code_coverage.md#view-code-coverage-results-in-the-mr
+  artifacts:
+    paths:
+      - htmlcov/*
+
+# pages:
+#   image: gitlab-registry.mpcdf.mpg.de/username/project/my_image:latest
+#   # Interesting, one can specify image for single job?
+#   rules:
+#     - if: $CI_COMMIT_TAG  # Only deploy if tag is pushed (i.e. for new version)

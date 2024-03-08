@@ -46,7 +46,7 @@ testing:
   # dependencies:
   #   - installation
   needs:
-    - job: installation
+    - jobs: installation
       artifacts: true
     # - stage: install
     #   artifacts: true

@@ -9,11 +9,11 @@ cache:
   paths:
     - .cache/pip
 
-before_script:  # Enabling virtual environment is recommended
-  - python --version ; pip --version  # For debugging
-  - pip install virtualenv
-  - virtualenv venv
-  - source venv/bin/activate
+# before_script:  # Enabling virtual environment is recommended
+#   - python --version ; pip --version  # For debugging
+#   - pip install virtualenv
+#   - virtualenv venv
+#   - source venv/bin/activate
 # Also possible: use extends. If venv not needed for every script, for example
 
 
@@ -28,6 +28,10 @@ stages:
 installation:
   stage: install
   script:
+    - python --version ; pip --version  # For debugging
+    - pip install virtualenv
+    - virtualenv venv
+    - source venv/bin/activate
     - pip install '.[dev, jupyter]'
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
@@ -46,7 +50,7 @@ testing:
   # dependencies:
   #   - installation
   needs:
-    - jobs: installation
+    - job: installation
       artifacts: true
     # - stage: install
     #   artifacts: true
@@ -54,6 +58,7 @@ testing:
     # -> but mybe cannot have artifacts from that?
     # -> pipeline editor says does invalid
   script:
+    - python --version ; pip --version  # For debugging
     # - pip install .[dev]  # Should be unnecessary with needs keyword
     - python -m setuptools_scm  # Print package version for debugging
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future

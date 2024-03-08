@@ -9,12 +9,12 @@ cache:
   paths:
     - .cache/pip
 
-# before_script:  # Enabling virtual environment is recommended
-#   - python --version ; pip --version  # For debugging
-#   - pip install virtualenv
-#   - virtualenv venv
-#   - source venv/bin/activate
-# Also possible: use extends. If venv not needed for every script, for example
+before_script:  # Enabling virtual environment is recommended
+  - python --version ; pip --version  # For debugging
+  - pip install virtualenv
+  - virtualenv venv
+  - source venv/bin/activate
+Also possible: use extends. If venv not needed for every script, for example
 
 
 stages:
@@ -28,10 +28,6 @@ stages:
 installation:
   stage: install
   script:
-    - python --version ; pip --version  # For debugging
-    - pip install virtualenv
-    - virtualenv venv
-    - source venv/bin/activate
     - pip install '.[dev, jupyter]'
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
@@ -52,14 +48,8 @@ testing:
   needs:
     - job: installation
       artifacts: true
-    # - stage: install
-    #   artifacts: true
-    # Does this also work? Would perhaps be more general
-    # -> but mybe cannot have artifacts from that?
-    # -> pipeline editor says does invalid
   script:
-    - python --version ; pip --version  # For debugging
-    # - pip install .[dev]  # Should be unnecessary with needs keyword
+    - pip install .[dev]
     - python -m setuptools_scm  # Print package version for debugging
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     - coverage report
@@ -68,9 +58,3 @@ testing:
   artifacts:
     paths:
       - htmlcov/*
-
-# pages:
-#   image: gitlab-registry.mpcdf.mpg.de/username/project/my_image:latest
-#   # Interesting, one can specify image for single job?
-#   rules:
-#     - if: $CI_COMMIT_TAG  # Only deploy if tag is pushed (i.e. for new version)

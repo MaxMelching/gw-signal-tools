@@ -15,7 +15,7 @@ from .waveform_utils import (
 )
 from .test_utils import allclose_quantity, assert_allclose_quantity
 
-import gw_signal_tools.cosmo as cosmo
+import gw_signal_tools.units as gw_signal_tools_units
 
 
 __doc__ = """
@@ -353,11 +353,13 @@ def inner_product_computation(
     
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
     try:
-        output_unit = output_unit.to_system(cosmo)[0]
-        # .compose(units=u.astrophys)[0]
+        # output_unit = output_unit.to_system(gw_signal_tools_units)[0]
+        output_unit = output_unit.compose(units=gw_signal_tools_units)[0]
     except u.UnitsError:
         output_unit = output_unit.si
         # Resets scale only for units, not for value. Best we can do in that case
+    # TODO: check if composing result into units=gw_signal_tools_units is
+    # better option. In current way, we still only change scale etc. of unit
 
     return (4.0 if ((signal1.frequencies[0].value >= 0.0)
                     or (signal1.frequencies[-1].value <= 0.0)) else 2.0  # Check if one-sided or not
@@ -459,8 +461,8 @@ def optimized_inner_product(
 
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
     try:
-        output_unit = output_unit.to_system(cosmo)[0]
-        # .compose(units=u.astrophys)[0]
+        # output_unit = output_unit.to_system(gw_signal_tools_units)[0]
+        output_unit = output_unit.compose(units=gw_signal_tools_units)[0]
     except u.UnitsError:
         output_unit = output_unit.si
         # Resets scale only for units, not for value. Best we can do in that case

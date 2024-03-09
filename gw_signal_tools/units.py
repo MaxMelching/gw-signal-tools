@@ -17,13 +17,36 @@ __all__: list[str] = []  #  Units are added at the end
 _ns = globals()
 
 # u.astrophys uses pc, we would like to use Mpc, thus redefine here
-# def_unit(
-#     ['Mpc'],
-#     _const_si.pc * 1e6,
-#     namespace=_ns,
-#     prefixes=True,
-#     doc='megaparsec: approximately 3.26 * 10^6 light-years.',
-# )
+# -> update on that: nope, since prefix is added automatically, base
+#    unit pc is much more general (and thus preferred) choice
+# -> more update: only works when u.CompositeUnit is used in MatrixWithUnits,
+#    switching to u.Unit would cause error!
+# -> it gets wilder: has nothing to do with u.Unit or u.CompositeUnit, but
+#    with wether or not following definition is included... Just wild
+# -> let's see it as useful bug (I guess) that we use while it is there
+def_unit(
+    ['Mpc'],
+    _const_si.pc * 1e6,
+    namespace=_ns,
+    prefixes=True,
+    doc='megaparsec: approximately 3.26 * 10^6 light-years.',
+)
+
+def_unit(
+    ['kpc'],
+    _const_si.pc * 1e3,
+    namespace=_ns,
+    prefixes=True,
+    doc='kiloparsec: approximately 3.26 * 10^3 light-years.',
+)
+
+def_unit(
+    ['Gpc'],
+    _const_si.pc * 1e9,
+    namespace=_ns,
+    prefixes=True,
+    doc='gigaparsec: approximately 3.26 * 10^9 light-years.',
+)
 
 
 # All that is left to do is defining a basis that can be converted to
@@ -39,6 +62,7 @@ K = _si.K
 mol = _si.mol
 
 bases = {pc, s, Msun, A, cd, rad, K, mol}
+# bases = {Mpc, s, Msun, A, cd, rad, K, mol}
 
 
 import gwpy.detector.units  # Adds strain to astropy units

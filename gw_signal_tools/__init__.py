@@ -19,6 +19,18 @@ PLOT_STYLE_SHEET = _path_join(PACKAGE_PATH, 'plot_stylesheet.sty')
 # import from each module (preferred solution at the moment)
 
 
+# TODO: decide if equivalency between strain and dimensionless can be enabled
+# here by setting some variable to true or so
+
+
+# TODO: set global preferred_unit_system here (default to our custom) and use this in inner_product
+# conversions etc., so that it can be changed to SI from astropy for example
+# -> maybe leave possible conversion in Fisher, but default
+# is global one given by gw_signal_tools
+import gw_signal_tools.units as _gw_signal_tools_units
+preferred_unit_system = _gw_signal_tools_units
+
+
 # ---------- Initialize Logging ----------
 import logging
 

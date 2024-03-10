@@ -198,6 +198,7 @@ def fisher_matrix(
         if param == 'time':
             wf = wf_generator(wf_params_at_point)
             deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
+            # deriv = wf * -1.j * 2.0 * np.pi * (wf.frequencies - wf_params_at_point['f22_ref'])
             deriv_series_storage[param] = deriv
             info = {'description': 'This derivative is exact.'}
 
@@ -252,30 +253,15 @@ def fisher_matrix(
             if i == j:
                 continue
             else:
-                unit_i = deriv_series_storage[param_i].unit
-                unit_j = deriv_series_storage[param_j].unit
+                fisher_val = inner_product(
+                    deriv_series_storage[param_i],
+                    deriv_series_storage[param_j],
+                    **inner_prod_kwargs
+                )
 
-                if unit_i == unit_j:
-                    fisher_val = inner_product(
-                        deriv_series_storage[param_i],
-                        deriv_series_storage[param_j],
-                        **inner_prod_kwargs
-                    )
-
-                    if not isinstance(fisher_val, u.Quantity):
-                        # Optimization is carried out in inner product
-                        fisher_val = fisher_val[1]
-                else:
-                    fisher_val = inner_product(
-                        deriv_series_storage[param_i],
-                        deriv_series_storage[param_j],
-                        **inner_prod_kwargs
-                    )
-
-                    if not isinstance(fisher_val, u.Quantity):
-                        # Optimization is carried out in inner product
-                        fisher_val = fisher_val[1]
-
+                if not isinstance(fisher_val, u.Quantity):
+                    # Optimization is carried out in inner product
+                    fisher_val = fisher_val[1]
 
                 fisher_matrix[i, j] = fisher_matrix[j, i] = fisher_val
 

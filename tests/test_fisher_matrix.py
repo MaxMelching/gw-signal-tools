@@ -3,6 +3,7 @@ import unittest
 
 # ----- Third Party Imports -----
 import numpy as np
+from numpy.testing import assert_allclose
 
 import astropy.units as u
 
@@ -86,6 +87,31 @@ def test_criterion_consistency():
     # Interesting, even equal. Roughly equal would also be sufficient, might
     # converge at different step sizes and thus have slightly different results
 
+
+#%% Feature tests
+def test_project():
+    test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
+
+    fisher = FisherMatrix(
+        wf_params,
+        test_params,
+        wf_generator=phenomx_generator,
+    )
+
+    fisher_fully_projected = fisher.project_fisher(test_params)
+
+    assert_allclose(
+        fisher_fully_projected.value,
+        0.0,
+        atol=1e-10 * np.max(np.abs(fisher.value)),
+        rtol=0
+    )
+    # Large values are decreased by 10 orders of magnitude. For smaller
+    # values, this test will pass almost automatically, but they have
+    # been close to zero in some cases anyway, so testing with
+    # rtol=1e-10 or testing that smaller than 1e-10*fisher.value would
+    # also not make sense (values that are already essentially zero
+    # will not change by 10 orders of magnitude)
 
 #%% Confirm that certain errors are raised
 class ErrorRaising(unittest.TestCase):

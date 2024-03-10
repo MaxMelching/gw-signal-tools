@@ -16,6 +16,7 @@ import lalsimulation.gwsignal.core.waveform as wfm
 from .waveform_utils import get_strain
 from .matrix_with_units import MatrixWithUnits
 from .fisher_utils import fisher_matrix
+from gw_signal_tools import preferred_unit_system
 
 
 class FisherMatrix:
@@ -72,6 +73,10 @@ class FisherMatrix:
         'break_upon_convergence': True,
         'convergence_threshold': 0.01
     }
+
+    _preferred_unit_sys = preferred_unit_system
+    # Idea: display stuff in these units, i.e. apply .to_system to each matrix before saving them
+    # TODO: make setter etc. for it
 
     def __init__(self,
             wf_params_at_point: dict[str, u.Quantity],
@@ -153,20 +158,17 @@ class FisherMatrix:
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
             return self._fisher_inverse  # type: ignore
-            # Explanation of ignore: type cannot be inferred and not hinted
+            # Explanation of ignore: neither can type be inferred nor hinted
         except AttributeError:
             # Inverse is called for the first time or has been deleted
-            self._fisher_inverse = MatrixWithUnits(
-                np.linalg.inv(self.fisher.value),
-                self.fisher.unit**-1,
-            )
+            self._fisher_inverse = MatrixWithUnits.inv(self.fisher)
 
             return self._fisher_inverse
         
     
     @property
     def deriv_info(self):
-        # self._deriv_info is available... Soooo, shall we something with it?
+        # TODO: self._deriv_info is available... Soooo, shall we something with it?
         raise NotImplementedError
 
 
@@ -259,61 +261,98 @@ class FisherMatrix:
         numpy.linalg.cond : Routine used for calculation.
         """
         return np.linalg.cond(self.fisher.value, p=matrix_norm)
+    
+    def project_fisher(self, params: str | list[str]) -> MatrixWithUnits:
+        """
+        Project Fisher matrix so that its components now live in the
+        orthogonal subspace to certain parameters (corresponds to
+        optimizing with respect to them).
 
+        Parameters
+        ----------
+        params : str or list[str]
+            Parameter or list of parameters to project out. Must have
+            been given in `params_to_vary` upon initialization of the
+            ``FisherMatrix`` instance.
 
-    @property
-    def projected_fisher(self) -> MatrixWithUnits:
-        params_array = np.array(self.params_to_vary)
-
-        if 'time' not in params_array or 'phase' not in params_array:
-            raise ValueError(
-                'Need keys `time` and `phase` in `self.params_to_vary`.'
-            )
-        else:
-            time_index = np.where(params_array == 'time')[0][0]
-            phase_index = np.where(params_array == 'phase')[0][0]
-            # print(time_index, phase_index)
+        Returns
+        -------
+        ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+            Matrix with same shape as initial Fisher matrix, but
+            potentially different component values.
+        """
+        if isinstance(params, str):
+            params = [params]
         
-        # The following is just testing, should not actually be neededs
-        # time_index, phase_index = min(time_index, phase_index), max(time_index, phase_index)
-        # time_index, phase_index = phase_index, time_index
+        for param in params:
+            assert param in self.params_to_vary, \
+                (f'Parameter {param} was not used to calculate the Fisher '
+                 'matrix, so it cannot be projected out of it.')
+        
+        param_indices = np.where(np.isin(self.params_to_vary, params))[0]
+        index_grid = np.ix_(param_indices, param_indices)
 
-        n = len(self.params_to_vary)
-        gamma = self.fisher.value
-        # assert that gamma is (n x n) matrix?
-        # submatr = np.zeros((n, n))
-        # submatr[time_index, time_index] = gamma[time_index, time_index]
-        # submatr[time_index, phase_index] = gamma[time_index, phase_index]
-        # submatr[phase_index, time_index] = gamma[phase_index, time_index]
-        # submatr[phase_index, phase_index] = gamma[phase_index, phase_index]
-        # Cannot invert in this case, singular matrix
+        n = len(self.params_to_vary)  # Equal to self.fisher.shape[0]
 
-        submatr = np.array([[gamma[time_index, time_index],
-                             gamma[time_index, phase_index]],
-                            [gamma[phase_index, time_index],
-                             gamma[phase_index, phase_index]]])
-        # TODO: check if indices are consistent. Should not matter anyway due to symmetry of Fisher, though
-
-        sub_matr_inv = np.linalg.inv(submatr)
-        # print(submatr, sub_matr_inv)
+        fisher_val = self.fisher.value
+        # sub_matrix = fisher[params_indices][:, params_indices]
+        sub_matrix = fisher_val[index_grid]
+        sub_matrix_inv = np.linalg.inv(sub_matrix)
 
         full_inv = np.zeros((n, n))
-        full_inv[time_index, time_index] = sub_matr_inv[0, 0]
-        full_inv[time_index, phase_index] = sub_matr_inv[0, 1]
-        full_inv[phase_index, time_index] = sub_matr_inv[1, 0]
-        full_inv[phase_index, phase_index] = sub_matr_inv[1, 1]
+        full_inv[index_grid] = sub_matrix_inv
 
-        self._projected_fisher = MatrixWithUnits(
-            # gamma - np.tensordot(np.tensordot(gamma, full_inv, axes=(1, 0)), gamma, axes=(1, 0)),
-            # gamma - gamma @ full_inv @ gamma,
-            # gamma - np.tensordot(np.tensordot(gamma, full_inv, axes=(0, 1)), gamma, axes=(0, 1)),
-            # gamma - gamma[:, [time_index, phase_index]] @ sub_matr_inv @ gamma[[time_index, phase_index], :],
-            gamma - np.einsum('ij, jk, kl', gamma, full_inv, gamma),
-            self.fisher.unit**-1
-            # u.dimensionless_unscaled
-        )
+        # return MatrixWithUnits(
+        #     # fisher_val - np.tensordot(np.tensordot(fisher_val, full_inv, axes=(1, 0)), fisher_val, axes=(1, 0)),
+        #     # fisher_val - np.tensordot(np.tensordot(fisher_val, full_inv, axes=(0, 1)), fisher_val, axes=(0, 1)),
+        #     # fisher_val - fisher_val[:, param_indices]] @ sub_matr_inv @ fisher_val[param_indices, :],
+        #     fisher_val - np.einsum('ij, jk, kl', fisher_val, full_inv, fisher),
+        #     self.fisher.unit
+        # )
 
-        return self._projected_fisher
+        # Testing with new tool of matrix multiplication -> WORKS!!! Noice
+        full_inv = MatrixWithUnits(full_inv, self.unit**-1)
+        fisher = self.fisher
+
+        return fisher - fisher @ full_inv @ fisher
+        # return fisher - MatrixWithUnits(np.einsum('ij, jk, kl', fisher, full_inv, fisher), self.fisher.unit)
+    
+    # Just toying around with application of matrix product
+    # def statistical_error(self, param_diff: MatrixWithUnits) -> u.Quantity:
+    #     r"""
+    #     Calculates
+
+    #     .. math:: \sum_{\mu \nu} \Gamma_{\mu \nu} \Delta \lambda^\mu
+    #     \Delta \lambda^\nu
+
+    #     using the given parameter difference :math:`\Delta \lambda^\mu`.
+
+    #     Parameters
+    #     ----------
+    #     param_diff : ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+    #         Row or column vector of parameter differences, which must be
+    #         specified with units (i.e. as a MatrixWithUnits instance).
+
+    #         Order must match the order used in `params_to_vary` argument
+    #         that has been used during Fisher matrix calculation.
+
+    #     Returns
+    #     -------
+    #     ~astropy.units.quantity
+    #         Total statistical error.
+
+    #     Notes
+    #     -----
+    #     Calculating this does not make sense if a PSD for no noise is
+    #     used during the Fisher matrix calculations
+    #     """
+    #     assert len(param_diff.shape) == 1, \
+    #         '`param_diffs` must be either a row or a column vector.'
+        
+    #     return param_diff @ self.fisher_inverse @ param_diff
+    # TODO: return **(1/2) of that?
+    # -> also test if Fraction from functools is better for numerical precision
+
     
 
     def plot(self):
@@ -324,7 +363,7 @@ class FisherMatrix:
     @staticmethod
     def get_wf_generator(
         approximant: str,
-        domain: str = 'frequency',
+        domain: Literal['frequency', 'time'] = 'frequency',
         *args, **kwargs
     ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
         """
@@ -333,16 +372,24 @@ class FisherMatrix:
 
         Parameters
         ----------
-        approximant : _type_
-            _description_
-        domain : _type_
-            Default is 'frequency', the domain where the Fisher matrix
-            is computed.
+        approximant : str
+            Name of a waveform model that is accepted by the
+            ``~lalsimulation.gwsignal.core.waveform.
+            LALCompactBinaryCoalescenceGenerator`` class.
+        domain : Literal['frequency', 'time'], optional,
+        default = 'frequency'
+            String representing the domain where the Fisher matrix is
+            computed. Accepted values are 'frequency' and 'time'.
 
         Returns
         -------
-        _type_
-            _description_
+        Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.
+        frequencyseries.FrequencySeries]
+            Function that takes dicionary of waveform parameters as
+            input and produces a waveform (stored in a GWPy
+            ``FrequencySeries``). Can, for example, be used as input
+            to `wf_generator` argument during initialization of a
+            ``FisherMatrix``.
 
         See also
         --------

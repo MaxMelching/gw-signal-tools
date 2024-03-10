@@ -115,6 +115,7 @@ class MatrixWithUnits:
     _allowed_numeric_types = (int, float, complex, np.number)
     _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
     _allowed_unit_types = _pure_unit_types + (u.Quantity,)
+    _allowed_input_types = _allowed_unit_types + _allowed_numeric_types
 
 
     def  __init__(self, value: ArrayLike, unit: ArrayLike) -> None:
@@ -135,13 +136,13 @@ class MatrixWithUnits:
 
 
         # Scalar unit is allowed input even for value array, handled here
-        if isinstance(unit, self._pure_unit_types):
-            unit = u.CompositeUnit(1.0, [unit], [1.0])
-        elif isinstance(unit, u.Quantity):
-            unit = u.CompositeUnit(unit.value, [unit.unit], [1.0])
-        elif isinstance(unit, self._allowed_numeric_types):
-            # Could occur as result of performing operations
-            unit = u.CompositeUnit(unit, [u.dimensionless_unscaled], [1.0])
+        if isinstance(unit, self._allowed_input_types):
+            unit = u.Unit(unit)
+            # unit = u.CompositeUnit(1, [unit], [1])
+            # Enforces keeping prefixes, needed to avoid numerical errors that
+            # happen at times (apparently during conversion using u.Unit,
+            # presumably due to scale that is not 1)
+            # -> had other reason, Unit and CompositeUnit are equivalent
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
@@ -216,11 +217,13 @@ class MatrixWithUnits:
             for i, val in np.ndenumerate(unit):
                 assert isinstance(val, self._allowed_unit_types), \
                     f'Need valid unit types for all members of `unit` (not {type(val)}).'
-                
-                if isinstance(val, self._pure_unit_types):
-                    unit[i] = u.CompositeUnit(1.0, [val], [1.0])
-                else:
-                    unit[i] = u.CompositeUnit(val.value, [val.unit], [1.0])
+
+                unit[i] = u.Unit(val)
+                # unit[i] = u.CompositeUnit(1, [val], [1])
+                # Enforces keeping prefixes, needed to avoid numerical errors
+                # that happen at times (apparently during conversion using,
+                # u.Unit, presumably due to scale that is not 1)
+                # -> had other reason, Unit and CompositeUnit are equivalent
 
             
         self._unit = unit
@@ -232,7 +235,6 @@ class MatrixWithUnits:
         return (np.array(self.value) * np.array(self.unit)).__repr__()  # Are converted in init -> now not anymore
     
     def __float__(self) -> float:
-        # if np.shape(self.value)
         # Will throw TypeError in most cases, but not because of our class,
         # but because of way it has been set by user (e.g. to array)
         return float(self.value * self.unit)
@@ -244,26 +246,32 @@ class MatrixWithUnits:
         return self.__copy__()
     
     def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, MatrixWithUnits):
-            return NotImplemented
+        if not isinstance(other, (MatrixWithUnits, u.Quantity, self._allowed_numeric_types)):
+            # Quantities are included here because slicing sometimes returns
+            # them, so throwing error here would not be good
+            raise NotImplementedError(
+                f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
+            )
         else:
-            return self.value.__eq__(other.value) & self.unit.__eq__(other.unit)
+            if isinstance(other, self._allowed_numeric_types):
+                other = other * u.dimensionless_unscaled
+
+            return np.equal(self.value, other.value) & np.equal(self.unit, other.unit)
+            # NOT equivalent to == or .__eq__, np.equal has better behaviour
+            # (compares unit arrays and scalar units in way we intend to)
     
     def __hash__(self) -> int:
         return hash(self.value) ^ hash(self.unit)
     
     def __getitem__(self, key: Any) -> MatrixWithUnits:
-        # return self.value.__getitem__(key) * self.unit.__getitem__(key)
         new_value = self.value.__getitem__(key)
         if isinstance(self.unit, self._pure_unit_types):
-            # if len(new_value) == 1:
             if isinstance(new_value, self._allowed_numeric_types):
                 # Scalar
                 return new_value * self.unit
             else:
                 return MatrixWithUnits(new_value, self.unit)
         else:
-            # if len(new_value) == 1:
             if isinstance(new_value, self._allowed_numeric_types):
                 return new_value * self.unit.__getitem__(key)
             else:
@@ -272,7 +280,6 @@ class MatrixWithUnits:
     def __setitem__(self, key: Any, value: Any) -> None:
         try:
             self.value.__setitem__(key, value.value)
-            # self.unit.__setitem__(key, value.unit)  # From array version
         
             if isinstance(self.unit, self._pure_unit_types):
                 self.unit = value.unit
@@ -317,41 +324,25 @@ class MatrixWithUnits:
             )
     
     def __radd__(self, other: Any) -> MatrixWithUnits:
-        # if isinstance(other, u.Quantity):
-        #     raise NotImplementedError(
-        #         'Right addition with astropy Quantities is currently not '
-        #         'supported. Consider changing this to left addition.'
-        #     )
-        # else:
-        #     return self.__add__(other)
-        # Not raised anyway, astropy tries to do it and fails
+        # Not used anyway, astropy tries to do it and fails
         return self.__add__(other)
     
     def __sub__(self, other: Any) -> MatrixWithUnits:
         return self.__add__(other.__neg__())
     
     def __rsub__(self, other: Any) -> MatrixWithUnits:
-        # if isinstance(other, u.Quantity):
-        #     raise NotImplementedError(
-        #         'Right subtraction with astropy Quantities is currently not '
-        #         'supported. Consider changing this to left addition.'
-        #     )
-        # else:
-        #     return self.__neg__().__add__(other)
-        # Not raised anyway, astropy tries to do it and fails
-        # return self.__neg__().__add__(other)
-        return (self.__sub__(other)).__neg__()
+        # Not used anyway, astropy tries to do it and fails
+        return self.__neg__().__add__(other)
+        # return (self.__sub__(other)).__neg__()  # Equivalent
             
     def __mul__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value * other, self.unit)
         elif isinstance(other, self._pure_unit_types):
-            # return MatrixWithUnits(self.value, self.unit * np.asarray(other, dtype=object))  # From array version
             return MatrixWithUnits(self.value, self.unit * other)
         elif isinstance(other, u.Quantity):
             # Fall back to multiplication with unit and value
             return self * other.value * other.unit
-        # Harder to implement than it seems
         elif isinstance(other, MatrixWithUnits):
             return MatrixWithUnits(self.value * other.value, self.unit * other.unit)
         else:
@@ -361,21 +352,14 @@ class MatrixWithUnits:
             )
 
     def __rmul__(self, other: Any) -> MatrixWithUnits:
-        # if isinstance(other, u.Quantity):
-        #     raise NotImplementedError(
-        #         'Right multiplication with astropy Quantities is currently '
-        #         'not supported. Consider changing this to left addition.'
-        #     )
-        # else:
-        #     return self.__mul__(other)
-        # Not raised anyway, astropy tries to do it and fails
+        # Not used anyway, astropy tries to do it and fails
         return self.__mul__(other)
 
     def __truediv__(self, other):
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value / other, self.unit)
         elif isinstance(other, self._pure_unit_types):
-            return MatrixWithUnits(self.value, self.unit / np.asarray(other, dtype=object))  # from array version
+            return MatrixWithUnits(self.value, self.unit / other)
         elif isinstance(other, u.Quantity):
             return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
         elif isinstance(other, MatrixWithUnits):
@@ -395,7 +379,7 @@ class MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(other / self.value, self.unit**-1)
         elif isinstance(other, self._pure_unit_types):
-            return MatrixWithUnits(1.0 / self.value, np.asarray(other, dtype=object) / self.unit)  # from array version
+            return MatrixWithUnits(1.0 / self.value, other / self.unit)
         elif isinstance(other, u.Quantity):
             return MatrixWithUnits(other.value / self.value, other.unit / self.unit)
         elif isinstance(other, MatrixWithUnits):
@@ -419,11 +403,11 @@ class MatrixWithUnits:
             )
     
     def __matmul__(self, other):
-        # Problem we have to circumvent:
-        # return MatrixWithUnits(self.value @ other.value, self.unit @ other.unit)
-        # does not work because CompositeUnits cannot be added (and adding
-        # them would also change value, which is not intended). Thus we have
-        # to handle unit manually (also for compatibility with scalar unit)
+        # Problem we have to circumvent: the code "return MatrixWithUnits(
+        # self.value @ other.value, self.unit @ other.unit)" does not work
+        # because astropy units cannot be added (and adding them would also
+        # change value, which is not intended). Thus we have to handle unit
+        # manually (also for compatibility with scalar unit of this class).
 
         if isinstance(other, MatrixWithUnits):
             # Step 1: apply to values. This is useful because it already checks
@@ -441,74 +425,15 @@ class MatrixWithUnits:
                     # other is column vector
                     new_shape = (new_shape[0], 1)
             
-
-            # print(new_shape)
-
-            # Step 2: handle unit.
-            # TODO: handle case of scalar unit for one of them
+            # Step 2: handle units (array or scalar are possible for both)
             new_unit = np.empty(new_shape, dtype=object)
-
-            # V1, not suitable for scalar units
-            # for i in range(new_shape[0]):
-            #     for j in range(new_shape[1]):
-            #         unit_test = self.unit[i, 0] * other.unit[0, j]
-
-            #         # print(unit_test)
-            #         # print(type(unit_test))
-
-            #         assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
-            #             'Need consistent units for matrix multiplication.'
-            #             # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
-            #         # NOTE: do NOT replace with == here, does not what we want
-                    
-            #         new_unit[i, j] = unit_test
             
-            # V2, trying to account for scalar unit
-            # try:
-            #     # test_unit_shape = self.unit.shape
-            #     # test_unit_shape = other.unit.shape
-
-            #     # If we can access both, they are not scalar
-            #     # -> would not be proof against setting unit to [u.s] or so, right?
-            #     # -> just apply test from unit property
-
-            #     for i in range(new_shape[0]):
-            #         for j in range(new_shape[1]):
-            #             unit_test = self.unit[i, 0] * other.unit[0, j]
-
-            #             # print(unit_test)
-            #             # print(type(unit_test))
-
-            #             assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
-            #                 'Need consistent units for matrix multiplication.'
-            #                 # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
-            #             # NOTE: do NOT replace with == here, does not what we want
-                        
-            #             new_unit[i, j] = unit_test
-            # except AttributeError:
-            #     ...
-            
-            # We have to distinguish several cases
-            # TODO (idea): reduce scalar unit cases for only one of the
-            # matrices to first one by following:
-            # new_self_unit = np.full(new_shape, self.unit, dtype=object)
-            # return MatrixWithUnits(self.value, new_self_unit) @ other
-            # -> not strictly necessary, though
-            # print(isinstance(self.unit, self._pure_unit_types))
-            # print(isinstance(other.unit, other._pure_unit_types))
-
             if (not isinstance(self.unit, self._pure_unit_types) and
                 not isinstance(other.unit, other._pure_unit_types)):
-                # Both arrays
-
-                # for i in range(new_shape[0]):
-                #     for j in range(new_shape[1]):
+                # Both units are arrays
                 for index in np.ndindex(new_shape):
                     i, j = index
                     unit_test = self.unit[i, 0] * other.unit[0, j]
-
-                    # print(unit_test)
-                    # print(type(unit_test))
 
                     assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
                         'Need consistent units for matrix multiplication.'
@@ -518,19 +443,14 @@ class MatrixWithUnits:
                     new_unit[i, j] = unit_test
             elif (isinstance(self.unit, self._pure_unit_types) and
                   isinstance(other.unit, self._pure_unit_types)):
-                # Both scalar units
+                # Both units are scalars
                 new_unit = np.full(new_shape, self.unit * other.unit, dtype=object)
-                # new_unit = self.unit * other.unit
+                # Not setting new scalar unit here because of reshaping
             elif isinstance(self.unit, self._pure_unit_types):
-                # One scalar unit
-                # for i in range(new_shape[0]):
-                #     for j in range(new_shape[1]):
+                # One scalar unit, one array
                 for index in np.ndindex(new_shape):
                     i, j = index
                     unit_test = other.unit[0, j]
-
-                    # print(unit_test)
-                    # print(type(unit_test))
 
                     assert np.all(np.equal(other.unit[:, j], unit_test)), \
                         'Need consistent units for matrix multiplication.'
@@ -539,15 +459,10 @@ class MatrixWithUnits:
                     
                     new_unit[i, j] = self.unit * unit_test
             elif isinstance(other.unit, self._pure_unit_types):
-                # One scalar unit
-                # for i in range(new_shape[0]):
-                #     for j in range(new_shape[1]):
+                # One scalar unit, one array
                 for index in np.ndindex(new_shape):
                     i, j = index
                     unit_test = self.unit[i, 0]
-
-                    # print(unit_test)
-                    # print(type(unit_test))
 
                     assert np.all(np.equal(self.unit[i, :], unit_test)), \
                         'Need consistent units for matrix multiplication.'
@@ -666,7 +581,7 @@ class MatrixWithUnits:
 
         return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
 
-    # ----- Deal with selected useful numpy functions/attributes -----
+    # ----- Deal with selected useful astropy functions/attributes -----
     def to_system(self, system: Any) -> MatrixWithUnits:
         if isinstance(self.unit, self._pure_unit_types):
             return MatrixWithUnits(self.value, self.unit.to_system(system))

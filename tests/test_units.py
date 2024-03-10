@@ -4,6 +4,7 @@ import astropy.units as u
 
 # ----- Local package imports -----
 import gw_signal_tools.units as gw_signal_tools_units
+# Do NOT import preferred_unit_system here, want to test the one from package
 
 
 # Could also test with units=[u.astrophys, gw_signal_tools_units]
@@ -69,4 +70,3 @@ def test_strain_definition():
     assert strain2.compose(units=gw_signal_tools_units)[0] != u.dimensionless_unscaled
 
     assert u.dimensionless_unscaled.compose(units=gw_signal_tools_units)[0] == u.dimensionless_unscaled
-

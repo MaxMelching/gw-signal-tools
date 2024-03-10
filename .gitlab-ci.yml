@@ -54,7 +54,14 @@ testing:
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     - coverage report
     - coverage html
+    - mv htmlcov/ public/
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'  # From https://gitlab.aei.uni-hannover.de/help/ci/testing/code_coverage.md#view-code-coverage-results-in-the-mr
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
+    - if: $CI_COMMIT_BRANCH
+      # when: manual  # Also possible for certain tests
   artifacts:
     paths:
-      - htmlcov/*
+      # - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
+      - public

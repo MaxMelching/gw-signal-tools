@@ -20,12 +20,11 @@ from gw_signal_tools.test_utils import (
     assert_allclose_frequseries
 )
 from gw_signal_tools.inner_product import norm
-from gw_signal_tools.fisher_utils import (
+from gw_signal_tools.fisher import (
     num_diff, get_waveform_derivative_1D,
     get_waveform_derivative_1D_with_convergence,
-    fisher_matrix
+    fisher_matrix, FisherMatrix
 )
-from gw_signal_tools.fisher_matrix import FisherMatrix
 
 
 #%% ---------- Testing Derivative Methods ----------

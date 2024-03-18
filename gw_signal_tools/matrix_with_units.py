@@ -653,10 +653,9 @@ class MatrixWithUnits:
 
     # ---------- Some custom additions -----
     def plot(self):
-        # plt.matshow(self, cmap='magma')
-
         # NOTE: all of this code is inspired by heatmap in seaborn, in fact
         # the relative_luminosity function is copied from there
+        # -> is done to avoid additional dependencies (pandas, seaborn)
         import matplotlib as mpl
         import matplotlib.pyplot as plt
 
@@ -681,45 +680,31 @@ class MatrixWithUnits:
             except ValueError:
                 return lum
 
-
-        # for (i, j), val in np.ndenumerate(self):
-            # plt.text(j, i, '{:0.1f}'.format(z), ha='center', va='center')
-
-
         fig, ax = plt.subplots()
 
-        # mesh = ax.pcolormesh(np.abs(self), cmap='magma')
         mesh = ax.pcolormesh(np.log10(np.abs(self)), cmap='magma')
         mesh.update_scalarmappable()
 
         ax.invert_yaxis()  # Otherwise indices would start at bottom
 
-        # for ((i, j), val), color in zip(np.ndenumerate(self), mesh.get_facecolors()):
         for (index), color in zip(np.ndindex(self.shape), mesh.get_facecolors()):
-        # for (i, j), val in np.ndenumerate(self):
-            # ax.pcolormesh(self.plot_data, cmap=self.cmap, **kws)
-            # color = mesh.get_facecolors(); print(color)
-            # color = ax.get_facecolor()
-
-            # print(i, j, val, color)
-
             i, j = index
-            # val = self[index]
             val = self[index].value
             unit = self[index].unit
 
             lum = relative_luminance(color)
-            text_color = ".15" if lum > .408 else "w"
-            # text_color = "black" if lum > .408 else "white"  # Should be equivalent
-            # plt.text(j + 0.5, i + 0.5, f'{val:e}', ha='center', va='center', color=text_color)
-            # plt.text(i + 0.5, j + 0.5, f'{val:e}\n{unit:latex}', ha='center', va='center', color=text_color, fontsize=22)
-            plt.text(i + 0.5, j + 0.5, f'{val:.3e}{unit:latex}', ha='center', va='center', color=text_color, fontsize=22)
-            # TODO: get Latex representations of units?
-            # TODO: make no \n if units is dimensionless?
+            text_color = '.15' if lum > .408 else 'w'
 
-        # plt.colorbar()
-        # ax.colorbar(aspect=20)
-        ax.figure.colorbar(mesh)  # Looks much better
+            plt.text(
+                x=j+0.5,
+                y=i+0.5,
+                s=f'{val:.3e}{unit:latex}',
+                ha='center',
+                va='center',
+                color=text_color
+            )
+
+        ax.figure.colorbar(mesh)  # Looks much better than ax.colorbar
 
         ax.set_aspect(1)
 
@@ -728,13 +713,3 @@ class MatrixWithUnits:
         ax.grid(False)
 
         return ax
-
-
-        # Seaborn is cool, but would be separate dependency (and also needs
-        # pandas to work properly, yet another dependency...)
-        # import seaborn as sns
-
-        # sns.heatmap(self, cmap='magma', linecolor='white', linewidths=1, annot=True)
-
-        # plt.grid(False)
-        # plt.show()

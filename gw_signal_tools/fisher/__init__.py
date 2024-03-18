@@ -27,7 +27,13 @@ latexparams = {
     'chi_eff': r'$\chi_{\mathrm{eff}}$',
     'chi_p': r'$\chi_p$',
     'a_1': r'$\chi_1$',
+    'spin1x': r'$\chi_{1, x}$',
+    'spin1y': r'$\chi_{1, y}$',
+    'spin1z': r'$\chi_{1, z}$',
     'a_2': r'$\chi_2$',
+    'spin2x': r'$\chi_{2, x}$',
+    'spin2y': r'$\chi_{2, y}$',
+    'spin2z': r'$\chi_{2, z}$',
     # External Parameters
     'luminosity_distance': '$D_L$',
     'distance': '$D_L$',

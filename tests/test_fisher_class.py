@@ -7,12 +7,16 @@ from numpy.testing import assert_allclose
 
 import astropy.units as u
 
+import matplotlib.pyplot as plt
+
 # ----- Local Package Imports -----
 from gw_signal_tools.inner_product import norm
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix
 )
+from gw_signal_tools import PLOT_STYLE_SHEET
+plt.style.use(PLOT_STYLE_SHEET)
 
 
 #%% Initializing commonly used variables
@@ -115,10 +119,6 @@ def test_project():
     # will not change by 10 orders of magnitude)
 
 def test_plot():
-    import matplotlib.pyplot as plt
-    from gw_signal_tools import PLOT_STYLE_SHEET
-    plt.style.use(PLOT_STYLE_SHEET)
-    
     fisher = FisherMatrix(
         wf_params,
         ['total_mass', 'mass_ratio', 'distance'],

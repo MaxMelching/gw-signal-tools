@@ -9,6 +9,8 @@ import astropy.units as u
 
 import pytest
 
+import matplotlib.pyplot as plt
+
 # ----- Local Package Imports -----
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.test_utils import (
@@ -508,6 +510,19 @@ def test_to_system():
 
     matrix.to_system(u.si)
     matrix.to_system(preferred_unit_system)
+
+
+# ----- Test custom additions -----
+def test_plot():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    matrix.plot()
+    plt.close()
+
+    MatrixWithUnits.plot(matrix)
+    plt.close()
+
+    # Main goal is to make sure there are no errors
 
 
 # ----- Test error raising -----

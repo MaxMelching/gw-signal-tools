@@ -50,11 +50,13 @@ class MatrixWithUnits:
     -> say that scalar unit also works, whence a u.Quantity is mimicked
 
     An important point of emphasis, however, is that unit handling is
-    not an easy task, especially not for matrices. For this reason,
-    operations like matrix multiplication are not supported, which means
-    one has to resort to applying these operations to `MatrixWithUnits.
-    value`. Simpler operations like addition and multiplication, on the
-    other hand, are defined.
+    not an easy task, especially not for matrices. In particular, some
+    operations might not even be possible (e.g. matrix multiplcation
+    with arbitrary units or matrix inversion, both of which only work
+    in certain circumstances). If possible, ``MatrixWithUnits``
+    -compatible versions of many numpy functions can be accessed via
+    `MatrixWithUnits.funtion` (if you think an implementation would be
+    possible, but is not available, please contact us).
 
     Examples
     --------
@@ -84,12 +86,9 @@ class MatrixWithUnits:
     
     Note, however, that this only uses the values and does not check
     whether such an operation would make sense to do with the units
-    of matrix. Figuring out if this is the case is left to the user
-    because implementing a consistent matrix multiplication for units
-    is beyond the scope of this class, which is mainly made to provide
-    a convenient representation with units. For physically motivated
-    matrices like the Fisher matrix, however, this consistency is
-    usually given, so that an inversion is indeed meaningful.
+    of matrix. In case this is your goal, calling `MatrixWithUnits.inv
+    (matrix)` would be the way to go (automatically checks whether or
+    not units are consistent).
     
 
     In order to get the printed representation, we can simply multiply
@@ -107,6 +106,11 @@ class MatrixWithUnits:
     >>> MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
+    
+           
+    -> mention MatrixWithUnits.from_numpy_array? Can also say that this just
+    creates instance with unit dimensionless, but is there for convenience
+    in case you don't want to understand more of inner workings of class
     """
     # __array_priority__ = 100 * u.core.UnitBase.__array_priority__
     # Does not help for radd etc. because problem is that IrreducibleUnit
@@ -205,7 +209,7 @@ class MatrixWithUnits:
             if not (unit not in self._pure_unit_types
                 or self.unit not in self._pure_unit_types):
                 assert np.shape(unit) == np.shape(self.unit), \
-                    'New and old `unit` must have equal shape'
+                    'New and old `unit` must have equal shape (if both are not a scalar unit).'
         except AttributeError:
             pass  # New class instance is created, nothing to check
                   # or unit is scalar, also ok
@@ -240,12 +244,15 @@ class MatrixWithUnits:
         return float(self.value * self.unit)
     
     def __copy__(self) -> MatrixWithUnits:
+        # Is called for matrix_copy = copy(matrix)
         return MatrixWithUnits(self.value.__copy__(), self.unit.__copy__())
     
     def copy(self) -> MatrixWithUnits:
+        # Is called for matrix_copy = matrix.copy() or
+        # matrix_copy = MatrixWithUnits.copy(matrix)
         return self.__copy__()
     
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: Any) -> np.ndarray:
         if not isinstance(other, (MatrixWithUnits, u.Quantity, self._allowed_numeric_types)):
             # Quantities are included here because slicing sometimes returns
             # them, so throwing error here would not be good
@@ -259,6 +266,10 @@ class MatrixWithUnits:
             return np.equal(self.value, other.value) & np.equal(self.unit, other.unit)
             # NOT equivalent to == or .__eq__, np.equal has better behaviour
             # (compares unit arrays and scalar units in way we intend to)
+    
+    def __ne__(self, other: Any) -> np.ndarray:
+        # Has to be implemented, applying not operator to array is not working
+        return np.logical_not(self == other)
     
     def __hash__(self) -> int:
         return hash(self.value) ^ hash(self.unit)
@@ -580,6 +591,44 @@ class MatrixWithUnits:
             'Need symmetric unit for inversion.'
 
         return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
+    
+    def diag(self):
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(np.diagonal(self.value).copy(), self.unit)
+        else:
+            return MatrixWithUnits(np.diagonal(self.value).copy(),
+                                   np.diagonal(self.unit).copy())
+    
+    def sqrt(self):
+        return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
+        # if isinstance(self.unit, self._pure_unit_types):
+        #     return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
+        # else:
+        #     return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
+
+    def cond(self,
+            matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
+        ) -> float:
+        """
+        Condition number of the matrix.
+
+        Parameters
+        ----------
+        matrix_norm : float | Literal['fro', 'nuc'], optional,
+        default = 'fro'
+            Matrix norm that shall be used for the calculation. Must be
+            compatible with argument `p` of `~numpy.linalg.cond`.
+
+        Returns
+        -------
+        float
+            Condition number of `self.value`.
+
+        See also
+        --------
+        numpy.linalg.cond : Routine used for calculation.
+        """
+        return np.linalg.cond(self.value, p=matrix_norm)
 
     # ----- Deal with selected useful astropy functions/attributes -----
     def to_system(self, system: Any) -> MatrixWithUnits:

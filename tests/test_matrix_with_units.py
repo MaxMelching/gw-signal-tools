@@ -101,6 +101,8 @@ def test_eq():
     matrix = MatrixWithUnits(example_values, example_units)
 
     assert np.all(matrix_in_s1 == matrix) == False
+    assert np.any(matrix_in_s1 != matrix) == True  # Test not equal operator
+    print(MatrixWithUnits.__eq__(matrix_in_s1, matrix))
 
 def test_copy():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -113,7 +115,12 @@ def test_copy():
     matrix_copy[0, 0] = -2*u.dimensionless_unscaled  # Inplace setting
 
     assert (matrix[0, 0] == component_val_copy) and (matrix[0, 0] != matrix_copy[0, 0])
-
+    
+    # Test if equivalent calls work
+    matrix_copy = MatrixWithUnits.copy(matrix)
+    from copy import copy, deepcopy
+    matrix_copy = copy(matrix)
+    matrix_copy = deepcopy(matrix)
 
 # ----- Test common operations -----
 def test_addition():
@@ -491,6 +498,8 @@ def test_inv():
         atol=1e-15,  # Account for numerical errors
         rtol=0.0
     )
+
+# TODO: test diag, sqrt, cond_numb
 
 
 # ----- Test astropy functions -----

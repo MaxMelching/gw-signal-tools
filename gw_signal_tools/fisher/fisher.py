@@ -71,7 +71,8 @@ class FisherMatrix:
     default_metadata = {
         'convergence_check': 'diff_norm',
         'break_upon_convergence': True,
-        'convergence_threshold': 0.01
+        'convergence_threshold': 0.01,
+        'return_info': True
     }
 
     _preferred_unit_sys = preferred_unit_system
@@ -92,23 +93,23 @@ class FisherMatrix:
         self.params_to_vary = params_to_vary
         self.wf_generator = wf_generator
         self.metadata = self.default_metadata | metadata
-
-        if ('return_info' in metadata.keys()) and not metadata['return_info']:
-            logging.info(
-                'The `return_info` key is set to true to collect information '
-                'for further use in the class.'
-            )
-
-        self.metadata['return_info'] = True
     
 
-        if not _copy:            
-            self._fisher, self._deriv_info = fisher_matrix(
-                self.wf_params_at_point,
-                self.params_to_vary,
-                self.wf_generator,
-                **self.metadata
-            )
+        if not _copy:
+            if self.metadata['return_info']:
+                self._fisher, self._deriv_info = fisher_matrix(
+                    self.wf_params_at_point,
+                    self.params_to_vary,
+                    self.wf_generator,
+                    **self.metadata
+                )
+            else:
+                self._fisher = fisher_matrix(
+                    self.wf_params_at_point,
+                    self.params_to_vary,
+                    self.wf_generator,
+                    **self.metadata
+                )
 
             # NOTE: although it may not be good practice to set private
             # attributes like self._fisher, this is our workaround to make
@@ -164,6 +165,11 @@ class FisherMatrix:
             self._fisher_inverse = MatrixWithUnits.inv(self.fisher)
 
             return self._fisher_inverse
+        
+    # TODO: make getattr and setattr where we either pass it to self.fisher
+    # (debatable if it makes sense; for numerical input it might) or we only
+    # accept string input so that parameters can be accessed using strings
+    # -> but would also be cool for inverse, right? So think of way to do this
         
     
     @property
@@ -260,7 +266,7 @@ class FisherMatrix:
         --------
         numpy.linalg.cond : Routine used for calculation.
         """
-        return np.linalg.cond(self.fisher.value, p=matrix_norm)
+        return MatrixWithUnits.condition_number(self.fisher, matrix_norm)
     
     def project_fisher(self, params: str | list[str]) -> MatrixWithUnits:
         """
@@ -299,6 +305,8 @@ class FisherMatrix:
         sub_matrix = fisher_val[index_grid]
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
+        print(np.linalg.cond(sub_matrix, 'fro'))
+
         full_inv = np.zeros((n, n))
         full_inv[index_grid] = sub_matrix_inv
 
@@ -312,6 +320,7 @@ class FisherMatrix:
 
         # Testing with new tool of matrix multiplication -> WORKS!!! Noice
         full_inv = MatrixWithUnits(full_inv, self.unit**-1)
+        # full_inv = MatrixWithUnits(full_inv.T, self.unit**-1)
         fisher = self.fisher
 
         return fisher - fisher @ full_inv @ fisher
@@ -350,15 +359,45 @@ class FisherMatrix:
     #         '`param_diffs` must be either a row or a column vector.'
         
     #     return param_diff @ self.fisher_inverse @ param_diff
-    # TODO: return **(1/2) of that?
+    # TODO: return **(1/2) of that? -> can now even do sqrt
     # -> also test if Fraction from functools is better for numerical precision
 
-    
+    def _plot_matrix(self, matrix: MatrixWithUnits):
+        # Plan: call MatrixWithUnits.plot, but add labels to axes
+        # -> for now, we implement everything here
+        
+        ax = MatrixWithUnits.plot(matrix)
 
-    def plot(self):
-        # plot with color=uncertainty
-        raise NotImplementedError
-    
+        tick_labels = self.params_to_vary if not isinstance(self.params_to_vary, str) else [self.params_to_vary]
+        from ..fisher import latexparams
+        tick_labels = [latexparams[param] if param in latexparams else param for param in tick_labels]
+        tick_locs = np.arange(0, len(tick_labels)) + 0.5
+
+        ax.set_xticks(tick_locs, tick_labels, rotation=45,
+                      horizontalalignment='right', rotation_mode='anchor')
+        ax.set_yticks(tick_locs, tick_labels, rotation=45,
+                      verticalalignment='baseline', rotation_mode='anchor')
+        ax.tick_params(length=0)
+
+        # -> rotation is good idea if param not in displayparams, otherwise looks strange
+
+        return ax
+
+    def plot(self, only_fisher: bool = False, only_fisher_inverse: bool = False) -> None:
+        # NOT final version
+
+        if not (only_fisher or only_fisher_inverse):
+            self._plot_matrix(self.fisher)
+
+            self._plot_matrix(self.fisher_inverse)
+        elif only_fisher:
+            self._plot_matrix(self.fisher)
+        elif only_fisher_inverse:
+            self._plot_matrix(self.fisher_inverse)
+
+    # Plans for plotting: make one function plot_uncertainty where
+    # color denotes uncertainty in fisher_inverse. And then one general
+    # function plot where output is plot of fisher and fisher_inverse
 
     @staticmethod
     def get_wf_generator(

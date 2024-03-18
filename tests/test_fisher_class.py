@@ -114,6 +114,29 @@ def test_project():
     # also not make sense (values that are already essentially zero
     # will not change by 10 orders of magnitude)
 
+def test_plot():
+    import matplotlib.pyplot as plt
+    from gw_signal_tools import PLOT_STYLE_SHEET
+    plt.style.use(PLOT_STYLE_SHEET)
+    
+    fisher = FisherMatrix(
+        wf_params,
+        ['total_mass', 'mass_ratio', 'distance'],
+        wf_generator=phenomx_generator,
+        return_info=False
+    )
+    plt.close()
+
+    print(fisher)  # For verification
+
+    MatrixWithUnits.plot(fisher.fisher)
+    # plt.show()
+    plt.close()
+
+    fisher.plot(only_fisher=True)
+    # plt.show()
+    plt.close()
+
 #%% Confirm that certain errors are raised
 class ErrorRaising(unittest.TestCase):
     def test_immutable(self):

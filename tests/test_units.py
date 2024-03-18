@@ -70,3 +70,6 @@ def test_strain_definition():
     assert strain2.compose(units=gw_signal_tools_units)[0] != u.dimensionless_unscaled
 
     assert u.dimensionless_unscaled.compose(units=gw_signal_tools_units)[0] == u.dimensionless_unscaled
+
+def test_docstring():
+    assert gw_signal_tools_units.__doc__ is not None

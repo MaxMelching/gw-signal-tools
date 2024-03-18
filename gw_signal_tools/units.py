@@ -72,9 +72,9 @@ strain = u.Unit('strain')
 
 __all__ += [n for n, v in _ns.items() if isinstance(v, UnitBase)]
 
-if __doc__ is not None:
-    # This generates a docstring for this module that describes all of the
-    # standard units defined here.
-    from astropy.utils import generate_unit_summary as _generate_unit_summary
 
-    __doc__ += _generate_unit_summary(globals())
+# This generates a docstring for this module that describes all of the
+# standard units defined here. Also copied from astropy.units.si
+from astropy.units.utils import generate_unit_summary as _generate_unit_summary
+__doc__ = ''
+__doc__ += _generate_unit_summary(globals())

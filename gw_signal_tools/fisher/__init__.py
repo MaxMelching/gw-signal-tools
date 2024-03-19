@@ -17,6 +17,7 @@ latexparams = {
     'chirp_mass_source': r'$\mathcal{M}$',
     'chirp_mass': r'$\mathcal{M}$',
     'mass_ratio': '$q$',
+    'sym_mass_ratio': r'$\eta$',
     'total_mass': '$M$',
     'total_mass_source': '$M$',
     'mass_1_source': '$m_1$',
@@ -40,6 +41,8 @@ latexparams = {
     'theta_jn': r'$\theta_{jn}$',
     'inclination': r'$\theta_{jn}$',
     'iota': r'$\iota$',
+    'time': '$t_0$',
+    'phase': r'$\phi_0$',
     # Detector parameters
     'log_likelihood': r'$\log\mathcal{L}$',
     'network_optimal_snr': r'$\rho_{\mathrm{opt}}$ (network)',

@@ -305,8 +305,6 @@ class FisherMatrix:
         sub_matrix = fisher_val[index_grid]
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
-        print(np.linalg.cond(sub_matrix, 'fro'))
-
         full_inv = np.zeros((n, n))
         full_inv[index_grid] = sub_matrix_inv
 
@@ -398,6 +396,12 @@ class FisherMatrix:
     # Plans for plotting: make one function plot_uncertainty where
     # color denotes uncertainty in fisher_inverse. And then one general
     # function plot where output is plot of fisher and fisher_inverse
+
+    # def __plot__(self, *args, **kwargs):
+    #     return self.plot(*args, **kwargs)
+
+    def cond(self, matrix_norm: float | str = 'fro'):
+        return self.fisher.cond(matrix_norm)
 
     @staticmethod
     def get_wf_generator(

@@ -9,6 +9,7 @@ import numdifftools as nd
 import matplotlib.pyplot as plt
 import astropy.units as u
 
+from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.testing.utils import assert_quantity_equal
 
@@ -17,7 +18,7 @@ import pytest
 # ----- Local Package Imports -----
 from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allclose_MatrixWithUnits,
-    assert_allclose_frequseries
+    assert_allclose_series
 )
 from gw_signal_tools.inner_product import norm
 from gw_signal_tools.fisher import (
@@ -53,6 +54,17 @@ def test_num_diff():
     assert_allclose(derivative_vals[:2], np.cos(x_vals)[:2], atol=0.0, rtol=0.01)
     assert_allclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02)
 
+@pytest.mark.parametrize('h', [None, 1e-2, 1e-2*u.s])
+def test_num_diff_input(h):
+    step_size = 1e-2  # Make equal to input h to avoid warning
+    x_vals = np.arange(0.0, 2.0, step=step_size)
+    func_vals = 0.5 * x_vals**2
+
+    deriv_vals1 = num_diff(func_vals, h)
+
+    func_vals = Series(func_vals, xindex=x_vals*u.s)
+    deriv_vals2 = num_diff(func_vals, h)
+
 
 #%% ----- Initializing commonly used variables for Fisher tests -----
 f_min = 20.*u.Hz
@@ -79,8 +91,7 @@ test_params = ['total_mass', 'distance', 'mass_ratio']
 
 
 approximant = 'IMRPhenomXPHM'
-
-phenomx_generator = FisherMatrix.get_wf_generator(approximant)
+wf_generator = FisherMatrix.get_wf_generator(approximant)
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc
@@ -101,10 +112,10 @@ except KeyError:
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
 def test_wf_deriv_numdifftools(param_to_vary, crit):
     def deriv_wrapper_real(param_val):
-        return phenomx_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).real
+        return wf_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).real
 
     def deriv_wrapper_imag(param_val):
-        return phenomx_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).imag
+        return wf_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).imag
 
 
     center_val = wf_params[param_to_vary]
@@ -118,7 +129,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
     deriv = get_waveform_derivative_1D_with_convergence(
         wf_params,
         param_to_vary,
-        phenomx_generator,
+        wf_generator,
         convergence_check=crit
     )
     plt.close()
@@ -170,7 +181,7 @@ def test_step_size(param, q_val, break_conv):
     deriv, deriv_info = get_waveform_derivative_1D_with_convergence(
         wf_params | {'mass_ratio': q_val*u.dimensionless_unscaled},
         param,
-        phenomx_generator,
+        wf_generator,
         break_upon_convergence=break_conv,
         return_info=True
     )
@@ -179,24 +190,24 @@ def test_step_size(param, q_val, break_conv):
     deriv_fixed_step_size = get_waveform_derivative_1D(
         wf_params | {'mass_ratio': q_val*u.dimensionless_unscaled},
         param,
-        phenomx_generator,
+        wf_generator,
         step_size=deriv_info['final_step_size']
     )
 
     # These must be equal (not just close)
     if break_conv:
-        assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=0.0, rtol=0.0)
+        assert_allclose_series(deriv, deriv_fixed_step_size, atol=0.0, rtol=0.0)
     else:
         deriv.crop(end=256 * u.Hz, copy=False)
         deriv_fixed_step_size.crop(end=256 * u.Hz, copy=False)
 
         # assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=2e-24, rtol=6e-4)
         if param != 'total_mass':
-            assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=2e-24, rtol=2e-3)
+            assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-24, rtol=2e-3)
         else:
             # One peak for q=0.42 where deviation is larger than otherwise.
             # No idea where this comes from
-            assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=2e-23, rtol=2e-3)
+            assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-23, rtol=2e-3)
         # Not sure why, but they are never fully equal here. Maybe we are off
         # by one index (though I checked this), but results look very equal
         # and all deviations are around zeros, where small deviations result
@@ -244,7 +255,7 @@ def test_convergence_check(break_conv):
     fisher_diff_norm = fisher_matrix(
         wf_params,
         test_params,
-        phenomx_generator,
+        wf_generator,
         convergence_check='diff_norm',
         break_upon_convergence=break_conv
     )
@@ -253,7 +264,7 @@ def test_convergence_check(break_conv):
     fisher_mismatch = fisher_matrix(
         wf_params,
         test_params,
-        phenomx_generator,
+        wf_generator,
         convergence_check='mismatch',
         break_upon_convergence=break_conv
     )
@@ -268,13 +279,12 @@ def test_convergence_check(break_conv):
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
                                         atol=0.0, rtol=3e-6)
 
-
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
 def test_break_upon_convergence(crit):
     fisher_without_convergence = fisher_matrix(
         wf_params,
         test_params,
-        phenomx_generator,
+        wf_generator,
         convergence_check=crit,
         break_upon_convergence=True
     )
@@ -282,7 +292,7 @@ def test_break_upon_convergence(crit):
     fisher_with_convergence = fisher_matrix(
         wf_params,
         test_params,
-        phenomx_generator,
+        wf_generator,
         convergence_check=crit,
         break_upon_convergence=False
     )
@@ -291,3 +301,30 @@ def test_break_upon_convergence(crit):
 
     assert_allclose_MatrixWithUnits(fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=1e-3)
     # Small deviations are expected, different final step sizes might be selected
+
+@pytest.mark.parametrize('conv_crit', ['diff_norm', 'mismatch'])
+def test_optimize(conv_crit):
+    params_to_vary = ['total_mass', 'time', 'phase']
+
+    # For diagonal values, optimization must yield same result
+    fisher_non_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
+                                   convergence_check=conv_crit)
+    fisher_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
+                               optimize_time_and_phase=True,
+                               convergence_check=conv_crit)
+    
+    assert_allclose_MatrixWithUnits(
+        fisher_non_opt.diag(),
+        fisher_opt.diag(),
+        atol=0.0, rtol=0.005
+    )
+
+class ErrorRaising(unittest.TestCase):
+    def test_wrong_conv_check(self):
+        with self.assertRaises(ValueError):
+            get_waveform_derivative_1D_with_convergence(
+                wf_params,
+                'total_mass',
+                wf_generator,
+                convergence_check=''
+            )

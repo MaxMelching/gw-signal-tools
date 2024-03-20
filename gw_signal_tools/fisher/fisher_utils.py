@@ -15,6 +15,7 @@ import lalsimulation.gwsignal.core.waveform as wfm
 # ----- Local Package Imports -----
 from ..inner_product import inner_product, norm
 from ..matrix_with_units import MatrixWithUnits
+from ..test_utils import allclose_quantity
 
 
 def num_diff(
@@ -51,7 +52,7 @@ def num_diff(
         elif not isinstance(h, u.Quantity):
             h = u.Quantity(h, signal.xindex.unit)
 
-        if h != signal.dx:
+        if not allclose_quantity(h, signal.dx, atol=0.0, rtol=0.001):
             warnings.warn(
                 'Given `h` does not coincide with `signal.dx`.'
             )
@@ -62,6 +63,9 @@ def num_diff(
         # Check if h is set
         if h is None:
             h = 1.0
+        else:
+            if isinstance(h, u.Quantity):
+                signal = u.Quantity(signal, u.dimensionless_unscaled)
 
 
     signal_deriv = np.roll(signal, 2) - 8.0 * np.roll(signal, 1) + 8.0 * np.roll(signal, -1) - np.roll(signal, -2)
@@ -127,20 +131,22 @@ def fisher_matrix(
     optional, default = None
         Criterion used to asses stability of the result. Currently, two
         are available:
+
         - diff_norm: calculates the norm of the difference of two
-          consecutive derivatives (using the function `~gw_signal_tools.
-          inner_product.norm`). This is compared to the norm of the most
-          recent derivative and if their fraction is smaller than some
-          threshold (specified in `convergence_threshold`), the result
-          is taken to be converged because the differences become
-          negligible on the relevant scales (provided by the norm of
-          the derivative).
+        consecutive derivatives (using the function `~gw_signal_tools.
+        inner_product.norm`). This is compared to the norm of the most
+        recent derivative and if their fraction is smaller than some
+        threshold (specified in `convergence_threshold`), the result
+        is taken to be converged because the differences become
+        negligible on the relevant scales (provided by the norm of
+        the derivative).
         - mismatch: calculates the mismatch between consecutive
-          derivatives (also using the function `~gw_signal_tools.
-          inner_product.norm`), which is defined as :math:`1 - overlap`.
-          Again, the result is taken to be converged if this mismatch
-          falls under a certain threshold, provided by
-          `convergence_threshold`.
+        derivatives (also using the function `~gw_signal_tools.
+        inner_product.norm`), which is defined as :math:`1 - overlap`.
+        Again, the result is taken to be converged if this mismatch
+        falls under a certain threshold, provided by
+        `convergence_threshold`.
+            
     convergence_threshold : float, optional, default = None
         Threshold that is used to decide if result is converged. This
         will be the case once the value of the criterion specified in
@@ -198,7 +204,7 @@ def fisher_matrix(
         if param == 'time':
             wf = wf_generator(wf_params_at_point)
             deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
-            # deriv = wf * -1.j * 2.0 * np.pi * (wf.frequencies - wf_params_at_point['f22_ref'])
+            # deriv = wf * -1.j * 2.0 * np.pi * (wf.frequencies - wf_params_at_point['f22_ref'])  # Testing
             deriv_series_storage[param] = deriv
             info = {'description': 'This derivative is exact.'}
 
@@ -244,6 +250,8 @@ def fisher_matrix(
         if return_info:
             # TODO: maybe copy selected stuff only?
             deriv_info[param] = info
+        else:
+            plt.close()  # Otherwise axes remain open and eventually get displayed
 
 
     # ----- Populate Fisher matrix -----
@@ -317,20 +325,22 @@ def get_waveform_derivative_1D_with_convergence(
     optional, default = None
         Criterion used to asses stability of the result. Currently, two
         are available:
+
         - diff_norm: calculates the norm of the difference of two
-          consecutive derivatives (using the function `~gw_signal_tools.
-          inner_product.norm`). This is compared to the norm of the most
-          recent derivative and if their fraction is smaller than some
-          threshold (specified in `convergence_threshold`), the result
-          is taken to be converged because the differences become
-          negligible on the relevant scales (provided by the norm of
-          the derivative).
+        consecutive derivatives (using the function `~gw_signal_tools.
+        inner_product.norm`). This is compared to the norm of the most
+        recent derivative and if their fraction is smaller than some
+        threshold (specified in `convergence_threshold`), the result
+        is taken to be converged because the differences become
+        negligible on the relevant scales (provided by the norm of
+        the derivative).
         - mismatch: calculates the mismatch between consecutive
-          derivatives (also using the function `~gw_signal_tools.
-          inner_product.norm`), which is defined as :math:`1 - overlap`.
-          Again, the result is taken to be converged if this mismatch
-          falls under a certain threshold, provided by
-          `convergence_threshold`.
+        derivatives (also using the function `~gw_signal_tools.
+        inner_product.norm`), which is defined as :math:`1 - overlap`.
+        Again, the result is taken to be converged if this mismatch
+        falls under a certain threshold, provided by
+        `convergence_threshold`.
+
     convergence_threshold : float, optional, default = None
         Threshold that is used to decide if result is converged. This
         will be the case once the value of the criterion specified in
@@ -442,15 +452,17 @@ def get_waveform_derivative_1D_with_convergence(
                 case 'mismatch':
                     # Compute mismatch, using that we already know norms
                     if len(derivative_vals) >= 2:
-                        innner_prod = inner_product(deriv_param, derivative_vals[-2],
-                                                **inner_prod_kwargs)
+                        inner_prod = inner_product(
+                            deriv_param,
+                            derivative_vals[-2],
+                            **inner_prod_kwargs
+                        )
                         
-                        if ('optimize_time_and_phase' in inner_prod_kwargs.keys()
-                            and inner_prod_kwargs['optimize_time_and_phase']):
-                            innner_prod = innner_prod[1]
+                        if not isinstance(inner_prod, u.Quantity):
+                            inner_prod = inner_prod[1]
 
                         convergence_vals += [
-                            1.0 -  innner_prod\
+                            1.0 - inner_prod\
                             / np.sqrt(derivative_norm * deriv_norms[-2])
                         ]  # Index -1 is deriv_param
                     else:
@@ -599,7 +611,7 @@ def get_waveform_derivative_1D(
 
     waveforms = [
         wf_generator(wf_params_at_point | {param_to_vary: param_val}
-                     ) for param_val in param_vals
+                    ) for param_val in param_vals
     ]
 
     
@@ -607,7 +619,8 @@ def get_waveform_derivative_1D(
     for wf in waveforms:
         try:
             wf.override_unit(u.s)
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
+            # In case different kind of wf_generator is provided
             # Could also turn into u.Quantity here... But usecase not there perhaps
             pass
 

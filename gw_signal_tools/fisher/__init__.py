@@ -11,6 +11,9 @@ phenomx_generator = FisherMatrix.get_wf_generator(
     'IMRPhenomXPHM'
 )
 
+from .distances import distance, linearized_distance
+# Order important. We import phenomx_generator there, must already be defined
+
 # Dictionary fo get nicer display of parameters in Fisher plotting method
 latexparams = {
     # Masses

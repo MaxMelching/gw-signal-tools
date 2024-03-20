@@ -1,0 +1,229 @@
+# ----- Standard Lib Imports -----
+import unittest
+
+# ----- Third Party Imports -----
+import numpy as np
+from numpy.testing import assert_allclose
+
+import astropy.units as u
+
+import matplotlib.pyplot as plt
+
+import pytest
+
+# ----- Local Package Imports -----
+from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.fisher import (
+    fisher_matrix, FisherMatrix, distance, linearized_distance
+)
+from gw_signal_tools.test_utils import (
+    allclose_quantity, assert_allclose_quantity,
+    assert_allclose_series
+)
+from gw_signal_tools import PLOT_STYLE_SHEET
+plt.style.use(PLOT_STYLE_SHEET)
+
+
+#%% Initializing commonly used variables
+f_min = 20.*u.Hz
+f_max = 1024.*u.Hz
+
+wf_params = {
+    'total_mass': 100.*u.solMass,
+    'mass_ratio': 0.42*u.dimensionless_unscaled,
+    'deltaT': 1./2048.*u.s,
+    'f22_start': f_min,
+    'f_max': f_max,
+    'f22_ref': 20.*u.Hz,
+    'phi_ref': 0.*u.rad,
+    'distance': 1.*u.Mpc,
+    'inclination': 0.0*u.rad,
+    'eccentricity': 0.*u.dimensionless_unscaled,
+    'longAscNodes': 0.*u.rad,
+    'meanPerAno': 0.*u.rad,
+    'condition': 0
+}
+
+approximant = 'IMRPhenomXPHM'
+
+wf_gen = FisherMatrix.get_wf_generator(approximant)
+
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
+@pytest.mark.parametrize('optimize', [False, True])
+@pytest.mark.parametrize('dist_kind', ['diff_norm', 'mismatch_norm'])
+def test_distance(param_to_vary, optimize, dist_kind):
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    dist = distance(
+        param_to_vary=param_to_vary,
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size,
+        distance_kind=dist_kind,
+        wf_generator=wf_gen,
+        optimize_time_and_phase=optimize
+    )
+
+    assert_allclose_quantity(dist.dx, step_size, atol=0.0, rtol=0.001)
+    # assert_allclose_quantity(dist.xspan*dist.xunit, param_range, atol=step_size.value, rtol=0.0)
+    # For some reason, xspan adds a whole delta to output...
+    assert_allclose_quantity(u.Quantity([dist.xindex[0], dist.xindex[-1]]),
+                             param_range, atol=step_size.value, rtol=0.0)
+
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
+def test_linearized_distance(param_to_vary):
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    dist = linearized_distance(
+        param_to_vary=param_to_vary,
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size,
+        wf_generator=wf_gen
+    )
+
+    assert_allclose_quantity(dist.dx, step_size, atol=0.0, rtol=0.001)
+    # assert_allclose_quantity(dist.xspan*dist.xunit, param_range, atol=step_size.value, rtol=0.0)
+    # For some reason, xspan adds a whole delta to output...
+    assert_allclose_quantity(u.Quantity([dist.xindex[0], dist.xindex[-1]]),
+                             param_range, atol=step_size.value, rtol=0.0)
+
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
+def test_projected_linearized_distance(param_to_vary):
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    dist1 = linearized_distance(
+        param_to_vary=[param_to_vary, 'time', 'phase'],
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size,
+        params_to_project=['time', 'phase'],
+        wf_generator=wf_gen
+    )
+
+    assert_allclose_quantity(dist1.dx, step_size, atol=0.0, rtol=0.001)
+    assert_allclose_quantity(u.Quantity([dist1.xindex[0], dist1.xindex[-1]]),
+                             param_range, atol=step_size.value, rtol=0.0)
+
+
+    dist2 = linearized_distance(
+        param_to_vary=[param_to_vary],  # Testing equivalent input
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size,
+        params_to_project=['time', 'phase'],
+        wf_generator=wf_gen
+    )
+
+    assert_allclose_quantity(dist2.dx, step_size, atol=0.0, rtol=0.001)
+    assert_allclose_quantity(u.Quantity([dist2.xindex[0], dist2.xindex[-1]]),
+                             param_range, atol=step_size.value, rtol=0.0)
+
+    assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
+
+@pytest.mark.parametrize('dist_func' ,[distance, linearized_distance])
+def test_default_wf_gen(dist_func):
+    param_to_vary = 'total_mass'
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    dist1 = dist_func(
+        param_to_vary=param_to_vary,
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size,
+        wf_generator=wf_gen
+    )
+
+    dist2 = dist_func(
+        param_to_vary=param_to_vary,
+        param_range=param_range,
+        wf_params=wf_params,
+        step_size=step_size
+    )
+
+    assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
+
+class ErrorRaising(unittest.TestCase):
+    param_to_vary = 'total_mass'
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    def test_invalid_dist_kind(self):
+        with self.assertRaises(ValueError):
+            distance(
+                param_to_vary=self.param_to_vary,
+                param_range=self.param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='',
+                wf_generator=wf_gen
+            )
+
+    def test_invalid_center_val(self):
+        wrong_param_range = u.Quantity([0.5*self.center_val,
+                                        0.9*self.center_val])
+        
+        with self.assertRaises(AssertionError):
+            distance(
+                param_to_vary=self.param_to_vary,
+                param_range=wrong_param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='diff_norm',
+                wf_generator=wf_gen
+            )
+        
+        with self.assertRaises(AssertionError):
+            linearized_distance(
+                param_to_vary=self.param_to_vary,
+                param_range=wrong_param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='diff_norm',
+                wf_generator=wf_gen
+            )
+    
+    def test_invalid_param_range(self):
+        wrong_param_range = u.Quantity([0.9*self.center_val, self.center_val,
+                                        1.1*self.center_val])
+        
+        with self.assertRaises(AssertionError):
+            distance(
+                param_to_vary=self.param_to_vary,
+                param_range=wrong_param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='diff_norm',
+                wf_generator=wf_gen
+            )
+
+    def test_invalid_param_to_vary(self):
+        with self.assertRaises(ValueError):
+            linearized_distance(
+                param_to_vary=[self.param_to_vary, self.param_to_vary],
+                param_range=self.param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='diff_norm',
+                wf_generator=wf_gen
+            )
+
+        with self.assertRaises(ValueError):
+            linearized_distance(
+                param_to_vary=[self.param_to_vary, self.param_to_vary,
+                               'time', 'phase'],
+                param_range=self.param_range,
+                wf_params=wf_params,
+                step_size=self.step_size,
+                distance_kind='diff_norm',
+                params_to_project=['time', 'phase']
+            )

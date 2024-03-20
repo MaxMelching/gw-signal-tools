@@ -1,8 +1,12 @@
 import numpy as np
 
+import astropy.units as u
+
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
-import astropy.units as u
+
+import lalsimulation.gwsignal.core.waveform as wfm
+
 
 from .test_utils import allclose_quantity
 
@@ -676,10 +680,6 @@ def get_signal_at_target_frequs(
 
 
 # ---------- Wrapper function for strain generation ----------
-
-import lalsimulation.gwsignal.core.waveform as wfm
-
-
 def get_strain(
     intrinsic_params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
@@ -784,87 +784,27 @@ def get_strain(
 
 
 # ---------- Mass Rescaling ----------
-    
-
-# def scale_to_Mtotal(
-#     waveform: FrequencySeries | TimeSeries,
-#     total_mass: u.Quantity,
-#     unit_sys: Optional[Literal['SI', 'cosmo', 'geom']] = None
-# ) -> FrequencySeries | TimeSeries:
-#     """
-#     _summary_
-
-#     Parameters
-#     ----------
-#     waveform : FrequencySeries | TimeSeries
-#         Output will be in SI units.
-#     total_mass : u.Quantity
-#         _description_
-#     unit_sys : Optional[Literal[&#39;SI&#39;, &#39;cosmo&#39;, &#39;geom&#39;]], optional
-#         _description_, by default None
-
-#     Returns
-#     -------
-#     FrequencySeries | TimeSeries
-#         _description_
-
-#     Raises
-#     ------
-#     ValueError
-#         _description_
-#     """
-#     import astropy.constants as const  # TODO: check if import outside of function. Then also define constants outside
-
-#     if unit_sys is None:
-#         unit_sys = 'cosmo'
-
-#     if unit_sys == 'cosmo':
-#         total_mass = total_mass.to(u.Msun)
-#     elif unit_sys == 'SI':
-#         total_mass = total_mass.to(u.kg)
-#     elif unit_sys == 'geom':
-#         kg_to_s = const.G / const.c**3
-
-#         total_mass = total_mass.to(u.kg) * kg_to_s
-
-
-#     rescaled_wf = waveform.copy()
-
-#     if isinstance(waveform, FrequencySeries):
-#         rescaled_wf *= total_mass**2
-#         rescaled_wf.frequencies /= total_mass
-    
-#         return rescaled_wf
-#     elif isinstance(waveform, TimeSeries):
-#         rescaled_wf *= total_mass
-#         rescaled_wf.times *= total_mass
-    
-#         return rescaled_wf
-#     else:
-#         raise ValueError(
-#             '`waveform` has to be either a GWPy `FrequencySeries` or'
-#             ' a GWPy `TimeSeries`.'
-#         )
-
-
+# TODO: decide if function still makes sense. No simple rescaling of
+# input waveform is possible, only generation of new one (for frequ domain)
 def get_mass_scaled_wf(
     wf_params: dict[str, u.Quantity | float | int],
-    domain: Literal['TD', 'FD'],
+    domain: Literal['time', 'frequency'],
     gen: Any,
     target_unit_sys: Optional[Literal['SI', 'cosmo', 'geom']] = None
-) -> FrequencySeries | TimeSeries:
+) -> FrequencySeries | TimeSeries:  # pragma: no cover
     """
     Rescale a given `waveform` to be independent of the total mass
     parameter.
 
     Parameters
     ----------
-    wf_params: dict[str, u.Quantity | float | int]
+    wf_params : dict[str, u.Quantity | float | int]
         Parameters for the waveform.
+    domain : Literal['time', 'frequency']
     total_mass : u.Quantity
         Value of the total mass that has been used to generate the
         `waveform`. Has to be given in SI or cosmological units.
-    gen: Any
+    gen : Any
         Generator that shall be used for waveform generation, is given
         to generator argument of `~lalsimulation.gwsignal.core.waveform`.
     target_unit_sys : Literal['SI', 'cosmo', 'geom'], optional, default = None
@@ -872,7 +812,7 @@ def get_mass_scaled_wf(
 
     Returns
     -------
-    FrequencySeries | TimeSeries
+    ~gwpy.frequencyseries.FrequencySeries or ~gwpy.timeseries.TimeSeries
         Rescaled waveform generated from `wf_params`.
     
     Notes
@@ -901,9 +841,8 @@ def get_mass_scaled_wf(
     inconsistent phases). However, if you do account for this, consider
     using the `~gw_signal_tools.waveform_utils.rescale_with_Mtotal` function.
     """
-    import astropy.constants as const  # TODO: check if import outside of function. Then also define constants outside
-    import lalsimulation.gwsignal.core.waveform as wfm
-    from lalsimulation.gwsignal.core.parameter_conventions import default_dict
+    import astropy.constants as const
+    # from lalsimulation.gwsignal.core.parameter_conventions import default_dict
 
     if target_unit_sys is None:
         target_unit_sys = 'cosmo'
@@ -911,25 +850,20 @@ def get_mass_scaled_wf(
     total_mass: u.Quantity = wf_params['total_mass']
 
 
-    wf_params = default_dict | wf_params
+    # if domain == 'frequency':
+    #     wf_params['f22_start'] = wf_params['f22_start'] / total_mass.value
+        # Doing this for TD case can make wf generation take ages
+    # wf_params['f_max'] = wf_params['f_max'] / total_mass.value
+    # Rescaling bounds is not a good idea, we do not know the value that
+    # comes out in the end
 
-    # if 'f_max' not in wf_params.keys():
-    #     wf_params['f_max'] = 1024.*u.Hz
-        
-    wf_params |= {
-        # 'f22_start': wf_params['f22_start'] / total_mass.value,  # DO NOT DO FOR TD CASE
-        'f22_ref': wf_params['f22_ref'] / total_mass.value,
-        # 'f_max': wf_params['f_max'] / total_mass.value,
-    }
-    # NOTE: /= operator overwrites original dictionary...
+    wf_params['f22_ref'] = wf_params['f22_ref'] / total_mass.value
+
+    # NOTE: /= operator overwrites original dictionary, thus not used
     
     logging.debug(total_mass)
     logging.debug(wf_params)
     
-    # wf_params['f22_ref'] /= total_mass.value
-    # wf_params['f22_start'] = wf_params['f22_ref']
-
-    # TODO: return both plus and cross polarization
 
     if target_unit_sys == 'cosmo':
         total_mass = total_mass.to(u.solMass)
@@ -940,148 +874,26 @@ def get_mass_scaled_wf(
 
         total_mass = total_mass.to(u.kg) * kg_to_s
 
-    if domain == 'FD':
-        rescaled_wf, _ = wfm.GenerateFDWaveform(wf_params, gen)
+    if domain == 'frequency':
+        rescaled_wf_p, rescaled_wf_c = wfm.GenerateFDWaveform(wf_params, gen)
         
-        rescaled_wf /= total_mass**2
-        rescaled_wf.frequencies *= total_mass
-    
-        return rescaled_wf
-    elif domain == 'TD':
-        rescaled_wf, _ = wfm.GenerateTDWaveform(wf_params, gen)
+        rescaled_wf_p /= total_mass**2
+        rescaled_wf_p.frequencies *= total_mass
 
-        rescaled_wf /= total_mass
-        rescaled_wf.times /= total_mass
+        rescaled_wf_c /= total_mass**2
+        rescaled_wf_c.frequencies *= total_mass
     
-        return rescaled_wf
+        return rescaled_wf_p, rescaled_wf_c
+    elif domain == 'time':
+        rescaled_wf_p, rescaled_wf_c = wfm.GenerateTDWaveform(wf_params, gen)
+
+        rescaled_wf_p /= total_mass
+        rescaled_wf_p.times /= total_mass
+        rescaled_wf_c /= total_mass
+        rescaled_wf_c.times /= total_mass
+    
+        return rescaled_wf_p, rescaled_wf_c
     else:
         raise ValueError(
-            '`domain` has to be either `FD` (frequency domain) or `TD`'
-            ' (time domain).'
-        )
-
-
-def rescale_with_Mtotal(
-    waveform: FrequencySeries | TimeSeries,
-    total_mass: u.Quantity,
-    target_unit_sys: Optional[Literal['SI', 'cosmo', 'geom']] = None
-) -> FrequencySeries | TimeSeries:
-    """
-    Rescale a given `waveform` to be independent of the total mass
-    parameter.
-
-    Parameters
-    ----------
-    waveform : FrequencySeries | TimeSeries
-        Waveform to rescale. Strain and frequencies have to be either in
-        SI or cosmological units.
-    total_mass : u.Quantity
-        Value of the total mass that has been used to generate the
-        `waveform`. Has to be given in SI or cosmological units.
-    target_unit_sys : Literal['SI', 'cosmo', 'geom'], optional, default = None
-        Unit system that `total_mass` is converted to before rescaling.
-
-    Returns
-    -------
-    FrequencySeries or TimeSeries
-        Rescaled version of `waveform`.
-
-    Notes
-    -----
-    This function expects that you have paid attention to frequencies
-    during waveform generation. For details on what this means, refer to
-    the notes of `~gw_signal_tools.waveform_utils.get_mass_scaled_wf`.
-    """
-    import astropy.constants as const  # TODO: check if import outside of function. Then also define constants outside
-
-    if target_unit_sys is None:
-        target_unit_sys = 'cosmo'
-
-    if target_unit_sys == 'cosmo':
-        total_mass = total_mass.to(u.Msun)
-    elif target_unit_sys == 'SI':
-        total_mass = total_mass.to(u.kg)
-    elif target_unit_sys == 'geom':
-        kg_to_s = const.G / const.c**3
-
-        total_mass = total_mass.to(u.kg) * kg_to_s
-
-
-    rescaled_wf = waveform.copy()
-
-    if isinstance(waveform, FrequencySeries):
-        rescaled_wf /= total_mass**2
-        rescaled_wf.frequencies *= total_mass
-    
-        return rescaled_wf
-    elif isinstance(waveform, TimeSeries):
-        rescaled_wf /= total_mass
-        rescaled_wf.times /= total_mass
-    
-        return rescaled_wf
-    else:
-        raise ValueError(
-            '`waveform` has to be either a GWPy `FrequencySeries` or'
-            ' a GWPy `TimeSeries`.'
-        )
-    
-
-def scale_to_Mtotal(
-    waveform: FrequencySeries | TimeSeries,
-    total_mass: u.Quantity,
-    unit_sys: Optional[Literal['SI', 'cosmo', 'geom']] = None
-) -> FrequencySeries | TimeSeries:
-    """
-    _summary_
-
-    Parameters
-    ----------
-    waveform : FrequencySeries | TimeSeries
-        Output will be in SI units.
-    total_mass : u.Quantity
-        _description_
-    unit_sys : Literal['SI', 'cosmo', 'geom'], optional, default = None
-        _description_, by default None
-
-    Returns
-    -------
-    FrequencySeries | TimeSeries
-        _description_
-
-    Raises
-    ------
-    ValueError
-        _description_
-    """
-    import astropy.constants as const  # TODO: check if import outside of function. Then also define constants outside
-
-    if unit_sys is None:
-        unit_sys = 'cosmo'
-
-    if unit_sys == 'cosmo':
-        total_mass = total_mass.to(u.solMass)
-    elif unit_sys == 'SI':
-        total_mass = total_mass.to(u.kg)
-    elif unit_sys == 'geom':
-        kg_to_s = const.G / const.c**3
-
-        total_mass = total_mass.to(u.kg) * kg_to_s
-
-
-    rescaled_wf = waveform.copy()
-
-    if isinstance(waveform, FrequencySeries):
-        rescaled_wf *= total_mass**2
-        rescaled_wf.frequencies /= total_mass
-    
-        return rescaled_wf
-    elif isinstance(waveform, TimeSeries):
-        rescaled_wf *= total_mass
-        rescaled_wf.times *= total_mass
-    
-        return rescaled_wf
-    else:
-        raise ValueError(
-            '`waveform` has to be either a GWPy `FrequencySeries` or'
-            ' a GWPy `TimeSeries`.'
+            '`domain` has to be either `frequency` or `time`.'
         )

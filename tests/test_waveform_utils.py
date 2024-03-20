@@ -1,3 +1,5 @@
+import unittest
+
 from gw_signal_tools.waveform_utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
@@ -12,7 +14,7 @@ import numpy as np
 from numpy.testing import assert_allclose
 from gw_signal_tools.test_utils import (
     allclose_quantity, assert_allclose_quantity,
-    assert_allclose_frequseries, assert_allclose_timeseries
+    assert_allclose_series
 )
 from gwpy.testing.utils import assert_quantity_equal
 
@@ -647,30 +649,29 @@ def test_get_strain_no_extrinsic():
 
 
 def test_get_strain_extrinsic():
-    # Not sure we can capture this in parametrize, problem is how to
-    # automatically get array we want to compare with
-    hp_t_test = get_strain(wf_params, 'time', generator=gen, mode='plus')
-    hc_t_test = get_strain(wf_params, 'time', generator=gen, mode='cross')
-    h_t_test = get_strain(wf_params, 'time', generator=gen, mode='mixed')
-
-    assert_quantity_equal(hp_t, hp_t_test)
-    assert_quantity_equal(hc_t, hc_t_test)
-    assert_quantity_equal(hp_t + 1.j * hc_t, h_t_test)
-
-    hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
-    hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
-    h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
+    ext_params = {'det': 'H1', 'ra': 0.2*u.rad, 'dec': 0.2*u.rad,
+                  'psi': 0.5*u.rad, 'tgps': 1126259462}
     
-    assert_quantity_equal(hp_f_fine, hp_f_test)
-    assert_quantity_equal(hc_f_fine, hc_f_test)
+    from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
 
-    h_f_fine = np.flip((np.conjugate(hp_f_fine) + 1.j * np.conjugate(hc_f_fine))[1:])
-    h_f_fine.df = hp_f_fine.df
-    h_f_fine.frequencies -= h_f_fine.frequencies[-1] + h_f_fine.df
-    h_f_fine = h_f_fine.append(hp_f_fine + 1.j * hc_f_fine, inplace=False)
+    ht_test = get_strain(wf_params, 'time', generator=gen, extrinsic_params=ext_params)
+    assert_quantity_equal(GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params), ht_test)
 
-    assert_quantity_equal(h_f_fine, h_f_test)
+    hf_test = get_strain(wf_params, 'frequency', generator=gen, extrinsic_params=ext_params)
+    assert_quantity_equal(GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params), hf_test)
 
+class ErrorRaising(unittest.TestCase):
+    def test_domain_checking(self):
+        with self.assertRaises(ValueError):
+            get_strain(wf_params, 'domain', generator=gen)
+
+    def test_mode_checking(self):
+        with self.assertRaises(ValueError):
+            get_strain(wf_params, 'time', generator=gen, mode='mode')
+    
+    def test_extr_params_checking(self):
+        with self.assertRaises(ValueError):
+            get_strain(wf_params, 'time', generator=gen, mode='mode', extrinsic_params=wf_params)
 
 #%% ---------- Testing mass rescaling ----------
 

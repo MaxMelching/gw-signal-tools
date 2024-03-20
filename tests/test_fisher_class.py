@@ -9,6 +9,8 @@ import astropy.units as u
 
 import matplotlib.pyplot as plt
 
+import pytest
+
 # ----- Local Package Imports -----
 from gw_signal_tools.inner_product import norm
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
@@ -40,8 +42,8 @@ wf_params = {
 }
 
 approximant = 'IMRPhenomXPHM'
-
 phenomx_generator = FisherMatrix.get_wf_generator(approximant)
+phenomx_cross_generator = FisherMatrix.get_wf_generator(approximant, mode='cross')
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc
@@ -118,6 +120,8 @@ def test_project():
     # also not make sense (values that are already essentially zero
     # will not change by 10 orders of magnitude)
 
+    fisher_partially_projected = fisher.project_fisher('time')  # Test if works
+
 def test_plot():
     fisher = FisherMatrix(
         wf_params,
@@ -133,9 +137,42 @@ def test_plot():
     # plt.show()
     plt.close()
 
+    fisher.plot()
+    # plt.show()
+    plt.close()
+
     fisher.plot(only_fisher=True)
     # plt.show()
     plt.close()
+
+    fisher.plot(only_fisher_inverse=True)
+    # plt.show()
+    plt.close()
+
+def test_cond():
+    assert fisher_tot_mass.cond() == fisher_tot_mass.fisher.cond()
+
+def test_array():
+    assert np.all(np.array(fisher_tot_mass) == np.array(fisher_tot_mass.fisher))
+
+@pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
+@pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
+@pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
+@pytest.mark.parametrize('new_metadata', [None, {'return_info': False, 'convergence_check': 'mismatch'}])
+def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
+                      new_wf_generator, new_metadata):
+    if new_metadata is None:
+        new_metadata = {}
+
+    fisher_tot_mass_v2 = fisher_tot_mass.update_attrs(
+        new_wf_params_at_point,
+        new_params_to_vary,
+        new_wf_generator,
+        **new_metadata
+    )
+
+def test_copy():
+    ...
 
 #%% Confirm that certain errors are raised
 class ErrorRaising(unittest.TestCase):

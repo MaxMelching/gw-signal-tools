@@ -123,7 +123,7 @@ class FisherMatrix:
         """
         Actual Fisher matrix associated with this class.
 
-        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
         """
         try:
             return self._fisher
@@ -135,7 +135,7 @@ class FisherMatrix:
         """
         Value of Fisher matrix associated with this class.
 
-        :type:`~numpy.ndarray`
+        :type: `~numpy.ndarray`
         """
         return self.fisher.value
     
@@ -144,7 +144,7 @@ class FisherMatrix:
         """
         Unit of Fisher matrix associated with this class.
 
-        :type:`~numpy.ndarray`
+        :type: `~numpy.ndarray`
         """
         return self.fisher.unit
 
@@ -154,7 +154,7 @@ class FisherMatrix:
         """
         Inverse of Fisher matrix associated with this class.
 
-        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
         """
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
@@ -178,12 +178,13 @@ class FisherMatrix:
         raise NotImplementedError
 
 
-    def update_metadata(self,
-            new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
-            new_params_to_vary: Optional[str | list[str]] = None,
-            new_wf_generator: Optional[Any] = None,
-            **new_metadata
-        ) -> FisherMatrix:
+    def update_attrs(self,
+        new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
+        new_params_to_vary: Optional[str | list[str]] = None,
+        new_wf_generator: Optional[Callable[[dict[str, u.Quantity]],
+                                            FrequencySeries]] = None,
+        **new_metadata
+    ) -> FisherMatrix:
         """
         Generate a Fisher matrix with properties like the current
         instance has, but selected updates.
@@ -238,35 +239,12 @@ class FisherMatrix:
         
         if len(new_metadata) > 0:
             new_metadata = self.metadata | new_metadata
+        else:
+            new_metadata = self.metadata
 
 
         return FisherMatrix(new_wf_params_at_point, new_params_to_vary,
-                            **new_metadata)
-
-    
-    def condition_number(self,
-            matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
-        ) -> float:
-        """
-        Condition number of the Fisher matrix.
-
-        Parameters
-        ----------
-        matrix_norm : float | Literal['fro', 'nuc'], optional,
-        default = 'fro'
-            Matrix norm that shall be used for the calculation. Must be
-            compatible with argument `p` of `~numpy.linalg.cond`.
-
-        Returns
-        -------
-        float
-            Condition number of `self.fisher`.
-
-        See also
-        --------
-        numpy.linalg.cond : Routine used for calculation.
-        """
-        return MatrixWithUnits.condition_number(self.fisher, matrix_norm)
+                            new_wf_generator, **new_metadata)
     
     def project_fisher(self, params: str | list[str]) -> MatrixWithUnits:
         """
@@ -401,6 +379,25 @@ class FisherMatrix:
     #     return self.plot(*args, **kwargs)
 
     def cond(self, matrix_norm: float | str = 'fro'):
+        """
+        Condition number of the Fisher matrix.
+
+        Parameters
+        ----------
+        matrix_norm : float | Literal['fro', 'nuc'], optional,
+        default = 'fro'
+            Matrix norm that shall be used for the calculation. Must be
+            compatible with argument `p` of `~numpy.linalg.cond`.
+
+        Returns
+        -------
+        float
+            Condition number of `self.fisher`.
+
+        See also
+        --------
+        numpy.linalg.cond : Routine used for calculation.
+        """
         return self.fisher.cond(matrix_norm)
 
     @staticmethod
@@ -462,7 +459,6 @@ class FisherMatrix:
 
         # MORE DESCRIPTION TO COME
         # '''
-    
 
     def __array__(self) -> np.ndarray:
         # Most intuitive behaviour: indeed return a Fisher matrix as array
@@ -479,13 +475,18 @@ class FisherMatrix:
             **self.metadata
         )
         
-        new_matrix._fisher = self.fisher
-        new_matrix._fisher_inverse = self.fisher_inverse
+        new_matrix._fisher = self.fisher.copy()
+        new_matrix._fisher_inverse = self.fisher_inverse.copy()
 
         # TODO: decide if other attributes like condition number or
-        # deriv_info shall be copied
+        # deriv_info shall be copied -> cond number not
 
         return new_matrix
     
     def copy(self) -> FisherMatrix:
         return self.__copy__()
+    
+    def __hash__(self) -> int:
+        return hash(self.fisher) ^ hash(self.fisher_inverse) \
+            ^ hash(self.metadata) ^ hash(self.wf_params_at_point) \
+            ^ hash(self.params_to_vary)

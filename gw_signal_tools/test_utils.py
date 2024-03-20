@@ -4,6 +4,7 @@ from numpy.testing import assert_allclose
 
 import astropy.units as u
 
+from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 
@@ -181,22 +182,21 @@ def assert_allequal_MatrixWithUnits(
 
 
 # ----- GWPy type equalities -----
-def assert_allclose_frequseries(
-    series1: FrequencySeries,
-    series2: FrequencySeries,
+def assert_allclose_series(
+    series1: Series,
+    series2: Series,
     *args,
     **kwargs
 ) -> None:
-    assert_allclose_quantity(series1.frequencies, series2.frequencies,
-                             *args, **kwargs)
-    assert_allclose_quantity(series1, series2, *args, **kwargs)
+    """
+    Includes FrequencySeries and TimeSeries
 
-def assert_allclose_timeseries(
-    series1: TimeSeries,
-    series2: TimeSeries,
-    *args,
-    **kwargs
-) -> None:
-    assert_allclose_quantity(series1.frequencies, series2.frequencies,
-                             *args, **kwargs)
+    Parameters
+    ----------
+    series1 : Series
+        _description_
+    series2 : Series
+        _description_
+    """
+    assert_allclose_quantity(series1.xindex, series2.xindex, *args, **kwargs)
     assert_allclose_quantity(series1, series2, *args, **kwargs)

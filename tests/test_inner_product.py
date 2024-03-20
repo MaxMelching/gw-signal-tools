@@ -7,7 +7,7 @@ from gw_signal_tools.waveform_utils import (
 )
 from gw_signal_tools.test_utils import (
     allclose_quantity, assert_allclose_quantity,
-    assert_allclose_frequseries, assert_allclose_timeseries
+    assert_allclose_series
 )
 from gwpy.testing.utils import assert_quantity_equal
 

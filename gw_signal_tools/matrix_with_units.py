@@ -74,12 +74,14 @@ class MatrixWithUnits:
     Alternatively, one can extract the values by converting to an array,
     which is supposed to simplify usage and provide an easy way to
     convert this class into more common data types:
+
     >>> np.array(matrix)
     array([[42, 96],
            [96, 42]])
     
     This enables calling numpy functions directly on instances of
     ``MatrixWithUnits``, e.g.
+
     >>> np.linalg.inv(matrix)
     array([[-0.00563607,  0.01288245],
            [ 0.01288245, -0.00563607]])
@@ -93,6 +95,7 @@ class MatrixWithUnits:
 
     In order to get the printed representation, we can simply multiply
     values and units:
+
     >>> matrix.value * matrix.unit
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
@@ -103,6 +106,7 @@ class MatrixWithUnits:
     numpy array, not a ``MatrixWithUnits`` anymore.
 
     It is also possible to initialize using a single unit, e.g.
+
     >>> MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
@@ -168,7 +172,7 @@ class MatrixWithUnits:
         """
         Numeric values of the matrix.
 
-        :type:`~numpy.ndarray`
+        :type: `~numpy.ndarray`
         """
         return self._value  # type: ignore
         # Explanation of ignore: we convert to array in __init__, but mypy
@@ -199,7 +203,7 @@ class MatrixWithUnits:
         """
         Units of the matrix.
 
-        :type:`~numpy.ndarray`
+        :type: `~numpy.ndarray`
         """
         return self._unit
     
@@ -245,7 +249,10 @@ class MatrixWithUnits:
     
     def __copy__(self) -> MatrixWithUnits:
         # Is called for matrix_copy = copy(matrix)
-        return MatrixWithUnits(self.value.__copy__(), self.unit.__copy__())
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(self.value.__copy__(), self.unit)
+        else:
+            return MatrixWithUnits(self.value.__copy__(), self.unit.__copy__())
     
     def copy(self) -> MatrixWithUnits:
         # Is called for matrix_copy = matrix.copy() or
@@ -253,14 +260,14 @@ class MatrixWithUnits:
         return self.__copy__()
     
     def __eq__(self, other: Any) -> np.ndarray:
-        if not isinstance(other, (MatrixWithUnits, u.Quantity, self._allowed_numeric_types)):
+        if not isinstance(other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_numeric_types)):
             # Quantities are included here because slicing sometimes returns
             # them, so throwing error here would not be good
             raise NotImplementedError(
                 f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
             )
         else:
-            if isinstance(other, self._allowed_numeric_types):
+            if isinstance(other, (np.ndarray, self._allowed_numeric_types)):
                 other = other * u.dimensionless_unscaled
 
             return np.equal(self.value, other.value) & np.equal(self.unit, other.unit)
@@ -291,23 +298,25 @@ class MatrixWithUnits:
     def __setitem__(self, key: Any, value: Any) -> None:
         try:
             self.value.__setitem__(key, value.value)
-        
+            
             if isinstance(self.unit, self._pure_unit_types):
-                self.unit = value.unit
-            else:
-                self.unit.__setitem__(key, value.unit)
+                # Make sure not unit of whole matrix is replaced,
+                # could easily happen otherwise for scalar unit case
+                self.unit = np.full(self.shape, self.unit, dtype=object)
+            
+            self.unit.__setitem__(key, value.unit)
         except AttributeError:
             try:
                 value = u.Quantity(value)
+
+                self.__setitem__(key, value)  # Otherwise scalar case would
+                                              # require special handling again
             except TypeError:
                 raise TypeError(
                     'Can only set items to data types that have members '
                     '`value` and `unit` (such as astropy Quantities or '
                     'MatrixWithUnits) or can be converted into a Quantity.'
                 )
-            
-            self.value.__setitem__(key, value.value)
-            self.unit.__setitem__(key, value.unit)
     
     def __len__(self):
         return self.value.__len__()
@@ -316,6 +325,10 @@ class MatrixWithUnits:
     # ----- Common operations -----
     def __neg__(self) -> MatrixWithUnits:
         return MatrixWithUnits(-self.value, self.unit)
+    
+    def __abs__(self) -> MatrixWithUnits:
+        return MatrixWithUnits(self.value.__abs__(), self.unit)
+        # return MatrixWithUnits(np.abs(self.value), self.unit)
     
     def __add__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
@@ -505,7 +518,7 @@ class MatrixWithUnits:
 
         Returns
         -------
-        :type:`~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
         """
         if isinstance(self.unit, self._pure_unit_types):
             return MatrixWithUnits(self.value.T, self.unit)
@@ -633,7 +646,7 @@ class MatrixWithUnits:
     # ----- Deal with selected useful astropy functions/attributes -----
     def to_system(self, system: Any) -> MatrixWithUnits:
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value, self.unit.to_system(system))
+            return MatrixWithUnits(self.value, self.unit.to_system(system)[0])
         else:
             new_unit = self.unit
             for index, val in np.ndenumerate(self.unit):
@@ -659,7 +672,7 @@ class MatrixWithUnits:
         import matplotlib as mpl
         import matplotlib.pyplot as plt
 
-        def relative_luminance(color):
+        def relative_luminance(color):  # pragma: no cover
             """Calculate the relative luminance of a color according to W3C standards
 
             Parameters

@@ -78,14 +78,18 @@ def test_getting_and_slicing():
     assert_allequal_MatrixWithUnits(matrix2[0], MatrixWithUnits([42, 24], [2.0 * u.s, u.m]))
     assert_allequal_MatrixWithUnits(matrix2[1, 0], MatrixWithUnits(18, u.m**2))
 
-@pytest.mark.parametrize('set_val', [-2*u.dimensionless_unscaled, 3*u.pc])
-def test_setting(set_val):
-    matrix = MatrixWithUnits(example_values, example_units).copy()
+@pytest.mark.parametrize('set_val', [-2*u.dimensionless_unscaled, 3*u.pc, 42])
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_setting(set_val, units):
+    matrix = MatrixWithUnits(example_values, units).copy()
 
     # We know that getting works because previous test passed, can rely on that
     matrix[0, 0] = set_val
 
     assert matrix[0, 0] == set_val
+    assert matrix[1, 1].unit == u.s
+    # Only 1,1 component tested because it is same one for example_units and
+    # scalar case u.s (otherwise values are unequal or not indexable)
 
 def test_eq():
     matrix_in_s1 = MatrixWithUnits(example_values, u.s)
@@ -104,7 +108,12 @@ def test_eq():
 
     assert np.all(matrix_in_s1 == matrix) == False
     assert np.any(matrix_in_s1 != matrix) == True  # Test not equal operator
-    print(MatrixWithUnits.__eq__(matrix_in_s1, matrix))
+    
+    matrix_dim_less = MatrixWithUnits.from_numpy_array(example_values)
+    assert np.all(matrix_dim_less == example_values)
+
+    matrix_single_val = MatrixWithUnits(42, u.dimensionless_unscaled)
+    assert np.all(matrix_single_val == 42)
 
 def test_copy():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -505,8 +514,9 @@ def test_inv():
 
 
 # ----- Test astropy functions -----
-def test_to_system():
-    matrix = MatrixWithUnits(example_values, example_units)
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_to_system(units):
+    matrix = MatrixWithUnits(example_values, units)
 
     matrix.to_system(u.si)
     matrix.to_system(preferred_unit_system)
@@ -529,6 +539,19 @@ def test_plot():
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+    def test_list_operations(self):
+        with self.assertRaises(TypeError):
+            self.matrix + [1, 2, 3]
+
+        with self.assertRaises(TypeError):
+            self.matrix * [1, 2, 3]
+
+        with self.assertRaises(TypeError):
+            self.matrix / [1, 2, 3]
+
+        with self.assertRaises(TypeError):
+            self.matrix**[1, 2, 3]
     
     def test_quantitiy_addition(self):
         # Test that unequal units throw error
@@ -576,3 +599,28 @@ class Errors(unittest.TestCase):
             matrix2 = self.matrix.copy()
             matrix2.unit = example_non_si_units
             MatrixWithUnits.inv(matrix2)
+
+    def test_invalid_instance(self):
+        matrix = MatrixWithUnits(example_values, u.s)
+        matrix._unit = np.array([u.s, u.m])
+
+        with self.assertRaises(AssertionError):
+            matrix.size
+
+        with self.assertRaises(AssertionError):
+            matrix.shape
+
+        with self.assertRaises(AssertionError):
+            matrix.ndim
+
+        matrix._unit = 42  # Has no size etc, so this does not fail.
+                           # But is also not valid unit, other error origin
+
+        with self.assertRaises(ValueError):
+            matrix.size
+
+        with self.assertRaises(ValueError):
+            matrix.shape
+
+        with self.assertRaises(ValueError):
+            matrix.ndim

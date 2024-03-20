@@ -8,7 +8,7 @@ def psd_to_file(
     psd: FrequencySeries,
     fname: str,
     is_asd: bool = False
-) -> None:
+) -> None:  # pragma: no cover
     """
     Save power spectral density (PSD) values from a GWPy
     ``FrequencySeries`` into a file.
@@ -122,7 +122,7 @@ def get_FreqSeries_from_dict(
     psd_vals_key: str,
     is_asd: bool = False,
     **kwargs
-) -> FrequencySeries:
+) -> FrequencySeries:  # pragma: no cover
     """
     Converts dictionary with Power spectral density (PSD) values into a
     GWpy ``FrequencySeries``. Frequencies are expected to be accessible

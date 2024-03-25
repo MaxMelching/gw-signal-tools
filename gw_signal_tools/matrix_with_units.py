@@ -440,7 +440,7 @@ class MatrixWithUnits:
             new_shape = new_value.shape
 
             # Hack for 1D output
-            new_shape_1 = new_shape
+            new_shape_backup = new_shape
             if len(new_shape) == 1:
                 if len(self.value.shape) == 1:
                     # self is row vector
@@ -448,6 +448,23 @@ class MatrixWithUnits:
                 else:
                     # other is column vector
                     new_shape = (new_shape[0], 1)
+
+            # Similar hack for 1D input
+            if ((len(self.shape) == 1 and
+                 not isinstance(self.unit, self._pure_unit_types)) or 
+                (len(other.shape) == 1 and
+                 not isinstance(other.unit, self._pure_unit_types))):
+                raise ValueError(
+                    'For the provided shapes, only ``MatrixWithUnits``'
+                    'instances initialized with a scalar unit are permitted. '
+                    'If the intention was to perform matrix multiplication '
+                    'with a row/column vector, please reshape the instance '
+                    'from the current shape `(n,)` to `(n, 1)` or `(1, n)`.'
+                )
+            
+            # TODO: how to handle other shapes??? E.g. self is row/column or other is?
+            # Can do reshaping, but then with other names or reshape self here
+            # and put back to old form before return?
             
             # Step 2: handle units (array or scalar are possible for both)
             new_unit = np.empty(new_shape, dtype=object)
@@ -458,7 +475,7 @@ class MatrixWithUnits:
                 for index in np.ndindex(new_shape):
                     i, j = index
                     unit_test = self.unit[i, 0] * other.unit[0, j]
-
+                    
                     assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
                         'Need consistent units for matrix multiplication.'
                         # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
@@ -495,8 +512,8 @@ class MatrixWithUnits:
                     
                     new_unit[i, j] = unit_test * other.unit
 
-            if new_shape != new_shape_1:
-                new_unit = np.reshape(new_unit, new_shape_1)
+            if new_shape != new_shape_backup:
+                new_unit = np.reshape(new_unit, new_shape_backup)
 
             return MatrixWithUnits(new_value, new_unit)
         else:
@@ -595,8 +612,12 @@ class MatrixWithUnits:
     
     @staticmethod
     def reshape(matrix: MatrixWithUnits, new_shape: Any) -> MatrixWithUnits:
-        return MatrixWithUnits(np.reshape(matrix.value, new_shape),
-                               np.reshape(matrix.unit, new_shape))
+        if isinstance(matrix.unit, matrix._pure_unit_types):
+            return MatrixWithUnits(np.reshape(matrix.value, new_shape),
+                                   matrix.unit)
+        else:
+            return MatrixWithUnits(np.reshape(matrix.value, new_shape),
+                                   np.reshape(matrix.unit, new_shape))
 
     @staticmethod
     def inv(matrix: MatrixWithUnits) -> MatrixWithUnits:

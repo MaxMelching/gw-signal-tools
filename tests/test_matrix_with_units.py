@@ -367,36 +367,55 @@ def test_matmul():
 
     # Test with rows and columns
     matrix_col = MatrixWithUnits(example_values[:, 0], u.s)
-    matrix_row = MatrixWithUnits(example_values[0 ,:], u.s)
+    matrix_col = MatrixWithUnits.reshape(matrix_col, (2, 1))
+    matrix_row = MatrixWithUnits(example_values[0, :], u.s)
+    matrix_row = MatrixWithUnits.reshape(matrix_row, (1, 2))
 
     assert_allequal_MatrixWithUnits(
-        matrix_col @ matrix_row,  # Inner product
+        matrix_row @ matrix_col,  # Inner product
         MatrixWithUnits(42**2 + 24 * 18, u.s**2)
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix_row @ matrix_col,  # Outer product
-        MatrixWithUnits(example_values[0, :] @ example_values[:, 0], u.s**2)
+        matrix_col @ matrix_row,  # Outer product
+        MatrixWithUnits(np.array([[42*42, 42*24], [18*42, 18*24]]), u.s**2)
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix_col,  # Matrix and column
-        MatrixWithUnits(example_values @ example_values[:, 0], u.s**2)
+        MatrixWithUnits(np.array([[42*42 + 24*18], [18*42 + 96*18]]), u.s**2)
     )
 
     assert_allequal_MatrixWithUnits(
         matrix2.T @ matrix_col,  # Matrix and column
-        MatrixWithUnits(example_values.T @ example_values[:, 0], np.array([u.s**2, u.s * u.m], dtype=object))
+        MatrixWithUnits(np.array([[42*42 + 18*18], [24*42 + 96*18]]), np.array([[u.s**2], [u.s*u.m]], dtype=object))
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix_in_s,  # Row and matrix
-        MatrixWithUnits(example_values[0, :] @ example_values, u.s**2)
+        MatrixWithUnits(np.array([42*42 + 24*18, 42*24 + 24*96]), u.s**2)
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix2,  # Row and matrix
-        MatrixWithUnits(example_values[0, :] @ example_values, np.array([u.s**2, u.s * u.m], dtype=object))
+        MatrixWithUnits(np.array([42*42 + 24*18, 42*24 + 24*96]), np.array([u.s**2, u.s * u.m], dtype=object))
+    )
+
+    # Now column/row with non-scalar unit
+    matrix_col = MatrixWithUnits(example_values[:, 0], np.array([u.s, u.m]))
+    matrix_col = MatrixWithUnits.reshape(matrix_col, (2, 1))
+    matrix_row = MatrixWithUnits(example_values[0, :], np.array([u.m, u.s]))
+    matrix_row = MatrixWithUnits.reshape(matrix_row, (1, 2))
+
+    assert_allequal_MatrixWithUnits(
+        matrix_row @ matrix_col,  # Inner product
+        MatrixWithUnits(42**2 + 24 * 18, u.s*u.m)
+    )
+
+    assert_allequal_MatrixWithUnits(
+        matrix_col @ matrix_row,  # Outer product
+        MatrixWithUnits(np.array([[42*42, 42*24], [18*42, 18*24]]),
+                        np.array([[u.s*u.m, u.s**2], [u.m**2, u.m*u.s]], dtype=object))
     )
 
 

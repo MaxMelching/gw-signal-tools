@@ -201,51 +201,21 @@ def fisher_matrix(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        if param == 'time':
-            wf = wf_generator(wf_params_at_point)
-            deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
-            # deriv = wf * -1.j * 2.0 * np.pi * (wf.frequencies - wf_params_at_point['f22_ref'])  # Testing
-            deriv_series_storage[param] = deriv
-            info = {'description': 'This derivative is exact.'}
+        deriv, info = get_waveform_derivative_1D_with_convergence(
+            wf_params_at_point=wf_params_at_point,
+            param_to_vary=param,
+            wf_generator=wf_generator,
+            step_sizes=step_sizes,
+            convergence_check=convergence_check,
+            break_upon_convergence=break_upon_convergence,
+            convergence_threshold=convergence_threshold,
+            return_info=True,
+            **inner_prod_kwargs
+        )
 
-            fisher_val_sqrt = norm(deriv, **inner_prod_kwargs)
-
-            if isinstance(fisher_val_sqrt, u.Quantity):
-                fisher_val = fisher_val_sqrt**2
-            else:
-                # Optimization is carried out in inner product
-                fisher_val = fisher_val_sqrt[1]**2
-
-            fisher_matrix[i, i] = fisher_val
-        elif param == 'phase':
-            wf = wf_generator(wf_params_at_point)
-            deriv = wf * -1.j
-            deriv_series_storage[param] = deriv
-            info = {'description': 'This derivative is exact.'}
-
-            fisher_val_sqrt = norm(deriv, **inner_prod_kwargs)
-
-            if isinstance(fisher_val_sqrt, u.Quantity):
-                fisher_val = fisher_val_sqrt**2
-            else:
-                # Optimization is carried out in inner product
-                fisher_val = fisher_val_sqrt[1]**2
-
-            fisher_matrix[i, i] = fisher_val
-        else:
-            deriv_series_storage[param], info = get_waveform_derivative_1D_with_convergence(
-                wf_params_at_point=wf_params_at_point,
-                param_to_vary=param,
-                wf_generator=wf_generator,
-                step_sizes=step_sizes,
-                convergence_check=convergence_check,
-                break_upon_convergence=break_upon_convergence,
-                convergence_threshold=convergence_threshold,
-                return_info=True,
-                **inner_prod_kwargs
-            )
-
-            fisher_matrix[i, i] = info['norm_squared']
+        deriv_series_storage[param] = deriv
+        info['deriv'] = deriv
+        fisher_matrix[i, i] = info['norm_squared']
 
         if return_info:
             # TODO: maybe copy selected stuff only?
@@ -304,7 +274,7 @@ def get_waveform_derivative_1D_with_convergence(
         `wf_generator`.
     param_to_vary : str
         Parameter with respect to which the derivative is taken. Must be
-        a key in `wf_params_at_point`.
+        `'time'`, `'phase'` or a key in `wf_params_at_point`.
     wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
     ~gwpy.frequencyseries.FrequencySeries]
         Arbitrary function that is used for waveform generation. The
@@ -387,6 +357,51 @@ def get_waveform_derivative_1D_with_convergence(
                 # convergence_threshold = 0.001
                 
     # ----- Calculation -----
+    if param_to_vary == 'time':
+        wf = wf_generator(wf_params_at_point)
+        deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
+        # deriv = wf * -1.j * 2.0 * np.pi * (wf.frequencies - wf_params_at_point['f22_ref'])  # Testing
+
+        derivative_norm = norm(deriv, **inner_prod_kwargs)
+
+        if isinstance(derivative_norm, u.Quantity):
+            derivative_norm **= 2
+        else:
+            # Optimization is carried out in inner product
+            derivative_norm = derivative_norm[1]**2
+
+        if return_info:
+            return deriv, {
+                'norm_squared': derivative_norm,
+                'description': 'This derivative is exact.'
+            }
+        else:
+            return deriv
+    elif param_to_vary == 'phase':
+        wf = wf_generator(wf_params_at_point)
+        deriv = wf * -1.j
+
+        derivative_norm = norm(deriv, **inner_prod_kwargs)
+
+        if isinstance(derivative_norm, u.Quantity):
+            derivative_norm **= 2
+        else:
+            # Optimization is carried out in inner product
+            derivative_norm = derivative_norm[1]**2
+
+        if return_info:
+            return deriv, {
+                'norm_squared': derivative_norm,
+                'description': 'This derivative is exact.'
+            }
+        else:
+            return deriv
+    else:
+        assert param_to_vary in wf_params_at_point, \
+            ('`param_to_vary` must be `\'time\'`, `\'phase`\' or a key '
+             'in `wf_params_at_point`.')
+
+    
     is_converged = False
     refine_numb = 0
     for _ in range(3):  # Maximum number of refinements of step size

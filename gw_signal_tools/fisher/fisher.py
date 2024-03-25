@@ -13,6 +13,7 @@ import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
+from ..inner_product import inner_product
 from ..waveform_utils import get_strain
 from ..matrix_with_units import MatrixWithUnits
 from .fisher_utils import fisher_matrix
@@ -103,6 +104,8 @@ class FisherMatrix:
                     self.wf_generator,
                     **self.metadata
                 )
+
+                plt.close()  # Avoid too many open axes
             else:
                 self._fisher = fisher_matrix(
                     self.wf_params_at_point,
@@ -175,7 +178,7 @@ class FisherMatrix:
     @property
     def deriv_info(self):
         # TODO: self._deriv_info is available... Soooo, shall we something with it?
-        raise NotImplementedError
+        return self._deriv_info
 
 
     def update_attrs(self,
@@ -302,41 +305,87 @@ class FisherMatrix:
         return fisher - fisher @ full_inv @ fisher
         # return fisher - MatrixWithUnits(np.einsum('ij, jk, kl', fisher, full_inv, fisher), self.fisher.unit)
     
-    # Just toying around with application of matrix product
-    # def statistical_error(self, param_diff: MatrixWithUnits) -> u.Quantity:
-    #     r"""
-    #     Calculates
+    def statistical_error(self, param_diff: MatrixWithUnits) -> u.Quantity:
+        r"""
+        Calculates
 
-    #     .. math:: \sum_{\mu \nu} \Gamma_{\mu \nu} \Delta \lambda^\mu
-    #     \Delta \lambda^\nu
+        .. math:: \sum_{\mu \nu} \Gamma_{\mu \nu} \Delta \lambda^\mu
+        \Delta \lambda^\nu
 
-    #     using the given parameter difference :math:`\Delta \lambda^\mu`.
+        using the given parameter difference :math:`\Delta \lambda^\mu`.
 
-    #     Parameters
-    #     ----------
-    #     param_diff : ~gw_signal_tools.matrix_with_units.MatrixWithUnits
-    #         Row or column vector of parameter differences, which must be
-    #         specified with units (i.e. as a MatrixWithUnits instance).
+        Parameters
+        ----------
+        param_diff : ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+            Row or column vector of parameter differences, which must be
+            specified with units (i.e. as a MatrixWithUnits instance).
 
-    #         Order must match the order used in `params_to_vary` argument
-    #         that has been used during Fisher matrix calculation.
+            Order must match the order used in `params_to_vary` argument
+            that has been used during Fisher matrix calculation.
 
-    #     Returns
-    #     -------
-    #     ~astropy.units.quantity
-    #         Total statistical error.
+        Returns
+        -------
+        ~astropy.units.quantity
+            Total statistical error.
 
-    #     Notes
-    #     -----
-    #     Calculating this does not make sense if a PSD for no noise is
-    #     used during the Fisher matrix calculations
-    #     """
-    #     assert len(param_diff.shape) == 1, \
-    #         '`param_diffs` must be either a row or a column vector.'
+        Notes
+        -----
+        Calculating this does not make sense if a PSD for no noise is
+        used during the Fisher matrix calculations
+        """
+        assert len(param_diff.shape) == 1, \
+            '`param_diffs` must be either a row or a column vector.'
+        # -> do this: We reshape anyway...
         
-    #     return param_diff @ self.fisher_inverse @ param_diff
+        # TODO: pay more attention to shapes, i.e. define param_diff_row
+        # and param_diff_col -> ah, or just use transpose...
+        
+        return param_diff @ self.fisher_inverse @ param_diff
     # TODO: return **(1/2) of that? -> can now even do sqrt
     # -> also test if Fraction from functools is better for numerical precision
+
+    def systematic_error(self,
+        wf_gen_2: Callable[[dict[str, u.Quantity]], FrequencySeries]
+    ) -> MatrixWithUnits:
+        # TODO: require to give new inner_prod_kwargs here?
+
+        delta_h = self.wf_generator(self.wf_params_at_point) - wf_gen_2(self.wf_params_at_point)
+        
+        if self.metadata['return_info']:
+            derivs = [
+                self.deriv_info[param]['deriv'] for param in self.params_to_vary
+            ]
+        else:
+            from gw_signal_tools.fisher import get_waveform_derivative_1D_with_convergence
+            derivs = [
+                get_waveform_derivative_1D_with_convergence(
+                    self.wf_params_at_point,
+                    param_to_vary,
+                    self.wf_generator
+                ) for param_to_vary in self.params_to_vary
+            ]
+
+
+        # Note: we want to use same kwargs for inner product as for
+        # calculation of Fisher matrix here, have to be extracted from
+        # metadata property
+        from inspect import signature
+        fisher_args = list(signature(fisher_matrix).parameters)
+        fisher_args.remove('inner_prod_kwargs')
+        inner_prod_kwargs = self.metadata.copy()
+
+        # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
+        for key in fisher_args:
+            try:
+                inner_prod_kwargs.pop(key)
+            except KeyError:
+                pass
+
+        vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
+        for i, deriv in enumerate(derivs):
+            vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
+        
+        return self.fisher_inverse @ vector
 
     def _plot_matrix(self, matrix: MatrixWithUnits):
         # Plan: call MatrixWithUnits.plot, but add labels to axes

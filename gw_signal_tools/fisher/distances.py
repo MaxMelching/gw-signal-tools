@@ -1,5 +1,5 @@
 # ---------- Standard Lib Imports ----------
-from typing import Any, Optional, Literal, Callable
+from typing import Optional, Literal, Callable
 
 # ---------- Third Party Imports ----------
 import numpy as np
@@ -14,17 +14,11 @@ from ..inner_product import inner_product, norm, overlap
 from ..matrix_with_units import MatrixWithUnits
 
 
-# TODO: make interval handling more sophisticated? Example idea:
-# param_range can be both limits of interval or whole interval,
-# depending on the value of step_size. If None, it is assumed that
-# param_range contains all points to evaluate at, and if step_size
-# has certain value, an interval will be constructed
-
 def distance(
     param_to_vary: str,
-    param_range: list[u.Quantity, u.Quantity],
+    param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
-    step_size: u.Quantity | float,
+    param_step_size: Optional[u.Quantity | float] = None,
     distance_kind: Literal['diff_norm', 'mismatch_norm'] = 'diff_norm',
     wf_generator: Optional[Callable[[dict[str, u.Quantity]],
                                     FrequencySeries]] = None,
@@ -39,23 +33,44 @@ def distance(
     param_to_vary : str
         Parameter that is varied arount the respective value given in
         `wf_params`.
-    param_range : list[u.Quantity, u.Quantity]
-        Range to over which distances for different values of
-        `param_to_vary` are calculated.
-    wf_params : dict[str, u.Quantity]
+    param_vals : ~astropy.units.Quantity | float | list[~astropy.units.
+    Quantity] | list[float]
+        Interval over which distances for different values of
+        `param_to_vary` are calculated. The way this is input is
+        interpreted depends on the value of `param_step_size`: if this
+        is None, the distances are evaluated at the points given in
+        `param_vals`; if it is not None, the interval is resampled in
+        the bounds given by first and last element of `param_vals`.
+
+        Note that it will be converted to an astropy Quantity with the
+        same unit that `param_to_vary` has in `wf_params`. Thus, if no
+        units are specified for `param_vals` (i.e. a list of floats is
+        passed), make sure the values are given in the correct units. To
+        avoid potential inconsistencies, giving a Quantity as input here
+        is recommended.
+    wf_params : dict[str, ~astropy.units.Quantity]
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
         `wf_generator` and must contain the `param_to_vary` as key.
-    step_size : u.Quantity | float
-        Step size of points in the discretized interval `param_range`,
-        at which the distance values will be calculated.
+    param_step_size : ~astropy.units.Quantity | float, default = None
+        Step size of points in the discretized interval `param_vals`, at
+        which the distance values will be calculated. Can be a ``float``
+        or an astropy Quantity. Its effect is described in the
+        description of `param_vals`.
+
+        Note that it will be converted to an astropy Quantity with the
+        same unit that `param_to_vary` has in `wf_params`. Thus, if no
+        units are specified for `param_step_size` (i.e. a list of floats
+        is passed), make sure the values are given in the correct units.
+        To avoid potential inconsistencies, giving a Quantity as input
+        here is recommended.
     distance_kind : Literal['diff_norm', 'mismatch_norm'], optional,
     default = 'diff_norm'
         Distance notion to use. At the moment, two possibilities can be
         selected, 'diff_norm' and 'mismatch_norm'. For details on them,
         refer to the **Notes** section.
-    wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries],
-    optional, default = None
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries], optional, default = None
         Function that takes dicionary of waveform parameters as input
         and produces a waveform (stored in a GWpy ``FrequencySeries``).
 
@@ -88,7 +103,7 @@ def distance(
 
     'mismatch_norm' represents the mismatch
 
-    .. math:: 1 - \langle h_1, h_2 \rangle
+    .. math:: 1 - \frac{\langle h_1, h_2 \rangle}{||h_1|| \cdot ||h_2||}
 
     in the same language as before (i.e. same inner product etc.).
     """
@@ -97,25 +112,26 @@ def distance(
 
     center_val = wf_params[param_to_vary]
 
-    assert len(param_range) == 2, \
-        '`param_range` must contain exactly two elements'
+    # ----- Parameter range handling -----
+    param_vals = u.Quantity(param_vals, unit=center_val.unit)
 
-    assert (param_range[0] <= center_val) and (center_val <= param_range[1]), \
+    assert (param_vals[0] <= center_val) and (center_val <= param_vals[-1]), \
         ('The value of `param_to_vary` provided in `wf_params` has to be in '
-         'the interval given by `param_range`.')
+         'the interval given by `param_vals`.')
     
-    step_size = u.Quantity(step_size, unit=center_val.unit)
-    
-    param_vals = np.arange(
-        param_range[0].value,
-        (param_range[1] + 0.9*step_size).value,
-        step=step_size.value
-    )*center_val.unit
+    # Check if new interval shall be created, otherwise use param_vals
+    if param_step_size is not None:
+        param_step_size = u.Quantity(param_step_size, unit=center_val.unit)
+        
+        param_vals = np.arange(
+            param_vals[0].value,
+            (param_vals[-1] + 0.9*param_step_size).value,
+            step=param_step_size.value
+        )*center_val.unit
 
+    # ----- Initialization of variables and calculation -----
     distances = []
-    
     center_wf = wf_generator(wf_params)
-
     norm_center_wf = norm(center_wf, **inner_prod_kwargs)
 
     for param_val in param_vals:
@@ -127,18 +143,19 @@ def distance(
             else:
                 # Optimization is wanted, have to rewrite for this to take action
                 norm_wf = norm(wf, **inner_prod_kwargs)
-                overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
-                # distance_val = (norm_wf[1]**2 + norm_center_wf[1]**2 - 2*overlap[1])**(1/2)
-                distance_val = np.sqrt(norm_wf[1]**2 + norm_center_wf[1]**2 - 2*overlap[1])
+                wf_overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
+                # distance_val = (norm_wf[1]**2 + norm_center_wf[1]**2 - 2*wf_overlap[1])**(1/2)
+                distance_val = np.sqrt(norm_wf[1]**2 + norm_center_wf[1]**2 - 2*wf_overlap[1])
         elif distance_kind == 'mismatch_norm':
-            overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
+            # wf_overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
+            wf_overlap = overlap(wf, center_wf, **inner_prod_kwargs)
 
-            if isinstance(overlap, u.Quantity):
-                distance_val = 1 - overlap
+            if isinstance(wf_overlap, u.Quantity):
+                distance_val = 1 - wf_overlap
             else:
-                distance_val = 1 - overlap[1]
+                distance_val = 1 - wf_overlap[1]
             
-            # distance_val = 1 - overlap(wf, center_wf, **inner_prod_kwargs)
+            # distance_val = 1 - wf_overlap(wf, center_wf, **inner_prod_kwargs)
             # distance_val = norm(center_wf, **inner_prod_kwargs)**2 - inner_product(wf, center_wf, **inner_prod_kwargs)
         else:
             raise ValueError('Invalid `distance_kind` is given.')
@@ -154,10 +171,10 @@ def distance(
 
 def linearized_distance(
     param_to_vary: str | list[str],
-    param_range: list[u.Quantity, u.Quantity],
+    param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
-    step_size: u.Quantity | float,
     params_to_project: Optional[list[str]] = None,
+    param_step_size: Optional[u.Quantity] = None,
     wf_generator: Optional[Callable[[dict[str, u.Quantity]],
                                     FrequencySeries]] = None,
     **inner_prod_kwargs
@@ -181,16 +198,25 @@ def linearized_distance(
         principle, this should be just one parameter. However, giving
         more than one is permitted as long as they are also in
         `params_to_project`.
-    param_range : list[u.Quantity, u.Quantity]
-        Range to over which distances for different values of
-        `param_to_vary` are calculated.
-    wf_params : dict[str, u.Quantity]
+    param_vals : ~astropy.units.Quantity | float | list[~astropy.units.
+    Quantity] | list[float]
+        Interval over which distances for different values of
+        `param_to_vary` are calculated. The way this is input is
+        interpreted depends on the value of `param_step_size`: if this
+        is None, the distances are evaluated at the points given in
+        `param_vals`; if it is not None, the interval is resampled in
+        the bounds given by first and last element of `param_vals`.
+
+        Note that it will be converted to an astropy Quantity with the
+        same unit that `param_to_vary` has in `wf_params`. Thus, if no
+        units are specified for `param_vals` (i.e. a list of floats is
+        passed), make sure the values are given in the correct units. To
+        avoid potential inconsistencies, giving a Quantity as input here
+        is recommended.
+    wf_params : dict[str, ~astropy.units.Quantity]
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
         `wf_generator` and must contain the `param_to_vary` as key.
-    step_size : u.Quantity | float
-        Step size of points in the discretized interval `param_range`,
-        at which the distance values will be calculated.
     params_to_project : str | list[str], optional, default = None
         One or multiple parameters that the linearized distance will
         be optimized over (by projecting the Fisher matrix on the
@@ -198,8 +224,20 @@ def linearized_distance(
 
         Need not be in `param_to_vary`, but can as long as just a single
         element of `param_to_vary` is not in `params_to_project`.
-    wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries],
-    optional, default = None
+    param_step_size : ~astropy.units.Quantity | float, default = None
+        Step size of points in the discretized interval `param_vals`, at
+        which the distance values will be calculated. Can be a ``float``
+        or an astropy Quantity. Its effect is described in the
+        description of `param_vals`.
+
+        Note that it will be converted to an astropy Quantity with the
+        same unit that `param_to_vary` has in `wf_params`. Thus, if no
+        units are specified for `param_step_size` (i.e. a list of floats
+        is passed), make sure the values are given in the correct units.
+        To avoid potential inconsistencies, giving a Quantity as input
+        here is recommended.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries], optional, default = None
         Function that takes dicionary of waveform parameters as input
         and produces a waveform (stored in a GWpy ``FrequencySeries``).
 
@@ -218,6 +256,7 @@ def linearized_distance(
     if wf_generator is None:
         wf_generator = phenomx_generator
     
+    # ----- Parameter input handling -----
     if not isinstance(param_to_vary, str):
         if len(param_to_vary) == 1:
             # Only one element given, fine
@@ -243,21 +282,6 @@ def linearized_distance(
             )
 
     center_val = wf_params[param_to_vary]
-
-    assert len(param_range) == 2, \
-        '`param_range` must contain exactly two elements'
-
-    assert (param_range[0] <= center_val) and (center_val <= param_range[1]), \
-        ('The value of `param_to_vary` provided in `wf_params` has to be in '
-         'the interval given by `param_range`.')
-    
-    step_size = u.Quantity(step_size, unit=center_val.unit)
-    
-    param_vals = np.arange(
-        param_range[0].value,
-        (param_range[1] + 0.9*step_size).value,
-        step=step_size.value
-    )*center_val.unit
     
     if params_to_project is None:
         full_fisher = FisherMatrix(wf_params, param_to_vary, wf_generator,
@@ -275,6 +299,23 @@ def linearized_distance(
         index = non_proj_indices[0]
     else:
         index = 0
+
+    # ----- Parameter range handling -----
+    param_vals = u.Quantity(param_vals, unit=center_val.unit)
+
+    assert (param_vals[0] <= center_val) and (center_val <= param_vals[-1]), \
+        ('The value of `param_to_vary` provided in `wf_params` has to be in '
+         'the interval given by `param_vals`.')
+    
+    # Check if new interval shall be created, otherwise use param_vals
+    if param_step_size is not None:
+        param_step_size = u.Quantity(param_step_size, unit=center_val.unit)
+        
+        param_vals = np.arange(
+            param_vals[0].value,
+            (param_vals[-1] + 0.9*param_step_size).value,
+            step=param_step_size.value
+        )*center_val.unit
 
     return Series(
         # MatrixWithUnits.sqrt(abs(fisher))[index, index]*np.abs(param_vals - center_val),

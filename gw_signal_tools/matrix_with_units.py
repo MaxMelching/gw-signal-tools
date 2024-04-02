@@ -239,8 +239,9 @@ class MatrixWithUnits:
 
     # ----- Deal with certain standard class functions -----
     def __repr__(self) -> str:
+        return (np.array(self.value) * np.array(self.unit)).__repr__()
         # return (self.value * self.unit).__repr__()
-        return (np.array(self.value) * np.array(self.unit)).__repr__()  # Are converted in init -> now not anymore
+        # return (np.array(self.value) * np.array(self.unit)).tolist().__repr__()  # Are converted in init -> now not anymore
     
     def __float__(self) -> float:
         # Will throw TypeError in most cases, but not because of our class,
@@ -626,6 +627,7 @@ class MatrixWithUnits:
 
         return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
     
+    # TODO: make diag and sqrt property? Or staticmethod? Static for sqrt would make lot of sense
     def diag(self):
         if isinstance(self.unit, self._pure_unit_types):
             return MatrixWithUnits(np.diagonal(self.value).copy(), self.unit)
@@ -641,8 +643,8 @@ class MatrixWithUnits:
         #     return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
 
     def cond(self,
-            matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
-        ) -> float:
+        matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
+    ) -> float:
         """
         Condition number of the matrix.
 
@@ -686,7 +688,7 @@ class MatrixWithUnits:
 
 
     # ---------- Some custom additions -----
-    def plot(self):
+    def plot(self, ax: Optional[Any] = None):
         # NOTE: all of this code is inspired by heatmap in seaborn, in fact
         # the relative_luminosity function is copied from there
         # -> is done to avoid additional dependencies (pandas, seaborn)
@@ -714,7 +716,8 @@ class MatrixWithUnits:
             except ValueError:
                 return lum
 
-        fig, ax = plt.subplots()
+        if ax is None:
+            fig, ax = plt.subplots()
 
         mesh = ax.pcolormesh(np.log10(np.abs(self)), cmap='magma')
         mesh.update_scalarmappable()
@@ -732,13 +735,19 @@ class MatrixWithUnits:
             plt.text(
                 x=j+0.5,
                 y=i+0.5,
-                s=f'{val:.3e}{unit:latex}',
+                s=f'{val:.3e}\,{unit:latex}',
                 ha='center',
                 va='center',
                 color=text_color
             )
 
-        ax.figure.colorbar(mesh)  # Looks much better than ax.colorbar
+        if (shape := self.shape)[0] == 1 and shape[0] < shape[1]:
+            cbar = ax.figure.colorbar(mesh, location='top')
+        else:
+            cbar = ax.figure.colorbar(mesh)
+
+        cbar.set_label(r'$\log_{10}(|M_{ij}|)$', labelpad=24.0)
+        # \cdot instead of M_{ij}?
 
         ax.set_aspect(1)
 

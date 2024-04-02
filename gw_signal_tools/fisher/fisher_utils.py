@@ -221,7 +221,7 @@ def fisher_matrix(
             # TODO: maybe copy selected stuff only?
             deriv_info[param] = info
         else:
-            plt.close()  # Otherwise axes remain open and eventually get displayed
+            plt.close('all')  # Otherwise axes remain open and eventually get displayed
 
 
     # ----- Populate Fisher matrix -----
@@ -259,7 +259,7 @@ def get_waveform_derivative_1D_with_convergence(
     break_upon_convergence: bool = True,
     return_info: bool = False,
     **inner_prod_kwargs
-) -> FrequencySeries | tuple[FrequencySeries, u.Quantity]:
+) -> FrequencySeries | tuple[FrequencySeries, dict[str, Any]]:
     """
     Calculate numerical derivative with respect to a waveform parameter,
     using the five-point-stencil method for different step sizes and a

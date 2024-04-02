@@ -6,6 +6,7 @@ from typing import Optional, Any, Literal, Self, Callable
 
 # ----- Third Party Imports -----
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from gwpy.frequencyseries import FrequencySeries
@@ -105,7 +106,7 @@ class FisherMatrix:
                     **self.metadata
                 )
 
-                plt.close()  # Avoid too many open axes
+                plt.close('all')  # Avoid too many open axes
             else:
                 self._fisher = fisher_matrix(
                     self.wf_params_at_point,
@@ -304,58 +305,137 @@ class FisherMatrix:
 
         return fisher - fisher @ full_inv @ fisher
         # return fisher - MatrixWithUnits(np.einsum('ij, jk, kl', fisher, full_inv, fisher), self.fisher.unit)
+
+        # Idea: return FisherMatrix instead of MatrixWithUnits? Would
+        # enable things like calculation of systematic error using this
+        # projected version (not sure if this makes sense, though)
+        # out = self.copy()
+        # for param in params:
+        #     out.params_to_vary.pop(key)  # Or remove, not sure atm
+        #     #  Also look at deriv_info, pop params there
+        #     try:
+        #         out.deriv_info.pop(key)
+        #     except KeyError:
+        #         pass
+        #     # More elegant solution
+        #     out.deriv_info.pop(key, None)  # Makes None default if key not there
+        
+        # out._fisher = fisher - fisher @ full_inv @ fisher
+
+        # return out
     
-    def statistical_error(self, param_diff: MatrixWithUnits) -> u.Quantity:
+    def statistical_error(self, params: Optional[str | list[str]] = None) -> MatrixWithUnits:
         r"""
-        Calculates
+        Calculates the :math:`1-\sigma` statistical error
 
-        .. math:: \sum_{\mu \nu} \Gamma_{\mu \nu} \Delta \lambda^\mu
-        \Delta \lambda^\nu
+        .. math:: \Delta \theta^\mu = \sqrt{\Gamma^{-1}_{\mu \mu}}
 
-        using the given parameter difference :math:`\Delta \lambda^\mu`.
+        for the selected parameters.
 
         Parameters
         ----------
-        param_diff : ~gw_signal_tools.matrix_with_units.MatrixWithUnits
-            Row or column vector of parameter differences, which must be
-            specified with units (i.e. as a MatrixWithUnits instance).
-
-            Order must match the order used in `params_to_vary` argument
-            that has been used during Fisher matrix calculation.
+        params : str | list[str], optional, default = None
+            Parameter(s) to calculate error for. In case it is None (the
+            default), the error for all parameters from `self.
+            params_to_vary` is calculated. Can also be a string or list
+            of strings, but these have to match elements of `self.
+            params_to_vary`.
 
         Returns
         -------
-        ~astropy.units.quantity
-            Total statistical error.
+        ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+            Vector of statistical errors. Indices match indices of
+            `params_to_vary` variable that has been used to initialize
+            the class.
 
         Notes
         -----
         Calculating this does not make sense if a PSD for no noise is
-        used during the Fisher matrix calculations
+        used during the Fisher matrix calculations.
         """
-        assert len(param_diff.shape) == 1, \
-            '`param_diffs` must be either a row or a column vector.'
-        # -> do this: We reshape anyway...
+        if params is not None:
+            if isinstance(params, str):
+                params = [params]
+            
+            for param in params:
+                assert param in self.params_to_vary, \
+                    (f'Parameter {param} was not used to calculate the Fisher '
+                    'matrix, so it cannot be projected out of it.')
+            
+            param_indices = np.where(np.isin(self.params_to_vary, params))[0]
+        else:
+            # Take all parameters
+            param_indices = len(self.params_to_vary)*[True]
         
-        # TODO: pay more attention to shapes, i.e. define param_diff_row
-        # and param_diff_col -> ah, or just use transpose...
-        
-        return param_diff @ self.fisher_inverse @ param_diff
-    # TODO: return **(1/2) of that? -> can now even do sqrt
-    # -> also test if Fraction from functools is better for numerical precision
+        return MatrixWithUnits.sqrt(self.fisher_inverse.diag()[param_indices])
+        # if len(params) != 1:
+        #     # TODO: decide if this distinction makes sense... Multiple return types are meh, right?
+        #     return MatrixWithUnits.sqrt(self.fisher_inverse.diag()[param_indices])
+        # else:
+        #     return np.sqrt(self.fisher_inverse.diag()[param_indices])
 
     def systematic_error(self,
-        wf_gen_2: Callable[[dict[str, u.Quantity]], FrequencySeries]
+        wf_generator_2: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        params: Optional[str | list[str]] = None
     ) -> MatrixWithUnits:
-        # TODO: require to give new inner_prod_kwargs here?
+        r"""
+        Calculates the systematic error
 
-        delta_h = self.wf_generator(self.wf_params_at_point) - wf_gen_2(self.wf_params_at_point)
+        .. math:: \Delta \theta^\mu = \sum_{\nu} \Gamma^{-1}_{\mu \nu}
+        \langle \frac{\partial h}{\partial \theta^\nu}, \delta h \rangle
+
+        where :math:`\delta h = h - h_2`. Here, :math:`h` is the
+        waveform model used to calculate the Fisher matrix instance and
+        :math:`h_2` is a second model, with respect to which we want to
+        compute the systematic error.
+
+        Parameters
+        ----------
+        wf_generator_2 : Callable[[dict[str, ~astropy.units.Quantity]],
+        ~gwpy.frequencyseries.FrequencySeries]
+            Waveform generator for other waveform model that the
+            systematic error shall be computed with respect to.
+        params : str | list[str], optional, default = None
+            Parameter(s) to calculate error for. In case it is None (the
+            default), the error for all parameters from `self.
+            params_to_vary` is calculated. Can also be a string or list
+            of strings, but these have to match elements of `self.
+            params_to_vary`.
+
+        Returns
+        -------
+        MatrixWithUnits
+            Column vector containing the systematic errors.
+        """
+        # TODO: require to give new inner_prod_kwargs here?
+        if params is not None:
+            if isinstance(params, str):
+                params = [params]
+            
+            for param in params:
+                assert param in self.params_to_vary, \
+                    (f'Parameter {param} was not used to calculate the Fisher '
+                    'matrix, so it cannot be projected out of it.')
+            
+            param_indices = np.where(np.isin(self.params_to_vary, params))[0]
+        else:
+            # Take all parameters
+            param_indices = len(self.params_to_vary)*[True]
+
+        delta_h = self.wf_generator(self.wf_params_at_point) \
+                  - wf_generator_2(self.wf_params_at_point)
+        # TODO: enable possibility to optimize this over certain parameters,
+        # for example f_ref
         
         if self.metadata['return_info']:
             derivs = [
                 self.deriv_info[param]['deriv'] for param in self.params_to_vary
             ]
         else:
+            # NOTE: I don't think we can/should calculate derivs for the
+            # parameters in params only because this argument is meant
+            # to determine return. For error, parameters that are not in
+            # in params still play a role and have to be accounted for.
             from gw_signal_tools.fisher import get_waveform_derivative_1D_with_convergence
             derivs = [
                 get_waveform_derivative_1D_with_convergence(
@@ -385,23 +465,46 @@ class FisherMatrix:
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         
-        return self.fisher_inverse @ vector
+        return (self.fisher_inverse @ vector)[param_indices]
 
-    def _plot_matrix(self, matrix: MatrixWithUnits):
-        # Plan: call MatrixWithUnits.plot, but add labels to axes
-        # -> for now, we implement everything here
-        
-        ax = MatrixWithUnits.plot(matrix)
+    def plot_matrix(self, matrix: MatrixWithUnits, xticks: bool = True,
+                    yticks: bool = True, *args, **kwargs) -> mpl.axes.Axes:
+        """
+        Plotting routine specifically for matrices in a ``FisherMatrix``
+        instance. Extends `MatrixWithUnits.plot` by adding labels for
+        parameters.
+
+        Parameters
+        ----------
+        matrix : MatrixWithUnits
+            Matrix to plot. Is assumed to have entries that correspond
+            to the parameters in `params_to_vary` variable of the
+            instance that the method is called upon.
+        xticks : bool, optional, default = True
+            Whether or not ticks on the x-axis shall be drawn.
+        yticks : bool, optional, default = True
+            Whether or not ticks on the y-axis shall be drawn.
+
+        Returns
+        -------
+        ~matplotlib.axes.Axes
+            A matplotlib axes object with the plot attached to it. Can
+            be further edited or simply plotted by calling `plt.show()`
+            after calling this function.
+        """
+        ax = MatrixWithUnits.plot(matrix, *args, **kwargs)
 
         tick_labels = self.params_to_vary if not isinstance(self.params_to_vary, str) else [self.params_to_vary]
         from ..fisher import latexparams
         tick_labels = [latexparams[param] if param in latexparams else param for param in tick_labels]
         tick_locs = np.arange(0, len(tick_labels)) + 0.5
 
-        ax.set_xticks(tick_locs, tick_labels, rotation=45,
-                      horizontalalignment='right', rotation_mode='anchor')
-        ax.set_yticks(tick_locs, tick_labels, rotation=45,
-                      verticalalignment='baseline', rotation_mode='anchor')
+        if xticks:
+            ax.set_xticks(tick_locs, tick_labels, rotation=45,
+                        horizontalalignment='right', rotation_mode='anchor')
+        if yticks:
+            ax.set_yticks(tick_locs, tick_labels, rotation=45,
+                        verticalalignment='baseline', rotation_mode='anchor')
         ax.tick_params(length=0)
 
         # -> rotation is good idea if param not in displayparams, otherwise looks strange
@@ -412,20 +515,17 @@ class FisherMatrix:
         # NOT final version
 
         if not (only_fisher or only_fisher_inverse):
-            self._plot_matrix(self.fisher)
+            self.plot_matrix(self.fisher)
 
-            self._plot_matrix(self.fisher_inverse)
+            self.plot_matrix(self.fisher_inverse)
         elif only_fisher:
-            self._plot_matrix(self.fisher)
+            self.plot_matrix(self.fisher)
         elif only_fisher_inverse:
-            self._plot_matrix(self.fisher_inverse)
+            self.plot_matrix(self.fisher_inverse)
 
     # Plans for plotting: make one function plot_uncertainty where
     # color denotes uncertainty in fisher_inverse. And then one general
     # function plot where output is plot of fisher and fisher_inverse
-
-    # def __plot__(self, *args, **kwargs):
-    #     return self.plot(*args, **kwargs)
 
     def cond(self, matrix_norm: float | str = 'fro'):
         """
@@ -501,13 +601,25 @@ class FisherMatrix:
 
     # ----- Set some Python class related goodies -----
     def __repr__(self) -> str:
-        return self.fisher.__repr__()
+        # return self.fisher.__repr__()
         # TODO: make custom one with more information
-        # return '''
-        # Fisher Matrix
 
-        # MORE DESCRIPTION TO COME
-        # '''
+        from shutil import get_terminal_size
+        terminal_width = get_terminal_size()[0]
+
+        def get_name_header(name: str) -> str:
+            return f"{' ' + name + ' ':-^{terminal_width}}"
+        
+        return f'''
+{get_name_header('Generation Parameters')}
+{self.params_to_vary.__repr__()}
+\n
+{get_name_header('Fisher Matrix')}
+{self.fisher.__repr__()}
+\n
+{get_name_header('Fisher Matrix Inverse')}
+{self.fisher_inverse.__repr__()}
+        '''
 
     def __array__(self) -> np.ndarray:
         # Most intuitive behaviour: indeed return a Fisher matrix as array

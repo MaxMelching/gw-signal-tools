@@ -105,22 +105,10 @@ def test_project():
         wf_generator=phenomx_generator,
     )
 
-    fisher_fully_projected = fisher.project_fisher(test_params)
+    project_params = ['time']
+    fisher_projected = fisher.project_fisher(project_params).fisher
 
-    assert_allclose(
-        fisher_fully_projected.value,
-        0.0,
-        atol=1e-10 * np.max(np.abs(fisher.value)),
-        rtol=0
-    )
-    # Large values are decreased by 10 orders of magnitude. For smaller
-    # values, this test will pass almost automatically, but they have
-    # been close to zero in some cases anyway, so testing with
-    # rtol=1e-10 or testing that smaller than 1e-10*fisher.value would
-    # also not make sense (values that are already essentially zero
-    # will not change by 10 orders of magnitude)
-
-    fisher_partially_projected = fisher.project_fisher('time')  # Test if works
+    assert fisher_projected.shape == (len(test_params) - len(project_params), len(test_params) - len(project_params))
 
 def test_plot():
     fisher = FisherMatrix(

@@ -82,20 +82,24 @@ class FisherMatrix:
     # TODO: make setter etc. for it
 
     def __init__(self,
-            wf_params_at_point: dict[str, u.Quantity],
-            params_to_vary: str | list[str],
-            wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
-            _copy: bool = False,
-            **metadata
-        ) -> None:
+        wf_params_at_point: dict[str, u.Quantity],
+        params_to_vary: str | list[str],
+        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        _copy: bool = False,
+        **metadata
+    ) -> None:
         """
         Initialize a ``FisherMatrix``.
         """
         self.wf_params_at_point = wf_params_at_point
-        self.params_to_vary = params_to_vary
+        if isinstance(params_to_vary, str):
+            self.params_to_vary = [params_to_vary]
+        else:
+            self.params_to_vary = params_to_vary.copy()
         self.wf_generator = wf_generator
         self.metadata = self.default_metadata | metadata
     
+
 
         if not _copy:
             if self.metadata['return_info']:
@@ -114,6 +118,9 @@ class FisherMatrix:
                     self.wf_generator,
                     **self.metadata
                 )
+
+                # self._deriv_info = {'general_info': 'There is no info available.'}
+                self._deriv_info = {}
 
             # NOTE: although it may not be good practice to set private
             # attributes like self._fisher, this is our workaround to make
@@ -303,26 +310,48 @@ class FisherMatrix:
         # full_inv = MatrixWithUnits(full_inv.T, self.unit**-1)
         fisher = self.fisher
 
-        return fisher - fisher @ full_inv @ fisher
+        # return fisher - fisher @ full_inv @ fisher
         # return fisher - MatrixWithUnits(np.einsum('ij, jk, kl', fisher, full_inv, fisher), self.fisher.unit)
 
         # Idea: return FisherMatrix instead of MatrixWithUnits? Would
         # enable things like calculation of systematic error using this
         # projected version (not sure if this makes sense, though)
-        # out = self.copy()
-        # for param in params:
-        #     out.params_to_vary.pop(key)  # Or remove, not sure atm
-        #     #  Also look at deriv_info, pop params there
-        #     try:
-        #         out.deriv_info.pop(key)
-        #     except KeyError:
-        #         pass
-        #     # More elegant solution
-        #     out.deriv_info.pop(key, None)  # Makes None default if key not there
+        out = self.copy()
+        for param in params:
+            out.params_to_vary.remove(param)
+            #  Also look at deriv_info, pop params there
+            out._deriv_info.pop(param, None)  # Makes None default if key not there
         
-        # out._fisher = fisher - fisher @ full_inv @ fisher
+        param_indices_2 = [i for i in range(len(self.params_to_vary))]
+        for index in param_indices:
+            param_indices_2.remove(index)
+        index_grid_2 = np.ix_(param_indices_2, param_indices_2)
+        out._fisher = (fisher - fisher @ full_inv @ fisher)[index_grid_2]
+        # This is the sneaky way of changing out.fisher (which has no setter,
+        # so changing it is not permitted otherwise)
+        out._fisher_inverse = MatrixWithUnits.inv(out.fisher)
 
-        # return out
+        # out.metadata['general_info'] = 'This is a projected Fisher matrix.'
+        # out.metadata['projected'] = True  # Given to fisher_matrix...
+        out._is_projected = True
+
+        return out
+    
+    @property
+    def is_projected(self):
+        """
+        Information on whether or not the matrix was obtained via
+        calculation only or via calculation and subsequent projection.
+        In the latter case, one cannot reproduce the result by
+        calculating the matrix again with the same parameters.
+
+        :type: boolean
+        """
+        try:
+            return self._is_projected
+        except AttributeError:
+            self._is_projected = False
+            return False
     
     def statistical_error(self, params: Optional[str | list[str]] = None) -> MatrixWithUnits:
         r"""
@@ -376,7 +405,9 @@ class FisherMatrix:
 
     def systematic_error(self,
         wf_generator_2: Callable[[dict[str, u.Quantity]], FrequencySeries],
-        params: Optional[str | list[str]] = None
+        # TODO: rename to reference_model?
+        params: Optional[str | list[str]] = None,
+        **inner_prod_kwargs
     ) -> MatrixWithUnits:
         r"""
         Calculates the systematic error
@@ -449,17 +480,18 @@ class FisherMatrix:
         # Note: we want to use same kwargs for inner product as for
         # calculation of Fisher matrix here, have to be extracted from
         # metadata property
-        from inspect import signature
-        fisher_args = list(signature(fisher_matrix).parameters)
-        fisher_args.remove('inner_prod_kwargs')
-        inner_prod_kwargs = self.metadata.copy()
+        # -> changed this now, we might want to optimize over some stuff here
+        # from inspect import signature
+        # fisher_args = list(signature(fisher_matrix).parameters)
+        # fisher_args.remove('inner_prod_kwargs')
+        # inner_prod_kwargs = self.metadata.copy()
 
-        # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
-        for key in fisher_args:
-            try:
-                inner_prod_kwargs.pop(key)
-            except KeyError:
-                pass
+        # # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
+        # for key in fisher_args:
+        #     try:
+        #         inner_prod_kwargs.pop(key)
+        #     except KeyError:
+        #         pass
 
         vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
         for i, deriv in enumerate(derivs):
@@ -638,9 +670,8 @@ class FisherMatrix:
         
         new_matrix._fisher = self.fisher.copy()
         new_matrix._fisher_inverse = self.fisher_inverse.copy()
-
-        # TODO: decide if other attributes like condition number or
-        # deriv_info shall be copied -> cond number not
+        new_matrix._deriv_info = self.deriv_info.copy()
+        new_matrix._is_projected = self.is_projected
 
         return new_matrix
     
@@ -650,4 +681,4 @@ class FisherMatrix:
     def __hash__(self) -> int:
         return hash(self.fisher) ^ hash(self.fisher_inverse) \
             ^ hash(self.metadata) ^ hash(self.wf_params_at_point) \
-            ^ hash(self.params_to_vary)
+            ^ hash(self.params_to_vary) ^ hash(self.is_projected)

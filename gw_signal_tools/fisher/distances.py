@@ -291,7 +291,7 @@ def linearized_distance(
         param_to_vary = [param_to_vary] + params_to_project
         full_fisher = FisherMatrix(wf_params, param_to_vary, wf_generator,
                                    return_info=False, **inner_prod_kwargs)
-        fisher = full_fisher.project_fisher(params_to_project)
+        fisher = full_fisher.project_fisher(params_to_project).fisher
 
     if params_to_project is not None:
         non_proj_indices = [i for i, val in enumerate(param_to_vary) \

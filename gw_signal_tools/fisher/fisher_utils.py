@@ -546,17 +546,35 @@ def get_waveform_derivative_1D_with_convergence(
         # consume quite some memory
         # -> could also make this class method of FisherMatrix, information
         #    about step sizes is available there
-        fig, ax = plt.subplots()
+
+        # fig, ax = plt.subplots(nrows=2, sharex=True)
+        fig = plt.figure()
+        ax = fig.subplots(nrows=2, sharex=True)
 
         for i in range(len(derivative_vals)):
-            ax.plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]:.6f} (Re)')
-            ax.plot(derivative_vals[i].imag, ':', label=f'{step_sizes[i]:.6f} (Im)')
+            ax[0].plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]:.6f}')
+            ax[1].plot(derivative_vals[i].imag, '--', label=f'{step_sizes[i]:.6f}')
 
-        ax.legend(title='Step Sizes', ncols=max(1, len(derivative_vals) % 3))
-
-        ax.set_xlabel('$f$')
-        ax.set_ylabel('Derivative')
-        ax.set_title(f'Parameter: {param_to_vary}')
+        # for i in [0, 1]:
+        #     ax[i].legend(
+        #         title='Step Sizes',
+        #         ncols=max(1, len(derivative_vals) % 3),
+        #         bbox_to_anchor=(1.05, 0.5),
+        #         loc='center left'
+        #     )
+        # With less code (and only one legend in the end)
+        fig.legend(
+            title='Step Sizes',
+            ncols=max(1, len(derivative_vals) % 3),
+            bbox_to_anchor=(0.96, 0.5),
+            loc='center left'
+        )
+        
+        # ax[0].set_title(f'Parameter: {param_to_vary}')
+        fig.suptitle(f'Parameter: {param_to_vary}')
+        ax[1].set_xlabel('$f$')
+        ax[0].set_ylabel('Derivative Re')
+        ax[1].set_ylabel('Derivative Im')
 
         # plt.close()
 

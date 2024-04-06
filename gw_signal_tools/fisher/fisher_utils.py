@@ -52,7 +52,8 @@ def num_diff(
         elif not isinstance(h, u.Quantity):
             h = u.Quantity(h, signal.xindex.unit)
 
-        if not allclose_quantity(h, signal.dx, atol=0.0, rtol=0.001):
+        if not allclose_quantity(h.value, signal.dx.value,
+                                 atol=0.0, rtol=0.001):
             warnings.warn(
                 'Given `h` does not coincide with `signal.dx`.'
             )
@@ -89,6 +90,7 @@ def fisher_matrix(
     params_to_vary: str | list[str],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     step_sizes: Optional[list[float] | np.ndarray] = None,
+    start_step_size: Optional[float] = 1e-2,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
     convergence_threshold: Optional[float] = None,
     break_upon_convergence: bool = True,
@@ -126,7 +128,11 @@ def fisher_matrix(
         get_wf_generator`, which generates a suitable function from
         a few arguments.
     step_sizes : list[float], optional, default = None
-        Step sizes that are used in the numerical differention.
+        Step sizes used in the numerical differention. Based on the
+        evaluation point, these are used as relative or absolute steps.
+    start_step_size: float, optional, default = 1e-2
+        Alternative way to control the relative step sizes. Determines
+        the largest relative step size that is tried.
     convergence_check : Optional[Literal['diff_norm', 'mismatch']],
     optional, default = None
         Criterion used to asses stability of the result. Currently, two
@@ -206,6 +212,7 @@ def fisher_matrix(
             param_to_vary=param,
             wf_generator=wf_generator,
             step_sizes=step_sizes,
+            start_step_size=start_step_size,
             convergence_check=convergence_check,
             break_upon_convergence=break_upon_convergence,
             convergence_threshold=convergence_threshold,
@@ -254,6 +261,7 @@ def get_waveform_derivative_1D_with_convergence(
     param_to_vary: str,
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     step_sizes: Optional[list[float] | np.ndarray] = None,
+    start_step_size: Optional[float] = 1e-2,
     convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
     convergence_threshold: Optional[float] = None,
     break_upon_convergence: bool = True,
@@ -261,9 +269,10 @@ def get_waveform_derivative_1D_with_convergence(
     **inner_prod_kwargs
 ) -> FrequencySeries | tuple[FrequencySeries, dict[str, Any]]:
     """
-    Calculate numerical derivative with respect to a waveform parameter,
-    using the five-point-stencil method for different step sizes and a
-    variable criterion check the "quality" of approximation.
+    Calculate numerical derivative of gravitational wave (GW) waveforms
+    with respect to a waveform parameter in frequency domain, using the
+    five-point-stencil method for different step sizes and a variable
+    criterion check the "quality" of approximation.
 
     Parameters
     ----------
@@ -290,7 +299,11 @@ def get_waveform_derivative_1D_with_convergence(
         get_wf_generator`, which generates a suitable function from
         a few arguments.
     step_sizes : list[float], optional, default = None
-        Step sizes that are used in the numerical differention.
+        Step sizes used in the numerical differention. Based on the
+        evaluation point, these are used as relative or absolute steps.
+    start_step_size: float, optional, default = 1e-2
+        Alternative way to control the relative step sizes. Determines
+        the largest relative step size that is tried.
     convergence_check : Optional[Literal['diff_norm', 'mismatch']],
     optional, default = None
         Criterion used to asses stability of the result. Currently, two
@@ -306,10 +319,15 @@ def get_waveform_derivative_1D_with_convergence(
         the derivative).
         - mismatch: calculates the mismatch between consecutive
         derivatives (also using the function `~gw_signal_tools.
-        inner_product.norm`), which is defined as :math:`1 - overlap`.
+        inner_product.norm`), which is defined as `1 - overlap`.
         Again, the result is taken to be converged if this mismatch
         falls under a certain threshold, provided by
         `convergence_threshold`.
+
+        For larger differences, they might produce different results,
+        but their behaviour for small distances should be very simliar
+        because they coincide in the infinitesimal limit (they induce
+        the same metric).
 
     convergence_threshold : float, optional, default = None
         Threshold that is used to decide if result is converged. This
@@ -337,7 +355,13 @@ def get_waveform_derivative_1D_with_convergence(
     """
     # ----- Check defaults -----
     if step_sizes is None:
-        step_sizes = np.reshape(np.outer([1e-2, 1e-3, 1e-4, 1e-5], [5, 1]), -1)
+        step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+        # NOTE: keeping 1e-2 as default start_step_size is most likely too
+        # high for relative ones. But depending on point that derivative is
+        # evaluated in, absolute step sizes are used sometimes, too, and in
+        # that case, 1e-2 seems to be a valid starting point.
+        # Also, five-point-stencil does not need values as small as the ones
+        # commonly used with e.g. central difference.
 
     if convergence_check is None:
         convergence_check = 'diff_norm'
@@ -350,10 +374,10 @@ def get_waveform_derivative_1D_with_convergence(
     if convergence_threshold is None:
         match convergence_check:
             case 'diff_norm':
-                convergence_threshold = 0.01
+                convergence_threshold = 0.001
                 # Could even be 0.005 or so, typically values are very small (which is good)
             case 'mismatch':
-                convergence_threshold = 0.01  # Maybe choose 0.03? Or 0.001?
+                convergence_threshold = 0.001  # Maybe choose 0.03? Or 0.001?
                 # convergence_threshold = 0.001
                 
     # ----- Calculation -----
@@ -494,10 +518,11 @@ def get_waveform_derivative_1D_with_convergence(
                     break
         
 
-        # Check (i) if we shall break upon convergence and in case no (ii) if
-        # convergence was reached using these step sizes (refine them if not)
+        # Check if step sizes shall be refined. This is be done if no breaking
+        # upon convergence is wanted or if no convergence was reached yet
         if not break_upon_convergence or not is_converged:
             # TODO: remove break_upon_convergence and just handle that via convergence_threshold?
+            # I.e. set to 0.0 if no breaking wanted
             
             min_dev_index = np.nanargmin(convergence_vals)  # type: ignore
             # Explanation of ignore: it seems like a signedinteger is returned
@@ -508,23 +533,36 @@ def get_waveform_derivative_1D_with_convergence(
             # Cut steps made around step size with best criterion value in half
             # compared to current steps (we take average step size in case
             # difference to left and right is unequl)
-            left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
-            if min_dev_index < len(step_sizes) - 1:
+            if min_dev_index < (len(step_sizes) - 1):
+                left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
                 right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
                 # 4.0 due to factor of two in step_sizes below
+
+                step_sizes = step_sizes[min_dev_index] + np.array(
+                    [2.*left_step, 1.*left_step, 1.*right_step, 2.*right_step]
+                )
+                # TODO: also include 0.0 here? I.e. the optimal one, as of now?
             else:
-                # Index + 1 is invalid
-                right_step = left_step
+                # Smallest convergence value at smallest step size, so
+                # min_dev_index + 1 is invalid index. Instead of zooming in,
+                # smaller step sizes are explored
+
+                # Get current difference of step sizes
+                # if len(step_sizes) > 1:
+                #     right_step = step_sizes[min_dev_index] - step_sizes[min_dev_index - 1]
+                # else:
+                #     right_step = step_sizes[min_dev_index]
             
-            step_sizes = step_sizes[min_dev_index] + np.array(
-                [2.0 * left_step, 1.0 * left_step, 1.0 * right_step, 2.0 * right_step]
-            )
+                # step_sizes = step_sizes[min_dev_index] - np.array(range(5))*right_step
+                # step_sizes = np.array([step_sizes[min_dev_index]/10**i for i in range(5)])
+
+                # Refine in same way that we do with start_step_size
+                step_sizes = np.reshape(np.outer([step_sizes[min_dev_index]/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+
 
             refine_numb += 1
         else:
             break
-
-    logging.debug(min_dev_index)
 
     # ----- Verification of result and information collection -----
     if not is_converged:
@@ -534,7 +572,7 @@ def get_waveform_derivative_1D_with_convergence(
             f'`{convergence_check}`, even after {refine_numb} refinements of '
             'step sizes. The minimal value of the criterion was '
             f'{convergence_vals[min_dev_index]}, which is above the selected '
-            f'threshold of {convergence_threshold}.'
+            f'threshold of {convergence_threshold}. '
             'If you are not satisfied with the result (for an eye test, you '
             'can plot the `convergence_plot` value returned in case '
             '`return_info=True`), consider changing the initial step sizes.'
@@ -553,32 +591,20 @@ def get_waveform_derivative_1D_with_convergence(
 
         for i in range(len(derivative_vals)):
             ax[0].plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]:.6f}')
-            ax[1].plot(derivative_vals[i].imag, '--', label=f'{step_sizes[i]:.6f}')
+            ax[1].plot(derivative_vals[i].imag, '--')
+            # No label for second because otherwise, everything shows up twice
+            # in figure legend
 
-        # for i in [0, 1]:
-        #     ax[i].legend(
-        #         title='Step Sizes',
-        #         ncols=max(1, len(derivative_vals) % 3),
-        #         bbox_to_anchor=(1.05, 0.5),
-        #         loc='center left'
-        #     )
-        # With less code (and only one legend in the end)
         fig.legend(
             title='Step Sizes',
-            ncols=max(1, len(derivative_vals) % 3),
             bbox_to_anchor=(0.96, 0.5),
             loc='center left'
         )
         
-        # ax[0].set_title(f'Parameter: {param_to_vary}')
         fig.suptitle(f'Parameter: {param_to_vary}')
         ax[1].set_xlabel('$f$')
         ax[0].set_ylabel('Derivative Re')
         ax[1].set_ylabel('Derivative Im')
-
-        # plt.close()
-
-        # TODO: check if this has unwanted effect, like having an open axis flying around after function call
 
         return derivative_vals[min_dev_index], {
             'norm_squared': deriv_norms[min_dev_index],
@@ -621,7 +647,8 @@ def get_waveform_derivative_1D(
         value, frequencies and units, which are all required for the
         calculations that are carried out.
     step_size : float
-        Step size used in numerical differentiation.
+        Step size used in the numerical differention. Based on the
+        evaluation point, this is used as relative or absolute step.
 
     Returns
     -------
@@ -637,8 +664,11 @@ def get_waveform_derivative_1D(
     """
 
     param_center_val = wf_params_at_point[param_to_vary]
-    step_size = u.Quantity(step_size, unit=param_center_val.unit)
-    # step_size = step_size * param_center_val
+    # TODO: check with scipy when to use rel and when abs step size
+    if np.log10(param_center_val.value) < 1:
+        step_size = u.Quantity(step_size, unit=param_center_val.unit)
+    else:
+        step_size = u.Quantity(step_size * param_center_val, unit=param_center_val.unit)
     param_vals = param_center_val + np.array([-2., -1., 1., 2.]) * step_size
 
 
@@ -646,17 +676,6 @@ def get_waveform_derivative_1D(
         wf_generator(wf_params_at_point | {param_to_vary: param_val}
                     ) for param_val in param_vals
     ]
-
-    
-    # TODO: change override once lalsuite gets it right!!!
-    for wf in waveforms:
-        try:
-            wf.override_unit(u.s)
-        except AttributeError:  # pragma: no cover
-            # In case different kind of wf_generator is provided
-            # Could also turn into u.Quantity here... But usecase not there perhaps
-            pass
-
 
     deriv_series = waveforms[0] - 8.0 * waveforms[1] + 8.0 * waveforms[2] - waveforms[3]    
     deriv_series /= 12.0 * step_size

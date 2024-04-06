@@ -113,7 +113,8 @@ filterwarnings = [
   'ignore:Deprecated call to `pkg_resources.declare_namespace(.*)`.*',
   'ignore:This code is currently UNREVIEWED, use with caution!',
   'ignore:.*This code is currently UNREVIEWED, use with caution!.*',
-  'ignore: Are you sure you want to have a q of.*'  # We skip when this occurs in test_fisher_utils, so no need to worry
+  'ignore: Are you sure you want to have a q of.*',  # We skip when this occurs in test_fisher_utils, so no need to worry
+  'ignore: Please use `OptimizeResult` from the `scipy.optimize` namespace.*'
 ]
 
 

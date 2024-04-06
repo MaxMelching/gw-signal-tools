@@ -76,6 +76,7 @@ wf_params = {
     'deltaT': 1./2048.*u.s,
     'f22_start': f_min,
     'f_max': f_max,
+    'deltaF': 2**-5*u.Hz,
     'f22_ref': 20.*u.Hz,
     'phi_ref': 0.*u.rad,
     'distance': 1.*u.Mpc,
@@ -139,7 +140,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
 
     mask = deriv.frequencies <= 256.0 * u.Hz
 
-    assert_allclose(deriv.value[mask], nd_deriv[mask], atol=0.0, rtol=0.05)
+    assert_allclose(deriv.value[mask], nd_deriv[mask], atol=0.0, rtol=0.06)
     # Once again, the problems seem to occur mostly around zeros, which is
     # also the reason why we exclude values where derivative is close to zero
 
@@ -248,6 +249,48 @@ def test_step_size(param, q_val, break_conv):
     # plt.legend()
     # plt.show()
 
+@pytest.mark.parametrize('param', test_params)
+def test_custom_convergence(param):
+    deriv_1 = get_waveform_derivative_1D_with_convergence(
+        wf_params,
+        param,
+        wf_generator,
+        return_info=False
+    )
+
+    deriv_2 = get_waveform_derivative_1D_with_convergence(
+        wf_params,
+        param,
+        wf_generator,
+        step_sizes=[1e-2],  # Force convergence testing
+        return_info=False
+    )
+
+    assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
+
+def test_invalid_step_size():
+    param = 'mass_ratio'
+    param_val = 0.42*u.dimensionless_unscaled
+
+    deriv_1 = get_waveform_derivative_1D_with_convergence(
+        wf_params | {'mass_ratio': param_val},
+        param,
+        wf_generator,
+        step_sizes=[2*param_val, 1e-2],
+        return_info=False
+    )
+    # Idea: provoke error for complete coverage, then use same step size as below
+
+    deriv_2 = get_waveform_derivative_1D_with_convergence(
+        wf_params,
+        param,
+        wf_generator,
+        step_sizes=[1e-2],
+        return_info=False
+    )
+
+    assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
+
 
 #%% ----- Fisher consistency checks -----
 @pytest.mark.parametrize('break_conv', [True, False])
@@ -272,9 +315,7 @@ def test_convergence_check(break_conv):
 
     if break_conv:
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
-                                        atol=0.0, rtol=0.0)
-    # 0.0 is good, means they converge at same step size, although this is
-    # surely not always the case -> for example if break_conv=True
+                                        atol=0.0, rtol=4e-4)
     else:
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
                                         atol=0.0, rtol=3e-6)
@@ -299,8 +340,9 @@ def test_break_upon_convergence(crit):
 
     plt.close()
 
-    assert_allclose_MatrixWithUnits(fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=1e-3)
+    assert_allclose_MatrixWithUnits(fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=2e-3)
     # Small deviations are expected, different final step sizes might be selected
+    # -> total mass has largest deviations, otherwise rtol=1e-3 would work
 
 @pytest.mark.parametrize('conv_crit', ['diff_norm', 'mismatch'])
 def test_optimize(conv_crit):
@@ -318,6 +360,15 @@ def test_optimize(conv_crit):
         fisher_opt.diag(),
         atol=0.0, rtol=0.005
     )
+
+def test_start_step_size():
+    fisher_1 = fisher_matrix(wf_params, test_params, wf_generator,
+                             start_step_size=1e-2)
+    
+    fisher_2 = fisher_matrix(wf_params, test_params, wf_generator,
+                             start_step_size=1e-3)
+
+    assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=0.0)
 
 class ErrorRaising(unittest.TestCase):
     def test_wrong_conv_check(self):

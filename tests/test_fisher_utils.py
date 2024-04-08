@@ -348,7 +348,8 @@ def test_break_upon_convergence(crit):
 def test_optimize(conv_crit):
     params_to_vary = ['total_mass', 'time', 'phase']
 
-    # For diagonal values, optimization must yield same result
+    # For diagonal values, optimization must yield same result (up to
+    # differences in the routines)
     fisher_non_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
                                    convergence_check=conv_crit)
     fisher_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
@@ -356,19 +357,21 @@ def test_optimize(conv_crit):
                                convergence_check=conv_crit)
     
     assert_allclose_MatrixWithUnits(
-        fisher_non_opt.diag(),
-        fisher_opt.diag(),
+        fisher_non_opt.diagonal(),
+        fisher_opt.diagonal(),
         atol=0.0, rtol=0.005
     )
 
 def test_start_step_size():
     fisher_1 = fisher_matrix(wf_params, test_params, wf_generator,
-                             start_step_size=1e-2)
+                             start_step_size=1e-1)
     
     fisher_2 = fisher_matrix(wf_params, test_params, wf_generator,
-                             start_step_size=1e-3)
+                             start_step_size=1e-2)
 
-    assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=0.0)
+    assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=1e-7)
+    # Idea: they should converge at similar step size because 1e-1 is very
+    # large, no good results will be produced there
 
 class ErrorRaising(unittest.TestCase):
     def test_wrong_conv_check(self):

@@ -17,6 +17,8 @@ from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix
 )
+from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
+
 from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)
 
@@ -83,16 +85,15 @@ def test_inverse():
 def test_fisher_calc():
     fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
                                       phenomx_generator)
-
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
 
 def test_criterion_consistency():
     fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
-                                      phenomx_generator, convergence_check='mismatch')
+                                      phenomx_generator,
+                                      convergence_check='mismatch')
     
-    assert fisher_tot_mass.fisher == fisher_tot_mass_2
-    # Interesting, even equal. Roughly equal would also be sufficient, might
-    # converge at different step sizes and thus have slightly different results
+    assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
+                                    atol=0.0, rtol=5e-5)
 
 
 #%% Feature tests
@@ -109,6 +110,17 @@ def test_project():
     fisher_projected = fisher.project_fisher(project_params).fisher
 
     assert fisher_projected.shape == (len(test_params) - len(project_params), len(test_params) - len(project_params))
+
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+def test_stat_error(params):
+    fisher_tot_mass.statistical_error(params)
+
+@pytest.mark.skip  # Work in progress
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+def test_sys_error(params):
+    phenomd_generator = FisherMatrix.get_wf_generator('IMRPhenomD')
+
+    fisher_tot_mass.systematic_error(phenomd_generator, params)
 
 def test_plot():
     fisher = FisherMatrix(
@@ -143,6 +155,7 @@ def test_cond():
 def test_array():
     assert np.all(np.array(fisher_tot_mass) == np.array(fisher_tot_mass.fisher))
 
+@pytest.mark.skip  # Note finished yet
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
@@ -159,6 +172,7 @@ def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
         **new_metadata
     )
 
+@pytest.mark.skip  # Note finished yet
 def test_copy():
     ...
 

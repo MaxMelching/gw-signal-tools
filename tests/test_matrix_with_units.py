@@ -115,6 +115,11 @@ def test_eq():
     matrix_single_val = MatrixWithUnits(42, u.dimensionless_unscaled)
     assert np.all(matrix_single_val == 42)
 
+def test_float():
+    matrix = MatrixWithUnits(42, u.dimensionless_unscaled)
+
+    assert float(matrix) == 42
+
 def test_copy():
     matrix = MatrixWithUnits(example_values, example_units)
     component_val_copy = matrix[0, 0]
@@ -132,6 +137,13 @@ def test_copy():
     from copy import copy, deepcopy
     matrix_copy = copy(matrix)
     matrix_copy = deepcopy(matrix)
+
+def test_dict_conversion():
+    # Apparently, __hash__ is not needed
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    test_dict = {'matrix': matrix}
+    assert_allequal_MatrixWithUnits(test_dict['matrix'], matrix)
 
 # ----- Test common operations -----
 def test_addition():
@@ -418,6 +430,13 @@ def test_matmul():
                         np.array([[u.s*u.m, u.s**2], [u.m**2, u.m*u.s]], dtype=object))
     )
 
+@pytest.mark.parametrize('sign', [+1, -1])
+def test_abs(sign):
+    matrix = MatrixWithUnits(sign*example_values, example_units)
+    matrix_abs = MatrixWithUnits(np.abs(example_values), example_units)
+
+    assert_allequal_MatrixWithUnits(abs(matrix), matrix_abs)
+
 
 # ----- Test numpy functions -----
 def test_transposing():
@@ -529,7 +548,43 @@ def test_inv():
         rtol=0.0
     )
 
-# TODO: test diag, sqrt, cond_numb
+def test_diagonal():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    assert_allequal_MatrixWithUnits(
+        matrix.diagonal(),
+        MatrixWithUnits([42, 96], u.s)
+    )
+
+    matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s.diagonal(),
+        MatrixWithUnits([42, 96], u.s)
+    )
+
+    # Testing args
+    assert_allequal_MatrixWithUnits(
+        matrix_in_s.diagonal(1),
+        MatrixWithUnits([24], u.s)
+    )
+
+def test_sqrt():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    assert_allequal_MatrixWithUnits(
+        matrix.sqrt(),
+        MatrixWithUnits(np.sqrt(example_values), example_units**(1/2))
+    )
+
+def test_cond():
+    # Here we just make sure that calling works. Results are assumed to be
+    # correct because we just pass to numpy
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    matrix.cond()
+    matrix.cond(2)
+    matrix.cond('nuc')
 
 
 # ----- Test astropy functions -----
@@ -540,15 +595,39 @@ def test_to_system(units):
     matrix.to_system(u.si)
     matrix.to_system(preferred_unit_system)
 
+def test_to():
+    matrix = MatrixWithUnits([42, 96], [u.m, u.km])
+
+    matrix[0] = matrix[0].to(u.km)
+    assert_allequal_MatrixWithUnits(matrix, MatrixWithUnits([0.042, 96], [u.km, u.km]))
+
+    # Now test for whole matrix
+    matrix_nm = matrix.to(u.nm)
+    assert_allclose_MatrixWithUnits(
+        matrix_nm,
+        MatrixWithUnits([0.042e12, 96e12], [u.nm, u.nm]),
+        atol=0.0,
+        rtol=1e-15  # Numerical errors, I think in initialization
+    )
+
 
 # ----- Test custom additions -----
-def test_plot():
+@pytest.mark.parametrize('given_ax', [True, False])
+def test_plot(given_ax):
+    if given_ax:
+        fig, ax = plt.subplots()
+    else:
+        ax = None
+
     matrix = MatrixWithUnits(example_values, example_units)
 
-    matrix.plot()
+    matrix.plot(ax=ax)
     plt.close()
 
     MatrixWithUnits.plot(matrix)
+    plt.close()
+    
+    matrix[:, 0].reshape((1, 2)).plot()
     plt.close()
 
     # Main goal is to make sure there are no errors
@@ -558,6 +637,40 @@ def test_plot():
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+    def test_operations_with_wrong_type(self):
+        # Setting
+        with self.assertRaises(TypeError):
+            self.matrix[0] = {'matrix': self.matrix}
+        
+        # Equality testing
+        with self.assertRaises(TypeError):
+            self.matrix == {'key': 1}
+        
+        # Operations
+        with self.assertRaises(TypeError):
+            self.matrix + {'key': 1}
+        with self.assertRaises(TypeError):
+            {'key': 1} + self.matrix
+
+        with self.assertRaises(TypeError):
+            self.matrix - {'key': 1}
+        with self.assertRaises(TypeError):
+            {'key': 1} - self.matrix
+
+        with self.assertRaises(TypeError):
+            self.matrix * {'key': 1}
+        with self.assertRaises(TypeError):
+            {'key': 1} * self.matrix
+
+        with self.assertRaises(TypeError):
+            self.matrix / {'key': 1}
+        with self.assertRaises(TypeError):
+            {'key': 1} / self.matrix
+    
+    def test_hash(self):
+        with self.assertRaises(TypeError):
+            hash(self.matrix)
 
     def test_list_operations(self):
         with self.assertRaises(TypeError):
@@ -600,11 +713,19 @@ class Errors(unittest.TestCase):
             self.matrix @ self.matrix  # Due to units not fitting together
     
     def test_matmul_wrong_shapes(self):
+        # Scalars
         with self.assertRaises(ValueError):
             self.matrix @ MatrixWithUnits(42, u.s)
 
         with self.assertRaises(ValueError):
             MatrixWithUnits(42, u.s) @ self.matrix
+
+        # Other 1D input
+        with self.assertRaises(ValueError):
+            self.matrix @ MatrixWithUnits([42, 96], [u.m, u.s])
+
+        with self.assertRaises(ValueError):
+            MatrixWithUnits([42, 96], [u.m, u.s]) @ self.matrix
     
     def test_matmul_wrong_types(self):
         with self.assertRaises(TypeError):

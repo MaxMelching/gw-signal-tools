@@ -264,7 +264,7 @@ class MatrixWithUnits:
         if not isinstance(other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_numeric_types)):
             # Quantities are included here because slicing sometimes returns
             # them, so throwing error here would not be good
-            raise NotImplementedError(
+            raise TypeError(
                 f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
             )
         else:
@@ -280,7 +280,10 @@ class MatrixWithUnits:
         return np.logical_not(self == other)
     
     def __hash__(self) -> int:
-        return hash(self.value) ^ hash(self.unit)
+        raise TypeError(
+            '`MatrixWithUnits` instances cannot be hashed because they are '
+            'based on numpy arrays, which are in turn unhashable.'
+        )
     
     def __getitem__(self, key: Any) -> MatrixWithUnits:
         new_value = self.value.__getitem__(key)
@@ -353,7 +356,13 @@ class MatrixWithUnits:
         return self.__add__(other)
     
     def __sub__(self, other: Any) -> MatrixWithUnits:
-        return self.__add__(other.__neg__())
+        try:
+            return self.__add__(other.__neg__())
+        except AttributeError:  # no __neg__ for example
+            raise TypeError(
+                f'Addition between {type(other)} and `MatrixWithUnit` is not '
+                'supported.'
+            )
     
     def __rsub__(self, other: Any) -> MatrixWithUnits:
         # Not used anyway, astropy tries to do it and fails
@@ -399,19 +408,17 @@ class MatrixWithUnits:
                 )
     
     def __rtruediv__(self, other: Any) -> MatrixWithUnits:
-        # Important: 1/u.Unit becomes quantity, we have to use power -1 so that
-        # unit actually remains a unit
         if isinstance(other, self._allowed_numeric_types):
-            return MatrixWithUnits(other / self.value, self.unit**-1)
-        elif isinstance(other, self._pure_unit_types):
-            return MatrixWithUnits(1.0 / self.value, other / self.unit)
-        elif isinstance(other, u.Quantity):
-            return MatrixWithUnits(other.value / self.value, other.unit / self.unit)
-        elif isinstance(other, MatrixWithUnits):
+            return MatrixWithUnits(other / self.value, 1/self.unit)
+        # Following two are actually handled by astropy (correctly), are left
+        # here as backup (to show how they work). Thus excluded from coverage
+        elif isinstance(other, self._pure_unit_types):  # pragma: no cover
+            return MatrixWithUnits(1. / self.value, other / self.unit)
+        elif isinstance(other, u.Quantity):  # pragma: no cover
             return MatrixWithUnits(other.value / self.value, other.unit / self.unit)
         else:
             try:
-                return MatrixWithUnits(other / self.value, self.unit**-1)
+                return MatrixWithUnits(other / self.value, 1/self.unit)
             except:
                 raise TypeError(
                     f'Division of {type(other)} and `MatrixWithUnit`'
@@ -441,20 +448,7 @@ class MatrixWithUnits:
             new_shape = new_value.shape
 
             # Hack for 1D output
-            new_shape_backup = new_shape
             if len(new_shape) == 1:
-                if len(self.value.shape) == 1:
-                    # self is row vector
-                    new_shape = (1, new_shape[0])
-                else:
-                    # other is column vector
-                    new_shape = (new_shape[0], 1)
-
-            # Similar hack for 1D input
-            if ((len(self.shape) == 1 and
-                 not isinstance(self.unit, self._pure_unit_types)) or 
-                (len(other.shape) == 1 and
-                 not isinstance(other.unit, self._pure_unit_types))):
                 raise ValueError(
                     'For the provided shapes, only ``MatrixWithUnits``'
                     'instances initialized with a scalar unit are permitted. '
@@ -462,10 +456,6 @@ class MatrixWithUnits:
                     'with a row/column vector, please reshape the instance '
                     'from the current shape `(n,)` to `(n, 1)` or `(1, n)`.'
                 )
-            
-            # TODO: how to handle other shapes??? E.g. self is row/column or other is?
-            # Can do reshaping, but then with other names or reshape self here
-            # and put back to old form before return?
             
             # Step 2: handle units (array or scalar are possible for both)
             new_unit = np.empty(new_shape, dtype=object)
@@ -512,9 +502,6 @@ class MatrixWithUnits:
                     # NOTE: do NOT replace with == here, does not what we want
                     
                     new_unit[i, j] = unit_test * other.unit
-
-            if new_shape != new_shape_backup:
-                new_unit = np.reshape(new_unit, new_shape_backup)
 
             return MatrixWithUnits(new_value, new_unit)
         else:
@@ -611,14 +598,13 @@ class MatrixWithUnits:
     def from_numpy_array(arr: np.ndarray) -> MatrixWithUnits:
         return MatrixWithUnits(arr, u.dimensionless_unscaled)
     
-    @staticmethod
-    def reshape(matrix: MatrixWithUnits, new_shape: Any) -> MatrixWithUnits:
-        if isinstance(matrix.unit, matrix._pure_unit_types):
-            return MatrixWithUnits(np.reshape(matrix.value, new_shape),
-                                   matrix.unit)
+    def reshape(self, new_shape: Any) -> MatrixWithUnits:
+        if isinstance(self.unit, self._pure_unit_types):
+            return MatrixWithUnits(np.reshape(self.value, new_shape),
+                                   self.unit)
         else:
-            return MatrixWithUnits(np.reshape(matrix.value, new_shape),
-                                   np.reshape(matrix.unit, new_shape))
+            return MatrixWithUnits(np.reshape(self.value, new_shape),
+                                   np.reshape(self.unit, new_shape))
 
     @staticmethod
     def inv(matrix: MatrixWithUnits) -> MatrixWithUnits:
@@ -627,20 +613,20 @@ class MatrixWithUnits:
 
         return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
     
-    # TODO: make diag and sqrt property? Or staticmethod? Static for sqrt would make lot of sense
-    def diag(self):
+    def diagonal(self, *args, **kwargs):
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(np.diagonal(self.value).copy(), self.unit)
+            return MatrixWithUnits(
+                np.diagonal(self.value,*args, **kwargs).copy(),
+                self.unit
+            )
         else:
-            return MatrixWithUnits(np.diagonal(self.value).copy(),
-                                   np.diagonal(self.unit).copy())
+            return MatrixWithUnits(
+                np.diagonal(self.value, *args, **kwargs).copy(),
+                np.diagonal(self.unit, *args, **kwargs).copy()
+            )
     
     def sqrt(self):
         return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
-        # if isinstance(self.unit, self._pure_unit_types):
-        #     return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
-        # else:
-        #     return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))
 
     def cond(self,
         matrix_norm: float | Literal['fro', 'nuc'] = 'fro'
@@ -685,6 +671,14 @@ class MatrixWithUnits:
         #     # new_matrix[index] = (self.value[index] * self.unit[index]).to_system(system)[0]
         
         # return new_matrix
+    
+    def to(self, new_unit: u.Unit) -> MatrixWithUnits:
+        new_matrix = self.copy()
+
+        for index in np.ndindex(new_matrix.shape):
+            new_matrix[index] = new_matrix[index].to(new_unit)
+        
+        return new_matrix
 
 
     # ---------- Some custom additions -----
@@ -735,7 +729,7 @@ class MatrixWithUnits:
             plt.text(
                 x=j+0.5,
                 y=i+0.5,
-                s=f'{val:.3e}\,{unit:latex}',
+                s=f'{val:.3e}$\\,${unit:latex}',
                 ha='center',
                 va='center',
                 color=text_color

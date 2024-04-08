@@ -33,8 +33,10 @@ def inner_product(
 ) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     r"""
     Calculates the noise-weighted inner product
+
     .. math:: \langle a, b \rangle = 2 \Re \int_{-\infty}^{\infty}
-        \frac{\tilde{a(f) \tilde{b}(f)}{S_n(f)} \, df
+        \frac{\tilde{a}(f) \tilde{b}(f)}{S_n(f)} \, df
+    
     of two signals using their representations
     :math:`\tilde{a}(f), \tilde{b}(f)` in frequency domain.
     

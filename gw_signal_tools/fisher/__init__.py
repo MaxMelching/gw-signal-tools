@@ -16,7 +16,7 @@ from .distances import distance, linearized_distance
 
 # Dictionary fo get nicer display of parameters in Fisher plotting method
 latexparams = {
-    # Masses
+    # ----- Masses -----
     'chirp_mass_source': r'$\mathcal{M}$',
     'chirp_mass': r'$\mathcal{M}$',
     'mass_ratio': '$q$',
@@ -25,9 +25,11 @@ latexparams = {
     'total_mass_source': '$M$',
     'mass_1_source': '$m_1$',
     'mass_1': '$m_1$',
+    'mass1': '$m_1$',
     'mass_2_source': '$m_2$',
     'mass_2': '$m_2$',
-    # Spins
+    'mass2': '$m_2$',
+    # ----- Spins -----
     'chi_eff': r'$\chi_{\mathrm{eff}}$',
     'chi_p': r'$\chi_p$',
     'a_1': r'$\chi_1$',
@@ -38,7 +40,7 @@ latexparams = {
     'spin2x': r'$\chi_{2, x}$',
     'spin2y': r'$\chi_{2, y}$',
     'spin2z': r'$\chi_{2, z}$',
-    # External Parameters
+    # ----- External Parameters -----
     'luminosity_distance': '$D_L$',
     'distance': '$D_L$',
     'theta_jn': r'$\theta_{jn}$',
@@ -46,7 +48,7 @@ latexparams = {
     'iota': r'$\iota$',
     'time': '$t_0$',
     'phase': r'$\phi_0$',
-    # Detector parameters
+    # ----- Detector parameters -----
     'log_likelihood': r'$\log\mathcal{L}$',
     'network_optimal_snr': r'$\rho_{\mathrm{opt}}$ (network)',
     'network_matched_filter_snr': r'$\rho_{\mathrm{matched filter}}$ (network)'

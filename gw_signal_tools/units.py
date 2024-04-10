@@ -12,18 +12,22 @@ import astropy.units.si as _si
 import astropy.units.astrophys as _astrophys
 
 
+__doc__ = """
+Custom unit module for the gw-signal-tools package. In here, we define
+certain base units that are used most commonly for our calculations.
+
+Moreover, we enable the equivalency between `u.rad` and no unit, i.e. we
+run `u.set_enabled_equivalencies(u.dimensionless_angles())`. This is
+done because of inconsistencies between numerical and analytical
+derivatives with respect to angles that would arise otherwise (also to
+enable exponentiation with angles).
+"""
+
+
 __all__: list[str] = []  #  Units are added at the end
 
 _ns = globals()
 
-# u.astrophys uses pc, we would like to use Mpc, thus redefine here
-# -> update on that: nope, since prefix is added automatically, base
-#    unit pc is much more general (and thus preferred) choice
-# -> more update: only works when u.CompositeUnit is used in MatrixWithUnits,
-#    switching to u.Unit would cause error!
-# -> it gets wilder: has nothing to do with u.Unit or u.CompositeUnit, but
-#    with wether or not following definition is included... Just wild
-# -> let's see it as useful bug (I guess) that we use while it is there
 def_unit(
     ['Mpc'],
     _const_si.pc * 1e6,
@@ -68,6 +72,9 @@ bases = {pc, s, Msun, A, cd, rad, K, mol}
 import gwpy.detector.units  # Adds strain to astropy units
 # -> custom adding would cause problems when GWPy and this package are loaded
 strain = u.Unit('strain')
+
+
+u.set_enabled_equivalencies(u.dimensionless_angles())
 
 
 __all__ += [n for n, v in _ns.items() if isinstance(v, UnitBase)]

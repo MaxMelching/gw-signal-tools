@@ -10,8 +10,12 @@ import gw_signal_tools.units as gw_signal_tools_units
 # Could also test with units=[u.astrophys, gw_signal_tools_units]
 @pytest.mark.parametrize('unit', [u.pc, u.s, u.Msun, u.A, u.cd, u.rad, u.K, u.mol])
 def test_pure_base_units(unit):
-    assert unit.to_system(gw_signal_tools_units)[0] == unit
-    assert unit.compose(units=gw_signal_tools_units)[0] == unit
+    if unit == u.rad:
+        assert unit.to_system(gw_signal_tools_units)[0] == u.dimensionless_unscaled
+        assert unit.compose(units=gw_signal_tools_units)[0] == u.dimensionless_unscaled
+    else:
+        assert unit.to_system(gw_signal_tools_units)[0] == unit
+        assert unit.compose(units=gw_signal_tools_units)[0] == unit
 
 def test_composite_units():
     test_unit = u.Hz**2 * u.s

@@ -97,6 +97,38 @@ def test_criterion_consistency():
 
 
 #%% Feature tests
+def test_get_indices():
+    test_params = ['total_mass', 'time', 'phase']
+
+    fisher = FisherMatrix(
+        wf_params,
+        test_params,
+        wf_generator=phenomx_generator,
+    )
+
+    indices_1 = fisher.get_param_indices(['time', 'phase'])
+    indices_2 = fisher.get_param_indices(['phase', 'time'])
+
+    assert np.all(indices_1 == np.array([1, 2]))
+    assert np.all(indices_2 == np.array([2, 1]))
+
+
+    grid_1 = fisher.get_sub_matrix_indices(['time', 'phase'])
+    sub_matr_1 = [[fisher.fisher[1, 1], fisher.fisher[1, 2]],
+                  [fisher.fisher[2, 1], fisher.fisher[2, 2]]]
+
+    grid_2 = fisher.get_sub_matrix_indices(['phase', 'time'])
+    sub_matr_2 = [[fisher.fisher[2, 2], fisher.fisher[2, 1]],
+                  [fisher.fisher[1, 2], fisher.fisher[1, 1]]]
+
+
+    # assert np.all(fisher.fisher[grid_1] == np.array(sub_matr_1))
+    # assert np.all(fisher.fisher[grid_2] == np.array(sub_matr_2))
+    for index in np.ndindex((2, 2)):
+        i, j = index
+        assert fisher.fisher[grid_1][i, j] == sub_matr_1[i][j]
+        assert fisher.fisher[grid_2][i, j] == sub_matr_2[i][j]
+
 def test_project():
     test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
 

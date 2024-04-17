@@ -36,8 +36,9 @@ def inner_product(
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
     optimize_time: bool = False,
-    optimize_phase: bool = False
-) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
+    optimize_phase: bool = False,
+    return_opt_info: bool = False
+) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
     r"""
     Calculates the noise-weighted inner product
 
@@ -85,12 +86,24 @@ def inner_product(
 
         It is also possible to optimize separately over time or phase
         shifts by using the arguments `optimize_time`, `optimize_phase`.
+        Note, however, that `optimize_time_and_phase=True` will
+        override `optimize_time=False` and `optimize_phase=False`.
+    return_opt_info : boolean, optional, default = False
+        Whether or not to return a dictionary with additional
+        information about the optimization results. Contains the full
+        time series of match values at all time shifts that are not
+        optimized over phase yet.
+
+        Has no effect if no optimization is not carried out.
 
     Returns
     -------
-    ~astropy.units.Quantity or tuple[~gwpy.timeseries.TimeSeries,
-    ~astropy.units.Quantity, ~astropy.units.Quantity]
+    ~astropy.units.Quantity or tuple[~astropy.units.Quantity, dict[str,
+    ~gwpy.timeseries.TimeSeries | ~astropy.units.Quantity]]
         Inner product value with `signal1`, `signal2` inserted.
+        Additional information if optimization is carried out and the
+        `return_opt_info=True`. More details on the latter are provided
+        in the documentaiton of the `optimized_inner_product` function.
 
     Raises
     ------
@@ -117,7 +130,6 @@ def inner_product(
     transform of the involved signals. An indicator this might be
     necessary is a shape mismatch error.
     """
-    
     # ----- Handling of units -----
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
@@ -139,7 +151,6 @@ def inner_product(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
     
-
     # ----- Handling PSD -----
     if psd is None:
         from .PSDs import psd_no_noise
@@ -162,7 +173,6 @@ def inner_product(
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
-
     # ----- Handling df argument -----
     if df is None:
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
@@ -177,7 +187,6 @@ def inner_product(
                 f' signals ({frequ_unit}).'
             )
 
-
     # ----- If necessary, do fft (padding to ensure -----
     # ----- sufficient resolution in frequency domain) -----
     if isinstance(signal1, TimeSeries):
@@ -186,7 +195,6 @@ def inner_product(
     if isinstance(signal2, TimeSeries):
         signal2 = td_to_fd_waveform(pad_to_get_target_df(signal2, df))
         
-
     # ----- Handling frequency range -----
     f_lower, f_upper = [
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
@@ -231,7 +239,6 @@ def inner_product(
         else:
             f_upper_new = f_upper
 
-
         # New lower bound must be greater than current lower bound,
         # otherwise no values for the range are available in signals
         if f_lower_new >= f_lower:
@@ -258,10 +265,10 @@ def inner_product(
 
     logging.debug([f_lower, f_upper])
 
-
     # ----- Get signals to same frequencies, i.e. make df -----
     # ----- equal (if necessary) and then restrict range -----
-    if not optimize_time_and_phase:
+    # if not optimize_time_and_phase and not optimize_time and not optimize_phase:
+    if not (optimize_time_and_phase or optimize_time or optimize_phase):
         target_range = np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
 
         signal1 = get_signal_at_target_frequs(signal1, target_range,
@@ -270,7 +277,6 @@ def inner_product(
                                               fill_val=0.0 * signal2.unit)
         psd = get_signal_at_target_frequs(psd, target_range,
                                           fill_val=1.0 * psd.unit)
-
 
         return inner_product_computation(signal1, signal2, psd)
     else:
@@ -281,7 +287,6 @@ def inner_product(
         else:
             f_limit = max(abs(f_lower), abs(f_upper))
             target_range = np.arange(-f_limit.value, f_limit.value + 0.9 * df.value, step=df.value) << frequ_unit
-
 
         signal1 = get_signal_at_target_frequs(
             signal1,
@@ -305,17 +310,18 @@ def inner_product(
         )
         
         if optimize_time_and_phase:
+            # Overwrite
             optimize_time = True
             optimize_phase = True
 
         return optimized_inner_product(
-            signal1,
-            signal2,
-            psd,
-            optimize_time,
-            optimize_phase
+            signal1=signal1,
+            signal2=signal2,
+            psd=psd,
+            optimize_time=optimize_time,
+            optimize_phase=optimize_phase,
+            return_opt_info=return_opt_info
         )
-
 
 def inner_product_computation(
     signal1: FrequencySeries,
@@ -345,7 +351,6 @@ def inner_product_computation(
     --------
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
-
     # ----- Assure same distance of samples -----
     assert (allclose_quantity(signal1.df, psd.df, rtol=0.01)
             and allclose_quantity(signal2.df, psd.df, rtol=0.01)), \
@@ -392,8 +397,9 @@ def optimized_inner_product(
     signal2: FrequencySeries,
     psd: FrequencySeries,
     optimize_time: bool,
-    optimize_phase: bool
-) -> tuple[TimeSeries, u.Quantity, u.Quantity]:
+    optimize_phase: bool,
+    return_opt_info: bool = False
+) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
     """
     Lower level function for inner product calculation. Assumes that
     signal conditioning has been done so that they contain values at the
@@ -411,18 +417,25 @@ def optimized_inner_product(
     psd : ~gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
     TODO: describe optimize keywords briefly
+    return_opt_info : boolean, optional, default = False
+        Whether or not to return a dictionary with additional
+        information about the optimization results. Contains the full
+        time series of match values at all time shifts that are not
+        optimized over phase yet.
 
     Returns
     -------
-    tuple[~gwpy.timeseries.TimeSeries, ~astropy.units.Quantity,
-    ~astropy.units.Quantity]
-        A tuple with three values:
+    ~astropy.units.Quantity or tuple[~astropy.units.Quantity, dict[str,
+    ~gwpy.timeseries.TimeSeries | ~astropy.units.Quantity]]
+        Output depends on the value of `return_opt_info`. If False (the
+        default), only the optimized value of the inner product is
+        returned. If True, a tuple of this value and a dictionary is
+        returned. This dictionary contains:
         (i) a ``TimeSeries`` where values of the inner product for
         different relative time shifts between `signal1`, `signal2`
         are stored (optimization over phase is not carried out)
-        (ii) maximum absolute value of (i), corresponds to maximization
-        of inner product over relative time and phase shifts
-        (iii) time at which maximum value (ii) occurs in (i)
+        (ii) time at which maximum value occurs in (i)
+        (iii) phase shift for which maximum value occurs in (i)
     """
     frequ_unit = signal1.frequencies.unit
 
@@ -447,7 +460,6 @@ def optimized_inner_product(
          'mentioned do not apply to the case of a starting frequency f=0, '
          'where both even and odd sample sizes are accepted.')
     
-
     # ----- Third step: assure frequencies are sufficiently equal. -----
     # ----- Maximum deviation allowed between the is given df, which -----
     # ----- determines accuracy the signals have been sampled with. -----
@@ -495,26 +507,73 @@ def optimized_inner_product(
         dt=dt
     )
 
-    # TODO: implement handling of optimize_phase etc
-
-    match_result = match_series.abs().max()
-
-    # Handle wrap-around of signal
-    number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
-    match_series = np.roll(match_series, shift=number_to_roll)
-    match_series.shift(-match_series.times[number_to_roll])
-
-    # Compute peak time
-    peak_index = np.argmax(match_series)
-    peak_time = match_series.times[peak_index]
+    # if optimize_phase:
+    #     phase_series = np.unwrap(np.angle(match_series))
+    #     _match_series = match_series.abs()
+    # else:
+    #     peak_phase = 0.*u.rad
+    #     _match_series = match_series.real
     
-    return match_series, match_result, peak_time
+    # if optimize_time:
+    #     peak_index = np.argmax(_match_series)
+    #     match_result = _match_series.max()
+
+    #     # Handle wrap-around of signal
+    #     number_to_roll = _match_series.size // 2  # Arbitrary value, no deep meaning
+    #     _match_series = np.roll(_match_series, shift=number_to_roll)
+    #     _match_series.shift(-_match_series.times[number_to_roll])
+
+    #     # Compute peak time for shifted time series
+    #     peak_index = np.argmax(_match_series)
+    #     peak_time = _match_series.times[peak_index]
+    # else:
+    #     # Evaluation at t0=0 corresponds to usual inner product
+    #     peak_time = 0.*_match_series.times.unit
+    #     match_result = _match_series.value_at(peak_time)
+    #     peak_phase = phase_series.value_at(peak_time)
+
+    # return match_result, {'match_series': match_series,
+    #                       'peak_phase': peak_phase,
+    #                       'peak_time': peak_time}
+
+
+    if optimize_phase:
+        _match_series = match_series.abs()
+    else:
+        _match_series = match_series.real
+    
+    if optimize_time:
+        peak_index = np.argmax(_match_series)
+        match_result = _match_series.max()
+    else:
+        # Evaluation at t0=0 corresponds to usual inner product
+        peak_time = 0.*_match_series.times.unit
+        peak_index = _match_series.times.value_at(peak_time)
+        match_result = _match_series.value_at(peak_time)
+
+    if return_opt_info:
+        peak_phase = np.unwrap(np.angle(match_series))[peak_index]
+    
+        # Handle wrap-around of signal
+        number_to_roll = _match_series.size // 2  # Arbitrary value, no deep meaning
+        _match_series = np.roll(_match_series, shift=number_to_roll)
+        _match_series.shift(-_match_series.times[number_to_roll])
+
+        # Compute peak time for shifted time series
+        peak_index = np.argmax(_match_series)  # peak_index -= number_to_roll should be sufficient, right?
+        peak_time = _match_series.times[peak_index]
+
+        return match_result, {'match_series': match_series,
+                              'peak_phase': peak_phase,
+                              'peak_time': peak_time}
+    else:
+        return match_result
 
 def norm(
     signal: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
+) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
     """
     Wrapper function for calculation of the norm of the given `signal`
     (i.e. square root of inner product between `signal` and `signal`,
@@ -550,14 +609,17 @@ def norm(
     if isinstance(out, u.Quantity):
         return np.sqrt(out)
     else:
-        return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
+        out[1]['match_series'] = np.sqrt(out[1]['match_series'])
+        # TODO: see how this changes phase where optimum is attained
+        # -> should we multiply peak phase with 1/2?
+        return np.sqrt(out[0]), out[1]
 
 def overlap(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
+) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
     """
     Wrapper for calculation of the overlap of two given signals as
     measured by the noise-weighted inner product implemented in
@@ -598,18 +660,19 @@ def overlap(
     if isinstance(norm1 := norm(signal1, *args, **kwargs), u.Quantity):
         normalization *= norm1
     else:
-        normalization *= norm1[1]
+        normalization *= norm1[0]
 
     if isinstance(norm2 := norm(signal2, *args, **kwargs), u.Quantity):
         normalization *= norm2
     else:
-        normalization *= norm2[1]
+        normalization *= norm2[0]
 
 
     if isinstance(out, u.Quantity):
         return out / normalization
     else:
-        return out[0] / normalization, out[1] / normalization, out[2]
+        out[1]['match_series'] /= normalization
+        return out[0] / normalization, out[1]
 
 
 # ---------- Optimization of Inner Product over Arbitrary Parameters ----------
@@ -743,7 +806,7 @@ def optimize_overlap(
     opt_params: Optional[str | list[str]] = None,
     **inner_prod_kwargs
 ) -> tuple[FrequencySeries, FrequencySeries, dict[str, u.Quantity]]:
-    """
+    r"""
     Optimize the overlap between two waveforms at the given point in the
     parameter space. This is done by varying certain parameters for one
     of the waveform generators while keeping them fixed for the other

@@ -112,17 +112,23 @@ def test_fd_td_overlap_consistency():
 
 def test_optimize_match_consistency():
     norm1_coarse = norm(hp_f_coarse)
-    _, norm2_coarse, time_coarse = norm(hp_f_coarse, optimize_time_and_phase=True)
+    # norm2_coarse, info_coarse = norm(hp_f_coarse, optimize_time_and_phase=True,
+    norm2_coarse, info_coarse = norm(hp_f_coarse, optimize_time=True,
+                                     optimize_phase=True,
+                                     return_opt_info=True)
+    time_coarse = info_coarse['peak_time']
 
     assert_allclose_quantity(norm1_coarse, norm2_coarse, atol=0.0, rtol=0.11)
-    assert_allclose_quantity(0.0 * u.s, time_coarse, atol=1e-10, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_coarse, atol=1e-10, rtol=0.0)
 
 
     norm1_fine = norm(hp_f_fine)
-    _, norm2_fine, time_fine = norm(hp_f_fine, optimize_time_and_phase=True)
+    norm2_fine, info_fine = norm(hp_f_fine, optimize_time_and_phase=True,
+                                 return_opt_info=True)
+    time_fine = info_fine['peak_time']
 
     assert_allclose_quantity(norm1_fine, norm2_fine, atol=0.0, rtol=0.001)
-    assert_allclose_quantity(0.0 * u.s, time_fine, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_fine, atol=1e-12, rtol=0.0)
 
 
 @pytest.mark.parametrize('f_min', [f_min, 30.0 * u.Hz])
@@ -142,21 +148,25 @@ def test_f_range(f_min, f_max):
 
 def test_positive_negative_f_range_consistency():
     h = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df))
-    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 1.j * 0.0)
+    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 1.j*0.)
     # h_symm has symmetric spectrum around f=0.0 and the same spectrum as h
     # for positive frequencies
 
     f_upper = f_max
 
     norm1 = norm(h, f_range=[0.0, f_upper])
-    _, norm1_opt, time_1 = norm(h, f_range=[0.0, f_upper], optimize_time_and_phase=True)
+    norm1_opt, info1 = norm(h, f_range=[0.0, f_upper],
+                            optimize_time_and_phase=True, return_opt_info=True)
+    time_1 = info1['peak_time']
     assert_allclose_quantity(norm1, norm1_opt, atol=0.0, rtol=1e-12)
-    assert_allclose_quantity(0.0 * u.s, time_1, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_1, atol=1e-12, rtol=0.0)
 
     norm2 = norm(h_symm, f_range=[-f_upper, f_upper])
-    _, norm2_opt, time_2 = norm(h_symm, f_range=[-f_upper, f_upper], optimize_time_and_phase=True)
+    norm2_opt, info2 = norm(h_symm, f_range=[-f_upper, f_upper],
+                            optimize_time_and_phase=True, return_opt_info=True)
+    time_2 = info2['peak_time']
     assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
-    assert_allclose_quantity(0.0 * u.s, time_2, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_2, atol=1e-12, rtol=0.0)
 
 
     assert_quantity_equal(norm1, norm2)
@@ -169,7 +179,7 @@ def test_positive_negative_f_range_consistency():
     assert_allclose_quantity(norm_plus, norm_minus, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_plus, norm2, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_minus, norm2, atol=0.0, rtol=1e-15)
-
+test_optimize_match_consistency()
 
 def test_df_consistency():
     # Same signal, decreasing df in inner_product
@@ -341,7 +351,7 @@ psd_pycbc_converted = FrequencySeries.from_pycbc(psd_pycbc) / u.Hz
 def test_match_pycbc():
     overlap_pycbc, _ = match(hp_1_pycbc, hp_2_pycbc, v1_norm=1.0, v2_norm=1.0, psd=psd_pycbc, low_frequency_cutoff=f_low, high_frequency_cutoff=f_high)
 
-    _, overlap_gw_signal_tools, _ = inner_product(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    overlap_gw_signal_tools = inner_product(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
     assert_allclose(overlap_pycbc, overlap_gw_signal_tools, atol=0.0, rtol=2e-3)
 
@@ -349,14 +359,14 @@ def test_match_pycbc():
 def test_overlap_pycbc():
     overlap_normalized_pycbc, _ = match(hp_1_pycbc, hp_2_pycbc, psd=psd_pycbc, low_frequency_cutoff=f_low, high_frequency_cutoff=f_high)
 
-    _, overlap_normalized_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    overlap_normalized_gw_signal_tools = overlap(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
-    assert_allclose(overlap_normalized_pycbc, overlap_normalized_gw_signal_tools, atol=0.0,rtol=2e-3)  # TODO: change rtol to 0.005?
+    assert_allclose(overlap_normalized_pycbc, overlap_normalized_gw_signal_tools, atol=0.0,rtol=2e-3)
 
 
 def test_norm_optimized():
-    _, norm1_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_1_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
-    _, norm2_gw_signal_tools, _ = overlap(hp_2_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    norm1_gw_signal_tools = overlap(hp_1_pycbc_converted, hp_1_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    norm2_gw_signal_tools = overlap(hp_2_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
 
     assert_allclose(norm1_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)
     assert_allclose(norm2_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)

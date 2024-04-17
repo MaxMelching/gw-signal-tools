@@ -101,7 +101,7 @@ def fisher_matrix(
     return_info: bool = False,
     **inner_prod_kwargs
 ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
-    """
+    r"""
     Compute Fisher matrix at a fixed point. To assess the stability of
     the result, this function calculates the involved derivatives for
     several step sizes and compares the results using what we call a
@@ -116,7 +116,8 @@ def fisher_matrix(
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be `'time'`, `'phase'` or keys in `wf_params_at_point`.
+        Must be `'tc'` (equivalent: `'time'`), `'psi'` (equivalent:
+        `'phase'`) or a key in `wf_params_at_point`.
         
         For the former two, analytical derivatives are applied. This is
         possible because they denote global phase and time shifts
@@ -257,8 +258,8 @@ def fisher_matrix(
                 )
 
                 if not isinstance(fisher_val, u.Quantity):
-                    # Optimization is carried out in inner product
-                    fisher_val = fisher_val[1]
+                    # Optimization info is returned
+                    fisher_val = fisher_val[0]
 
                 fisher_matrix[i, j] = fisher_matrix[j, i] = fisher_val
 
@@ -294,7 +295,8 @@ def get_waveform_derivative_1D_with_convergence(
         `wf_generator`.
     param_to_vary : str
         Parameter with respect to which the derivative is taken. Must be
-        `'time'`, `'phase'` or a key in `wf_params_at_point`.
+        `'tc'` (equivalent: `'time'`), `'psi'` (equivalent: `'phase'`)
+        or a key in `wf_params_at_point`.
         
         For the former two, analytical derivatives are applied. This is
         possible because they denote global phase and time shifts
@@ -394,12 +396,11 @@ def get_waveform_derivative_1D_with_convergence(
         match convergence_check:
             case 'diff_norm':
                 convergence_threshold = 0.001
-                # Could even be 0.005 or so, typically values are very small (which is good)
             case 'mismatch':
-                convergence_threshold = 0.001  # Maybe choose 0.03? Or 0.001?
+                convergence_threshold = 0.001
                 
     # ----- Calculation -----
-    if param_to_vary == 'time':
+    if (param_to_vary == 'time' or param_to_vary == 'tc'):
         wf = wf_generator(wf_params_at_point)
         deriv = wf * -1.j * 2.0 * np.pi * wf.frequencies
 
@@ -408,8 +409,8 @@ def get_waveform_derivative_1D_with_convergence(
         if isinstance(derivative_norm, u.Quantity):
             derivative_norm **= 2
         else:
-            # Optimization is carried out in inner product
-            derivative_norm = derivative_norm[1]**2
+            # Optimization info is returned
+            derivative_norm = derivative_norm[0]**2
 
         if return_info:
             return deriv, {
@@ -418,7 +419,7 @@ def get_waveform_derivative_1D_with_convergence(
             }
         else:
             return deriv
-    elif param_to_vary == 'phase':
+    elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
         wf = wf_generator(wf_params_at_point)
         deriv = wf * 2.j
 
@@ -427,8 +428,8 @@ def get_waveform_derivative_1D_with_convergence(
         if isinstance(derivative_norm, u.Quantity):
             derivative_norm **= 2
         else:
-            # Optimization is carried out in inner product
-            derivative_norm = derivative_norm[1]**2
+            # Optimization info is returned
+            derivative_norm = derivative_norm[0]**2
 
         if return_info:
             return deriv, {
@@ -439,8 +440,8 @@ def get_waveform_derivative_1D_with_convergence(
             return deriv
     else:
         assert param_to_vary in wf_params_at_point, \
-            ('`param_to_vary` must be `\'time\'`, `\'phase`\' or a key '
-             'in `wf_params_at_point`.')
+            ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'
+             '`\'phase`\' or a key in `wf_params_at_point`.')
 
     
     is_converged = False
@@ -483,7 +484,8 @@ def get_waveform_derivative_1D_with_convergence(
             if isinstance(derivative_norm, u.Quantity):
                 derivative_norm **= 2
             else:
-                derivative_norm = derivative_norm[1]**2
+                # Optimization info is returned
+                derivative_norm = derivative_norm[0]**2
 
             derivative_vals += [deriv_param]
             deriv_norms += [derivative_norm]
@@ -495,9 +497,8 @@ def get_waveform_derivative_1D_with_convergence(
                         diff_norm = norm(deriv_param - derivative_vals[-2],
                                     **inner_prod_kwargs)
                         
-                        if ('optimize_time_and_phase' in inner_prod_kwargs.keys()
-                            and inner_prod_kwargs['optimize_time_and_phase']):
-                            diff_norm = diff_norm[1]
+                        if not isinstance(diff_norm, u.Quantity):
+                            diff_norm = diff_norm[0]
                         
                         convergence_vals += [
                             diff_norm / np.sqrt(derivative_norm)
@@ -515,7 +516,7 @@ def get_waveform_derivative_1D_with_convergence(
                         )
                         
                         if not isinstance(inner_prod, u.Quantity):
-                            inner_prod = inner_prod[1]
+                            inner_prod = inner_prod[0]
 
                         convergence_vals += [
                             1.0 - inner_prod\
@@ -564,15 +565,6 @@ def get_waveform_derivative_1D_with_convergence(
                 # min_dev_index + 1 is invalid index. Instead of zooming in,
                 # smaller step sizes are explored
 
-                # Get current difference of step sizes
-                # if len(step_sizes) > 1:
-                #     right_step = step_sizes[min_dev_index] - step_sizes[min_dev_index - 1]
-                # else:
-                #     right_step = step_sizes[min_dev_index]
-            
-                # step_sizes = step_sizes[min_dev_index] - np.array(range(5))*right_step
-                # step_sizes = np.array([step_sizes[min_dev_index]/10**i for i in range(5)])
-
                 # Refine in same way that we do with start_step_size
                 step_sizes = np.reshape(np.outer([step_sizes[min_dev_index]/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
 
@@ -597,12 +589,6 @@ def get_waveform_derivative_1D_with_convergence(
     
 
     if return_info:
-        # TODO: rethink of plot made, seems to create axis each time and
-        # consume quite some memory
-        # -> could also make this class method of FisherMatrix, information
-        #    about step sizes is available there
-
-        # fig, ax = plt.subplots(nrows=2, sharex=True)
         fig = plt.figure()
         ax = fig.subplots(nrows=2, sharex=True)
 

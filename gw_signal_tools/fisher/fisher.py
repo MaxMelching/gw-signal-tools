@@ -34,7 +34,8 @@ class FisherMatrix:
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be `'time'`, `'phase'` or keys in `wf_params_at_point`.
+        Must be `'tc'` (equivalent: `'time'`), `'psi'` (equivalent:
+        `'phase'`) or a key in `wf_params_at_point`.
     wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
     ~gwpy.frequencyseries.FrequencySeries]
         Arbitrary function that is used for waveform generation. The
@@ -243,8 +244,9 @@ class FisherMatrix:
             computed, the norms of which constitute the Fisher matrix.
             can in principle also be any, but param_to_vary has to be
             accessible as a key and value has to be value of point that
-            we want to compute derivative around. Must be `'time'`,
-            `'phase'` or keys in `wf_params_at_point`.
+            we want to compute derivative around. Must be `'tc'`
+            (equivalent: `'time'`), `'psi'` (equivalent: `'phase'`) or
+            a key in `wf_params_at_point`.
 
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is

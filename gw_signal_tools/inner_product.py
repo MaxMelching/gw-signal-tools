@@ -613,7 +613,69 @@ def overlap(
 
 # ---------- Optimization over Arbitrary Parameters ----------
 # TODO: put this into waveform_utils?
-def test_hm_or_precessing(wf_params: dict[str, Any]) -> bool:
+def test_hm(
+    wf_params: dict[str, u.Quantity],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries]
+) -> bool:
+    """
+    Perform test whether or not higher modes are relevant for the chosen
+    point in parameter space and waveform model. This is done by
+    comparing the similarity of two waveforms, one with a certain value
+    for the reference phase 'phi_ref' and the other one with 'phi_ref'
+    equal to zero, but phase shifted by two times this value. If higher
+    modes are relevant, these waveforms will have an overlap not equal
+    to 1, which is the test that is performed.
+
+    Parameters
+    ----------
+    wf_params : dict[str, ~astropy.units.Quantity]
+        Point in parameter space that waveform is generated at.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries]
+        Routine to generate waveforms.
+
+    Returns
+    -------
+    bool
+        Whether or not higher modes have a significant impact for the
+        selected configuration.
+    """
+    phi_val = 0.76*u.rad
+    wf_phizero_shifted = wf_generator(wf_params | {'phi_ref': 0.*u.rad}) * np.exp(1.j*2*phi_val)
+    wf_phinonzero = wf_generator(wf_params | {'phi_ref': phi_val})
+    
+    if overlap(wf_phizero_shifted, wf_phinonzero) > 0.999:
+        # Arbitrary value, but should be sufficient to assess influence of HMs
+        return False
+    else:
+        return True
+
+def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
+    """
+    Perform test whether or not the given binary system is precessing.
+    This is done by looking at the x-, y-values of the component spins
+    of each binary and if one of them is non-zero, the system is taken
+    to be precessing. While this might not cover all cases correctly, it
+    is sufficient to serve the main purpose of this function, namely its
+    use in the optimization of the overlap between waveforms, where the
+    return is used to select the default parameters to optimize over.
+    
+    Note that this function is compatible with all input accepted by
+    the `lalsimulation.gwsignal` module. That means (i) there is no need
+    to actually specify the spin components (default values of zero for
+    all are assumed) and (ii) components need not be specified in
+    cartesian coordinates, can also be spherical.
+
+    Parameters
+    ----------
+    wf_params : dict[str, ~astropy.units.Quantity]
+        Point in parameter space that waveform is generated at.
+
+    Returns
+    -------
+    bool
+        Whether or not the system is precessing.
+    """
     # TODO: maybe test for valid spin config?
     for i in [1, 2]:
         # Check for cartesian components first
@@ -646,40 +708,41 @@ def optimize_overlap(
     vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     opt_params: Optional[str | list[str] | set[str]] = None,
     **inner_prod_kwargs
-) -> tuple[FrequencySeries, FrequencySeries, list]:
+) -> tuple[FrequencySeries, FrequencySeries, dict[str, u.Quantity]]:
     """
     _summary_
 
     Parameters
     ----------
-    wf_params : dict[str, Any]
+    wf_params : dict[str, u.Quantity]
         _description_
-    reference_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
+    fixed_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
         _description_
     vary_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
-        Must accept phi_jl as keyword the configuration specified in
-        ``wf_params`` is precessing.
+        _description_
+    opt_params : Optional[str  |  list[str]  |  set[str]], optional
+        _description_, by default None
 
     Returns
     -------
-    tuple[FrequencySeries, FrequencySeries, list]
+    tuple[FrequencySeries, FrequencySeries, dict[str, u.Quantity]]
         _description_
     """
     wf1 = fixed_wf_generator(wf_params)
 
     if opt_params is None:
-        if (use_phi_ref_and_phi_jl := test_hm_or_precessing(wf_params)):
-            # _opt_params = {'tc', 'psi', 'phi_ref', 'phi_jl'}
-            _opt_params = ['tc', 'psi', 'phi_ref', 'phi_jl']
-        else:
-            # _opt_params = {'tc', 'psi'}
-            _opt_params = ['tc', 'psi']
+        default_opt_params = ['tc', 'psi']
+
+        if (use_phi_ref_and_phi_jl := test_precessing(wf_params)):
+            default_opt_params += ['phi_ref', 'phi_jl']
+        elif (use_phi_ref := test_hm(wf_params, vary_wf_generator)):
+            default_opt_params += ['phi_ref']
         
         return optimize_overlap(
             wf_params=wf_params,
             fixed_wf_generator=fixed_wf_generator,
             vary_wf_generator=vary_wf_generator,
-            opt_params=_opt_params,
+            opt_params=default_opt_params,
             **inner_prod_kwargs
         )
     elif isinstance(opt_params, str):
@@ -693,31 +756,55 @@ def optimize_overlap(
             **inner_prod_kwargs
         )
     else:
-        # _opt_params = set(opt_params)
-        _opt_params = np.array(opt_params)  # Better because we can maintain order
+        _opt_params = np.array(opt_params)
+        # List is better than set because it maintains order of elements
+
+        # time and phase indices are accessed frequently, thus store
+        if 'tc' in _opt_params:
+            time_index = np.argwhere(_opt_params == 'tc')[0,0]
+        elif 'time' in _opt_params:
+            time_index = np.argwhere(_opt_params == 'time')[0,0]
+        else:
+            time_index = None
+        
+        if 'psi' in _opt_params:
+            phase_index = np.argwhere(_opt_params == 'psi')[0,0]
+        elif 'phase' in _opt_params:
+            phase_index = np.argwhere(_opt_params == 'phase')[0,0]
+        else:
+            phase_index = None
+
+        print(time_index, phase_index)
 
         if len(_opt_params) == 2 \
             and ('tc' in _opt_params or 'time' in _opt_params) \
             and ('psi' in _opt_params or 'phase' in _opt_params):
+            # Optimize over global time and phase shifts only. In that case,
+            # one can make things much faster by generating the waveform
+            # beforehand and just multiplying with phase
             wf2 = vary_wf_generator(wf_params)
 
-            # time_index = np.argwhere()
-
             def wf2_shifted(args):
-                t_shift, psi = args
-                # TODO: they might have different order!!! Is that accounted for?
-                # t_shift = args[]
-                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+                tc, psi = args[time_index], args[phase_index]
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*tc + 2.j*psi)
         else:
-            if 'phase' in _opt_params:
-                # _opt_params.remove('phase')
-                # _opt_params.add('psi')
-                _opt_params[np.argwhere(_opt_params == 'phase')] = 'psi'
+            # if 'time' in _opt_params:
+            #     # _opt_params.remove('time')
+            #     # _opt_params.add('tc')
+            #     _opt_params[np.argwhere(_opt_params == 'time')] = 'tc'
+
+            # if 'phase' in _opt_params:
+            #     # _opt_params.remove('phase')
+            #     # _opt_params.add('psi')
+            #     _opt_params[np.argwhere(_opt_params == 'phase')] = 'psi'
             
-            if 'time' in _opt_params:
-                # _opt_params.remove('time')
-                # _opt_params.add('tc')
-                _opt_params[np.argwhere(_opt_params == 'time')] = 'tc'
+            # For internal use, make sure only one name is used for
+            # time/tc and phase/psi. Corrected at the end
+            if time_index is not None:
+                _opt_params[time_index] = 'tc'
+
+            if phase_index is not None:
+                _opt_params[phase_index] = 'psi'
             
             # TODO: maybe only allow psi and tc? And state that in doc
             # -> time and phase might have ambiguous conventions for signs etc,
@@ -739,21 +826,21 @@ def optimize_overlap(
 
             def wf2_shifted(args):
                 wf_args = wf_params | {param: args[i]*wf_params[param].unit for i, param in enumerate(_opt_params) if (param != 'tc' and param != 'psi')}
-                t_shift = wf_args.pop('tc', 0.)
+                tc = wf_args.pop('tc', 0.)
                 psi = wf_args.pop('psi', 0.)
                 wf2 = vary_wf_generator(wf_args)
-                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*tc + 2.j*psi)
 
                 # Older idea
-                # if _optimize_t_shift:
-                #     wf2 *= np.exp(-2.j * np.pi * wf2.frequencies.value * t_shift)
+                # if _optimize_tc:
+                #     wf2 *= np.exp(-2.j * np.pi * wf2.frequencies.value * tc)
                 # if _optimize_psi:
                 #     wf2 *= np.exp(2.j * psi)
                 
                 # return wf2
 
     def loss(args):
-        return 1. - overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
+        return 1.-overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
     
     init_guess = np.zeros(len(opt_params))
     
@@ -762,16 +849,21 @@ def optimize_overlap(
     #     init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
     #     # init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
 
-    if 'psi' in _opt_params:
-        init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    # if 'psi' in _opt_params:
+    #     init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    if phase_index is not None:
+        init_guess[phase_index] = 0.1
     if 'phi_ref' in _opt_params:
         init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
     # Has negative effect, for WFs that match in beginning it introduces error
     
     bounds = len(_opt_params)*[(None, None)]
-    if 'psi' in _opt_params:
-        # bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-np.pi, np.pi)
-        bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    # if 'psi' in _opt_params:
+    #     # bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-np.pi, np.pi)
+    #     bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    if phase_index is not None:
+        # bounds[phase_index] = (-np.pi, np.pi)
+        bounds[phase_index] = (-2.*np.pi, 2.*np.pi)
     if 'phi_ref' in _opt_params:
         # bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-np.pi, np.pi)
         bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-2.*np.pi, 2.*np.pi)
@@ -783,8 +875,36 @@ def optimize_overlap(
 
     opt_params_results = {param: result.x[i] for i, param in enumerate(_opt_params)}
     # Enumerating over _opt_params here would be bad idea, is set (unordered) -> changed, but maybe still over opt_params?
+    for param, param_val in wf_params.items():
+        if param in opt_params_results:
+            opt_params_results[param] *= param_val.unit
+    
+    # if 'tc' in opt_params_results:
+    #     opt_params_results['tc'] *= u.s
 
-    if not result.success:
-        logging.info(result.message)
+    # if 'psi' in opt_params_results:
+    #     opt_params_results['psi'] *= u.rad
+
+    # # Make output names consistent with input names
+    # if 'tc' in opt_params_results and np.array(opt_params)[np.argwhere(_opt_params == 'tc')] == 'time':
+    #     opt_params_results['time'] = opt_params_results.pop('tc')
+
+    # if 'psi' in opt_params_results and np.array(opt_params)[np.argwhere(_opt_params == 'psi')] == 'phase':
+    #     opt_params_results['phase'] = opt_params_results.pop('psi')
+    
+
+    # Add units for time and phase shifts and make output names consistent
+    # with input names (might have been changed)
+    if time_index is not None:
+        opt_params_results[opt_params[time_index]] = opt_params_results['tc']*u.s
+
+    if phase_index is not None:
+        opt_params_results[opt_params[phase_index]] = opt_params_results['psi']*u.s
+    
+
+    # if not result.success:
+    #     logging.info(result.message)
+    logging.info(result.message \
+                 + f' Remaining waveform overlap is {result.fun:.5f}.')
 
     return wf1, wf2_shifted(result.x), opt_params_results

@@ -9,6 +9,7 @@ from gw_signal_tools.waveform_utils import (
 )
 
 import astropy.units as u
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 import numpy as np
 from numpy.testing import assert_allclose
@@ -16,6 +17,7 @@ from gw_signal_tools.test_utils import (
     allclose_quantity, assert_allclose_quantity,
     assert_allclose_series
 )
+from gw_signal_tools.waveform_utils import get_wf_generator
 from gwpy.testing.utils import assert_quantity_equal
 
 import pytest
@@ -42,15 +44,19 @@ wf_params = {
 }
 
 approximant = 'IMRPhenomXPHM'
+gen = gwsignal_get_waveform_generator(approximant)
+def td_wf_gen(wf_params):
+    return wfm.GenerateTDWaveform(wf_params, gen)
 
-gen = wfm.LALCompactBinaryCoalescenceGenerator(approximant)
+def fd_wf_gen(wf_params):
+    return wfm.GenerateFDWaveform(wf_params, gen)
 
-hp_t, hc_t = wfm.GenerateTDWaveform(wf_params, gen)
 
+hp_t, hc_t = td_wf_gen(wf_params)
 
-hp_f_fine, hc_f_fine = wfm.GenerateFDWaveform(wf_params, gen)
+hp_f_fine, hc_f_fine = fd_wf_gen(wf_params)
 
-hp_f_coarse, hc_f_coarse = wfm.GenerateFDWaveform(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)}, gen)
+hp_f_coarse, hc_f_coarse = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
 
 
 hp_f_fine.override_unit(u.s)
@@ -210,7 +216,7 @@ def test_get_signal_at_target_frequs_interp_and_padding(f_low, f_high, df):
     assert_quantity_equal(hp_f_at_target_frequs.frequencies, target_frequs)
 
 
-    hp_f_at_df, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f_at_df, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f_at_df.override_unit(u.s)
 
     hp_f_at_df = hp_f_at_df[
@@ -268,7 +274,7 @@ def test_get_signal_at_target_frequs_interp_and_filling(f_low, f_high, df):
     assert_quantity_equal(hp_f_at_target_frequs.frequencies, target_frequs)
 
 
-    hp_f_at_df, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f_at_df, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f_at_df.override_unit(u.s)
 
     hp_f_at_df = hp_f_at_df[
@@ -319,7 +325,7 @@ def test_restrict_f_range_copy():
 
 
 def test_restrict_f_range_none_args():
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params, gen)
+    hp_f, _ = fd_wf_gen(wf_params)
     hp_f.override_unit(u.s)
 
     hp_f_filtered = hp_f[hp_f != 0.0 * hp_f.unit]
@@ -368,7 +374,7 @@ def test_restrict_f_range_none_args():
 # Last one is there to demonstrate that it is not about size of df, behaviour
 # is about nature of its value (power of two or not)
 def test_restrict_f_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f.override_unit(u.s)
     
     hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
@@ -414,7 +420,7 @@ def test_restrict_f_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high
 # Checking with one that is not power of two is important to ensure
 # pad_to_target_df does good job (not necessarily related to restrict_f_range)
 def test_restrict_f_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f.override_unit(u.s)
     
     hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
@@ -460,7 +466,7 @@ def test_restrict_f_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_
 @pytest.mark.parametrize('f_fill_low', [0.8 * f_min, f_min, 1.2 * f_min])
 @pytest.mark.parametrize('f_fill_high', [0.8 * f_max, f_max, 1.2 * f_max])
 def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f.override_unit(u.s)
 
     hp_f_restricted = restrict_f_range(hp_f, fill_range=[f_fill_low, f_fill_high])
@@ -523,7 +529,7 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
 # @pytest.mark.parametrize('f_fill_low', [1.1 * f_min, f_min])
 # @pytest.mark.parametrize('f_fill_high', [0.9 * f_max, f_max])
 # def test_restrict_f_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 #     hp_f.override_unit(u.s)
 
 #     hp_f_restricted = restrict_f_range(hp_f,
@@ -580,7 +586,7 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
 
 #     # hp_t_padded = pad_to_get_target_df(hp_t, df)
 #     # hp_t_f = td_to_fd_waveform(hp_t_padded)
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 #     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
 #     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
 #                                        fill_range=[f_crop_low, None])
@@ -599,7 +605,7 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
 # def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
 #     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
 
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': df}, gen)
+#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 #     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
 #     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
 #                                        fill_range=[f_crop_low, None])
@@ -692,9 +698,9 @@ class ErrorRaising(unittest.TestCase):
 #     mass2 = 0.5 * total_mass
 #     mass3 = 0.25 * total_mass
 
-#     # hp_f_M1, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass1}, gen)
-#     # hp_f_M2, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass2}, gen)
-#     # hp_f_M3, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass3}, gen)
+#     # hp_f_M1, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass1})
+#     # hp_f_M2, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass2})
+#     # hp_f_M3, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass3})
 
 #     # hp_f_M1 = rescale_with_Mtotal(hp_f_M1, mass1, target_unit_sys)
 #     # hp_f_M2 = rescale_with_Mtotal(hp_f_M2, mass2, target_unit_sys)
@@ -732,9 +738,9 @@ class ErrorRaising(unittest.TestCase):
 #     mass2 = 0.5 * total_mass
 #     mass3 = 0.25 * total_mass
 
-#     # hp_f_M1, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass1}, gen)
-#     # hp_f_M2, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass2}, gen)
-#     # hp_f_M3, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass | {'total_mass': mass3}, gen)
+#     # hp_f_M1, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass1}, gen)
+#     # hp_f_M2, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass2})
+#     # hp_f_M3, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass3})
 
 #     # hp_f_M1 = rescale_with_Mtotal(hp_f_M1, mass1, target_unit_sys)
 #     # hp_f_M2 = rescale_with_Mtotal(hp_f_M2, mass2, target_unit_sys)
@@ -773,7 +779,7 @@ class ErrorRaising(unittest.TestCase):
 
 
 # def test_conversion_si_units():
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass, gen)
+#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
 
 #     hp_f_rescaled = rescale_with_Mtotal(
 #         hp_f,
@@ -792,7 +798,7 @@ class ErrorRaising(unittest.TestCase):
 
 
 # def test_conversion_geom_units():
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass, gen)
+#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
 
 #     hp_f_rescaled = rescale_with_Mtotal(
 #         hp_f,
@@ -811,7 +817,7 @@ class ErrorRaising(unittest.TestCase):
 
 
 # def test_conversion_cosmo_units():
-#     hp_f, _ = wfm.GenerateFDWaveform(wf_params_with_total_mass, gen)
+#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
 
 #     hp_f_rescaled = rescale_with_Mtotal(
 #         hp_f,

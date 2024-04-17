@@ -14,6 +14,7 @@ from gwpy.testing.utils import assert_quantity_equal
 import pytest
 
 # ----- Local Package Imports -----
+from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix, distance, linearized_distance
@@ -48,7 +49,7 @@ wf_params = {
 
 approximant = 'IMRPhenomXPHM'
 
-wf_gen = FisherMatrix.get_wf_generator(approximant)
+wf_gen = get_wf_generator(approximant)
 
 @pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 @pytest.mark.parametrize('optimize', [False, True])

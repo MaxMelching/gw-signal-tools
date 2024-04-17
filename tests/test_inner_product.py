@@ -3,7 +3,7 @@ import unittest
 from numpy.testing import assert_allclose
 
 from gw_signal_tools.waveform_utils import (
-    td_to_fd_waveform, pad_to_get_target_df, get_strain
+    td_to_fd_waveform, pad_to_get_target_df, get_wf_generator
 )
 from gw_signal_tools.test_utils import (
     allclose_quantity, assert_allclose_quantity,
@@ -15,6 +15,7 @@ from gw_signal_tools.inner_product import inner_product, norm, overlap
 from gw_signal_tools.PSDs import psd_gw150914, psd_no_noise
 
 import astropy.units as u
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
 import pytest
@@ -41,19 +42,21 @@ wf_params = {
 }
 
 approximant = 'IMRPhenomXPHM'
+gen = gwsignal_get_waveform_generator(approximant)
+def td_wf_gen(wf_params):
+    return wfm.GenerateTDWaveform(wf_params, gen)
 
-# Call the generator
-gen = wfm.LALCompactBinaryCoalescenceGenerator(approximant)
-
+def fd_wf_gen(wf_params):
+    return wfm.GenerateFDWaveform(wf_params, gen)
 
 # Generate time domain waveform
-hp_t, _ = wfm.GenerateTDWaveform(wf_params, gen)
+hp_t, _ = td_wf_gen(wf_params)
 
 # Two waveforms will be generated in frequency domain, first with finer
 # sampling and then with coarser one
-hp_f_fine, _ = wfm.GenerateFDWaveform(wf_params, gen)
+hp_f_fine, _ = fd_wf_gen(wf_params)
 
-hp_f_coarse, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)}, gen)
+hp_f_coarse, _ = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
 
 # Make units consistent with gw_signal_tools
 hp_f_fine *= u.s
@@ -138,7 +141,7 @@ def test_f_range(f_min, f_max):
     norm_no_units = norm(hp_f_fine, f_range=[f_min.value, f_max.value])
     assert_quantity_equal(norm1, norm_no_units)
 
-    hp_f_restricted, _ = wfm.GenerateFDWaveform(wf_params | {'f22_start': f_min, 'f_max': f_max}, gen)
+    hp_f_restricted, _ = fd_wf_gen(wf_params | {'f22_start': f_min, 'f_max': f_max})
     hp_f_restricted.override_unit(u.s)
     norm2 = norm(hp_f_restricted)
 
@@ -194,11 +197,11 @@ def test_df_consistency():
 
 
     # Different signals with matching df in inner_product
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 2}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 2})
     hp_f.override_unit(u.s)
     norm2 = norm(hp_f, df=hp_f_fine.df / 2)
 
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 4}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 4})
     hp_f.override_unit(u.s)
     norm3 = norm(hp_f, df=hp_f_fine.df / 4)
 

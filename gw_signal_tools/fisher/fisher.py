@@ -15,7 +15,7 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 
 # ----- Local Package Imports -----
 from ..inner_product import inner_product, optimize_overlap
-from ..waveform_utils import get_strain
+from ..waveform_utils import get_wf_generator
 from ..matrix_with_units import MatrixWithUnits
 from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
 from gw_signal_tools import preferred_unit_system
@@ -713,7 +713,8 @@ class FisherMatrix:
     ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
         """
         Generates a function that fulfils the requirements of the
-        `wf_generator` argument of a ``FisherMatrix``.
+        `wf_generator` argument of a ``FisherMatrix`` by calling
+        `~gw_signal_tools.waveform_utils.get_wf_generator`.
 
         Parameters
         ----------
@@ -742,17 +743,8 @@ class FisherMatrix:
             Function that is wrapped here. All arguments provided in
             addition to the mandatory ones are passed to this function
             (just like `domain` is as well).
-        lalsimulation.gwsignal.core.waveform.
-        LALCompactBinaryCoalescenceGenerator : 
-            Function used to get a generator from `approximant`. This is
-            passed to the `generator` argument of `get_strain`.
         """
-        generator = gwsignal_get_waveform_generator(approximant)
-
-        def wf_generator(wf_params):
-            return get_strain(wf_params, domain, generator, *args, **kwargs)
-
-        return wf_generator
+        return get_wf_generator(approximant, domain, *args, **kwargs)
     
 
     # ----- Set some Python class related goodies -----

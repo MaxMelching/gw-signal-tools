@@ -30,6 +30,11 @@ PLOT_STYLE_SHEET = _path_join(PACKAGE_PATH, 'plot_stylesheet.sty')
 import gw_signal_tools.units as _gw_signal_tools_units
 preferred_unit_system = _gw_signal_tools_units
 
+from .waveform_utils import get_wf_generator
+phenomx_generator = get_wf_generator(
+    'IMRPhenomXPHM'
+)
+
 
 # ---------- Initialize Logging ----------
 import logging

@@ -1,17 +1,19 @@
-import numpy as np
+# ----- Standard Lib Imports -----
+from typing import Optional, Literal, Any, Callable
+import logging
 
+# ----- Third Party Imports -----
+import numpy as np
 import astropy.units as u
 
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
-
+# ----- Local Package Imports -----
 from .test_utils import allclose_quantity
-
-from typing import Optional, Literal, Any
-import logging
 
 
 __doc__ = """
@@ -679,14 +681,14 @@ def get_signal_at_target_frequs(
     return out
 
 
-# ---------- Wrapper function for strain generation ----------
+# ---------- Wrapper functions for strain generation ----------
 def get_strain(
     intrinsic_params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
     generator: Any,
     extrinsic_params: Optional[dict[str, str | u.Quantity]] = None,
     mode: Optional[Literal['plus', 'cross', 'mixed']] = None
-) -> Any:
+) -> FrequencySeries | TimeSeries:
     """
     Wrapper function that allows to generate various types of
     gravitational wave strain.
@@ -718,10 +720,9 @@ def get_strain(
 
     Returns
     -------
-    Any
+    ~gwpy.timeseries.TimeSeries or ~gwpy.frequencyseries.FrequencySeries
         Gravitational wave strain.
     """
-    
     if domain == 'time':
         generator_func = wfm.GenerateTDWaveform
         temp_factor = 1.0  # TODO: change unit once lal gets it right
@@ -743,7 +744,6 @@ def get_strain(
             raise ValueError('Need complete set of extrinsic parameters.')    
     else:
         return_detector_output = False
-
     
     if mode is None:
         mode = 'plus'
@@ -753,7 +753,6 @@ def get_strain(
                 '`mode` argument has been set, but is ignored because '
                 'extrinsic parameters have been passed.'
             )
-    
 
     if return_detector_output:
         return generator_func(intrinsic_params, generator).strain(**extrinsic_params) * temp_factor  # TODO: change unit once lal gets it right
@@ -781,6 +780,56 @@ def get_strain(
                     ).append(hp + 1.j * hc, inplace=True) * temp_factor  # TODO: change unit once lal gets it right
             case _:
                 raise ValueError('Invalid `mode`.')
+
+def get_wf_generator(
+    approximant: str,
+    domain: Literal['frequency', 'time'] = 'frequency',
+    *args, **kwargs
+) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+    """
+    Generates a function that can serve as a convenient waveform
+    generator since its only input is a parameter dictionary.
+    
+    The returned function fulfils the requirements of the `wf_generator`
+    argument of a ``~gw_signal_tools.fisher.FisherMatrix``.
+
+    Parameters
+    ----------
+    approximant : str
+        Name of a waveform model that is accepted by the
+        ``~lalsimulation.gwsignal.core.waveform.
+        LALCompactBinaryCoalescenceGenerator`` class.
+    domain : Literal['frequency', 'time'], optional,
+    default = 'frequency'
+        String representing the domain where the Fisher matrix is
+        computed. Accepted values are 'frequency' and 'time'.
+
+    Returns
+    -------
+    Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.
+    frequencyseries.FrequencySeries]
+        Function that takes dicionary of waveform parameters as
+        input and produces a waveform (stored in a GWPy
+        ``FrequencySeries``). Can, for example, be used as input
+        to `wf_generator` argument during initialization of a
+        ``FisherMatrix``.
+
+    See also
+    --------
+    gw_signal_tools.waveform_utils.get_strain :
+        Function that is wrapped here. All arguments provided in
+        addition to the mandatory ones are passed to this function
+        (just like `domain` is as well).
+    lalsimulation.gwsignal.gwsignal_get_waveform_generator : 
+        Function used to get a generator from `approximant`. This is
+        passed to the `generator` argument of `get_strain`.
+    """
+    generator = gwsignal_get_waveform_generator(approximant)
+
+    def wf_generator(wf_params):
+        return get_strain(wf_params, domain, generator, *args, **kwargs)
+
+    return wf_generator
 
 
 # ---------- Mass Rescaling ----------

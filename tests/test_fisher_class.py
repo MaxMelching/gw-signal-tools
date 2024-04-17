@@ -13,6 +13,7 @@ import pytest
 
 # ----- Local Package Imports -----
 from gw_signal_tools.inner_product import norm
+from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix
@@ -44,8 +45,8 @@ wf_params = {
 }
 
 approximant = 'IMRPhenomXPHM'
-phenomx_generator = FisherMatrix.get_wf_generator(approximant)
-phenomx_cross_generator = FisherMatrix.get_wf_generator(approximant, mode='cross')
+phenomx_generator = get_wf_generator(approximant)
+phenomx_cross_generator = get_wf_generator(approximant, mode='cross')
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc

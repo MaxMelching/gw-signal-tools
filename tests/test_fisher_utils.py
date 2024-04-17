@@ -21,6 +21,7 @@ from gw_signal_tools.test_utils import (
     assert_allclose_series
 )
 from gw_signal_tools.inner_product import norm
+from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.fisher import (
     num_diff, get_waveform_derivative_1D,
     get_waveform_derivative_1D_with_convergence,
@@ -92,7 +93,7 @@ test_params = ['total_mass', 'distance', 'mass_ratio']
 
 
 approximant = 'IMRPhenomXPHM'
-wf_generator = FisherMatrix.get_wf_generator(approximant)
+wf_generator = get_wf_generator(approximant)
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc

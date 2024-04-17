@@ -7,10 +7,6 @@ from .fisher_utils import (
 from .fisher import FisherMatrix
 # from .matrix_with_units import MatrixWithUnits  # Do this? 
 
-phenomx_generator = FisherMatrix.get_wf_generator(
-    'IMRPhenomXPHM'
-)
-
 from .distances import distance, linearized_distance
 # Order important. We import phenomx_generator there, must already be defined
 

@@ -1,6 +1,7 @@
 # ----- Standard Lib Imports -----
 from typing import Optional, Any, Callable
 import logging
+from copy import deepcopy
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -855,11 +856,16 @@ def optimize_overlap(
                 psi = wf_args.pop('psi', 0.)
                 wf2 = vary_wf_generator(wf_args)
                 return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*tc + 2.j*psi)
+                # tc_factor = np.exp(-2.j*np.pi*wf2.frequencies.value*tc) if time_index is not None else 1
+                # psi_factor = np.exp(2.j*psi) if time_index is not None else 1
+                # return wf2 * tc_factor * psi_factor
 
     def loss(args):
         return 1.-overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
     
-    init_guess = np.zeros(len(opt_params))
+    # init_guess = np.zeros(len(opt_params))
+
+    init_guess = [wf_params[param].value if (param != 'tc' and param != 'psi') else 0. for param in _opt_params]
     
     # if phase_index is not None and 'phi_ref' in _opt_params:
     #     init_guess[phase_index] = 0.1
@@ -881,9 +887,10 @@ def optimize_overlap(
     # no optimization will be reached, so we allow for same negative range
     
     result = minimize(fun=loss, x0=init_guess, bounds=bounds,
-                      method='Nelder-Mead', options=dict(fatol=1e-5))
+                      method='Nelder-Mead')#, tol=1e-6, options=dict(fatol=1e-6, xatol=1e-6))
     # fatol is tolerable change in fun over subsequent iterations that
     # indicates convergence. 1e-5 should be sufficient
+    # -> does not change behaviour much, so we just let automatic do its magic
 
     # opt_params_results = {param: result.x[i] for i, param in enumerate(_opt_params)}
     # Enumerating over _opt_params here would be bad idea, is set (unordered) -> changed, but maybe still over opt_params?
@@ -909,5 +916,5 @@ def optimize_overlap(
 
     logging.info(result.message \
                  + f' Remaining waveform overlap is {result.fun:.5f}.')
-
+    
     return wf1, wf2_shifted(result.x), opt_params_results

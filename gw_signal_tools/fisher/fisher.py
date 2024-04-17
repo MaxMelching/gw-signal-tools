@@ -11,13 +11,13 @@ import matplotlib.pyplot as plt
 
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
-import lalsimulation.gwsignal.core.waveform as wfm
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 
 # ----- Local Package Imports -----
 from ..inner_product import inner_product
 from ..waveform_utils import get_strain
 from ..matrix_with_units import MatrixWithUnits
-from .fisher_utils import fisher_matrix
+from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
 from gw_signal_tools import preferred_unit_system
 
 
@@ -107,6 +107,8 @@ class FisherMatrix:
     
         if direct_computation:
             self._calc_fisher()
+            # TODO: decide if this is really needed. Could also just
+            # not allow new computation if this param is False
     
     def _calc_fisher(self):
         if self.metadata['return_info']:
@@ -418,9 +420,9 @@ class FisherMatrix:
         reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         params: Optional[str | list[str]] = None,
         # optimize_extrinsic_params: bool = False,
-        optimized_params: Optional[dict[str, u.Quantity]] = None,
+        optimize: Optional[bool | str | list[str]] = True,
         **inner_prod_kwargs
-    ) -> MatrixWithUnits:
+    ) -> tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
         Calculates the systematic error
 
@@ -434,8 +436,8 @@ class FisherMatrix:
 
         Parameters
         ----------
-        wf_generator_2 : Callable[[dict[str, ~astropy.units.Quantity]],
-        ~gwpy.frequencyseries.FrequencySeries]
+        reference_wf_generator : Callable[[dict[str, ~astropy.units.
+        Quantity]], ~gwpy.frequencyseries.FrequencySeries]
             Waveform generator for other waveform model that the
             systematic error shall be computed with respect to.
         params : str | list[str], optional, default = None
@@ -444,42 +446,102 @@ class FisherMatrix:
             params_to_vary` is calculated. Can also be a string or list
             of strings, but these have to match elements of `self.
             params_to_vary`.
+        optimize : boolean | str | list[str], optional, default = True
+            Option that allows the to control the optimization procedure
+            that is used. Can be True or False to switch automatic
+            version on and off, but also a list with parameter names
+            that the optimization will be carried out for.
+
+            If it is given as a list, the corresponding parameters must
+            be in the instances ``wf_params_at_point`` dictionary or
+            'time', 'phase'. They do not have to be part of `params`.
+        inner_prod_kwargs : 
+            Key word arguments used for the calculations here, i.e. for
+            waveform difference and more.
 
         Returns
         -------
-        MatrixWithUnits
-            Column vector containing the systematic errors.
+        tuple[MatrixWithUnits, dict[str, Any]]
+            Column vector containing the systematic errors and
+            dictionary with information about the calculation.
         """
-        # TODO: require to give new inner_prod_kwargs here?
         if params is not None:
+            params = self.wf_params_at_point
             param_indices = self.get_param_indices(params)
         else:
             # Take all parameters
             param_indices = len(self.params_to_vary)*[True]
+        
 
-        if optimized_params is None:
-            # Do optimization, get optimal parameters
-            opt_params = ...
-            opt_wf_params = self.wf_params_at_point | opt_params  # Wrong syntax, opt_params is list and we need dict.
-                                                                  # Moreover, we only add phi_ref and inclination here
+        if len(inner_prod_kwargs) > 0:
+            # Update keywords from initial input to the instance
 
-            opt_fisher = FisherMatrix(...)
+            # Note: we want to use same kwargs for inner product as for
+            # calculation of Fisher matrix here, have to be extracted from
+            # metadata property
+            # -> changed this now, we might want to optimize over some stuff here
+            from inspect import signature
+            fisher_args = list(signature(fisher_matrix).parameters)
+            fisher_args.remove('inner_prod_kwargs')
+            init_inner_prod_kwargs = self.metadata.copy()
 
-            logging.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
-
-
-            # return opt_fisher.systematic_error(wf_generator_2, params,
-            #                                    optimize_extrinsic_params=False)
-            # return opt_fisher.systematic_error(wf_generator_2, params,
-            #                                    optimized_params=opt_wf_params)
-
-            # It might be better not to return optimized Fisher (or even
-            # replace self with opt_fisher; printing as replacement).
-            # Instead, we just calculate the systematic error here and
-            # return it, as one would expect
-            delta_h = 0.0
+            # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
+            for key in fisher_args:
+                try:
+                    init_inner_prod_kwargs.pop(key)
+                except KeyError:
+                    pass
             
+            inner_prod_kwargs = init_inner_prod_kwargs | inner_prod_kwargs
+
+
+        optimization_info = {}
+
+
+        # General thoughts on function:
+        # It might be better not to return optimized Fisher (or even
+        # replace self with opt_fisher; printing as replacement).
+        # Instead, we just calculate the systematic error here and
+        # return it, as one would expect
+        # -> maybe in info_dict; along with optimized point
+
+
+        if isinstance(optimize, (str, list)):
+            # TODO: think about accepted parameters etc
+            ...
+            optimization_info['general'] = 'Custom optimization was carried out.'
+        elif isinstance(optimize, bool) and optimize:
+            # TODO: maybe just call with certain default param list for optimize?
+
+            # Do optimization, get optimal parameters
+            opt_wf_1, opt_wf_2, opt_params = optimize_h_difference(
+                self.wf_params_at_point,
+                reference_wf_generator=reference_wf_generator,
+                vary_wf_generator=self.wf_generator,
+                **inner_prod_kwargs
+            )
+            delta_h = opt_wf_1 - opt_wf_2
+
+            # TODO: remove t_shift and psi at this point (but store)
+
+            opt_wf_params = self.wf_params_at_point | opt_params
+            # Remove parameters that are not used in wf generation
+            opt_wf_params.pop('t_shift')
+            opt_wf_params.pop('psi')  # TODO: only remove this optionally? Or just always add as global phase to waveforms?
+
+            optimization_info['opt_params'] = opt_wf_params  # Or opt_params?
+
+            opt_fisher = FisherMatrix(
+                opt_wf_params,
+                self.params_to_vary,
+                self.wf_generator
+            )
             fisher_inverse = opt_fisher.fisher_inverse
+
+
+            # logging.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
+            optimization_info['opt_fisher'] = opt_fisher
+            
 
             # Need to calculate derivatives at new point
             derivs = [
@@ -489,13 +551,14 @@ class FisherMatrix:
                     self.wf_generator
                 ) for param_to_vary in self.params_to_vary
             ]
-        else:
-            # TODO: use optimized_params here
-            delta_h = self.wf_generator(self.wf_params_at_point) \
-                    - reference_wf_generator(self.wf_params_at_point)
-            
-            fisher_inverse = self.fisher_inverse
-        
+            # TODO: don't forget to add phase shifts here, have to evaluate
+            # derivatives in the optimized point
+
+            optimization_info['general'] = 'Default optimization was carried out.'
+        elif isinstance(optimize, bool) and not optimize:
+            delta_h = reference_wf_generator(self.wf_params_at_point) \
+                - self.wf_generator(self.wf_params_at_point)
+
             if self.metadata['return_info']:
                 derivs = [
                     self.deriv_info[param]['deriv'] for param in self.params_to_vary
@@ -505,7 +568,6 @@ class FisherMatrix:
                 # parameters in params only because this argument is meant
                 # to determine return. For error, parameters that are not in
                 # in params still play a role and have to be accounted for.
-                from gw_signal_tools.fisher import get_waveform_derivative_1D_with_convergence
                 derivs = [
                     get_waveform_derivative_1D_with_convergence(
                         self.wf_params_at_point,
@@ -514,28 +576,50 @@ class FisherMatrix:
                     ) for param_to_vary in self.params_to_vary
                 ]
 
+            fisher_inverse = self.fisher_inverse
 
-        # Note: we want to use same kwargs for inner product as for
-        # calculation of Fisher matrix here, have to be extracted from
-        # metadata property
-        # -> changed this now, we might want to optimize over some stuff here
-        # from inspect import signature
-        # fisher_args = list(signature(fisher_matrix).parameters)
-        # fisher_args.remove('inner_prod_kwargs')
-        # inner_prod_kwargs = self.metadata.copy()
+            optimization_info['general'] = 'No optimization was carried out.'
+        else:
+            raise ValueError('Given `optimize` input not accepted.')
+        
 
-        # # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
-        # for key in fisher_args:
-        #     try:
-        #         inner_prod_kwargs.pop(key)
-        #     except KeyError:
-        #         pass
+        # Parameters that all branches/cases define: optimized_params
+        # -> no matter if actual optimization shall be carried out
+
+        # TODO: maybe do things differently. For no opt, we can take
+        # stored derivs and Fisher, potentially. Thus it might be best
+        # to just store/define delta_h, derivs and fisher_inverse in
+        # each case and then only do computation afterwards
+
+        # TODO: think about how Fisher optimization can be incorporated
+        # -> extra keyword?
+
 
         vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         
-        return (fisher_inverse @ vector)[param_indices]
+        fisher_bias = (fisher_inverse @ vector)[param_indices]
+
+        # Bias from Fisher calculation might not be the only one we have
+        # to account for, some parameters might change in optimization
+        # procedure (has to be taken into account as well).
+        if np.any(np.isin(opt_params, params)):
+            opt_bias = MatrixWithUnits.from_numpy_array(vector.shape)
+            for index in np.ndindex(opt_bias.shape):
+                param = param_indices[index]
+                if param in params.keys():
+                    # param was changed by optimization procedure
+                    opt_bias = opt_params[param] - params[param]
+            
+            # TODO: account for correlations with parameters that are
+            # not from opt_params, they might still change
+
+            # TODO: especially check what they mean by summation of errors after eq 13
+
+            return fisher_bias + opt_bias, optimization_info
+        else:
+            return fisher_bias, optimization_info
 
     def plot_matrix(self, matrix: MatrixWithUnits, xticks: bool = True,
                     yticks: bool = True, *args, **kwargs) -> mpl.axes.Axes:
@@ -586,7 +670,6 @@ class FisherMatrix:
 
         if not (only_fisher or only_fisher_inverse):
             self.plot_matrix(self.fisher)
-
             self.plot_matrix(self.fisher_inverse)
         elif only_fisher:
             self.plot_matrix(self.fisher)
@@ -661,7 +744,7 @@ class FisherMatrix:
             Function used to get a generator from `approximant`. This is
             passed to the `generator` argument of `get_strain`.
         """
-        generator = wfm.LALCompactBinaryCoalescenceGenerator(approximant)
+        generator = gwsignal_get_waveform_generator(approximant)
 
         def wf_generator(wf_params):
             return get_strain(wf_params, domain, generator, *args, **kwargs)
@@ -724,12 +807,8 @@ class FisherMatrix:
 from gw_signal_tools.inner_product import overlap
 from scipy.optimize import minimize
 
-
-def test_precessing(wf_params: dict[str, Any]) -> bool:
-    is_precessing = False
-
+def test_hm_or_precessing(wf_params: dict[str, Any]) -> bool:
     # TODO: maybe test for valid spin config?
-
     for i in [1, 2]:
         # Check for cartesian components first
         for index in ['x', 'y']:
@@ -738,104 +817,175 @@ def test_precessing(wf_params: dict[str, Any]) -> bool:
                 if (wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled
                     and wf_params[f'spin{i}z'] != 0.*u.dimensionless_unscaled):
                     # Spins are not parallel to L and not in orbital plane
-                    is_precessing = True
-                    break
+                    return True
             except KeyError:
                 pass
         
-        # TODO: spins might not be parallel to L, but can still cancel and in that case, no precession!!!
+        # TODO: spins might not be parallel to L, but can still cancel
+        # and in that case, no precession!!!
         # -> but that also depends on mass, very specific... Just neglect?
     
-        if is_precessing:
-            break
-
         # No precession in cartesian components, but spherical ones might be given
         try:
-            if wf_params[f'spin{i}_tilt'] % (np.pi*u.rad) == 0.*u.rad:
-                is_precessing = True
-                break
+            if wf_params[f'spin{i}_tilt'] % (np.pi*u.rad) != 0.*u.rad:
+                return True
         except KeyError:
             pass
         
-    return is_precessing
+    return False
 
 def optimize_h_difference(
     wf_params: dict[str, Any],
     reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
-    vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries]
-) -> tuple[FrequencySeries, FrequencySeries]:
-    wf_params = wf_params.copy()  # TODO: check if needed
+    vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    opt_params: Optional[str | list[str] | set[str]] = None,
+    **inner_prod_kwargs
+) -> tuple[FrequencySeries, FrequencySeries, list]:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    wf_params : dict[str, Any]
+        _description_
+    reference_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
+        _description_
+    vary_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
+        Must accept phi_jl as keyword the configuration specified in
+        ``wf_params`` is precessing.
+
+    Returns
+    -------
+    tuple[FrequencySeries, FrequencySeries, list]
+        _description_
+    """
     wf1 = reference_wf_generator(wf_params)
 
-    def wf2_shifted(tc, psi, phi_ref, phi_jl):
-        # wf2 = wf_generator_2(wf_params | {'phi_ref': phi_ref*u.rad, 'some_weird_param': phi_jl*u.rad})
-        # Maybe following is more flexible
-        if phi_ref is not None:
-            wf_params['phi_ref'] = phi_ref*u.rad
-        elif phi_jl is not None:
-            wf_params['phi_jl'] = phi_jl*u.rad
-
-        wf2 = vary_wf_generator(wf_params)
-
-        return wf2 * np.exp(-2.j * np.pi * wf2.frequencies.value * tc + 2.j * psi)
-    
-    # Maybe test if wf(wf_params | {'phi_ref': np.pi*u.rad}) close to
-    # wf(wf_params | {'phi_ref': 0.*u.rad}) * np.exp(2.j*np.pi).
-    # and if yes, phi_ref and psi are degenerate. Then set boolean based on that
-    use_psi = False
-    # -> or maybe do not test for this due to arbitrariness of threshold and use bounds instead?
-    is_precessing = test_precessing(wf_params)
-
-    if use_psi and is_precessing:
-        def loss_func(args):
-            tc, psi, phi_ref, phi_jl = args
-            return 1.0 - overlap(wf1, wf2_shifted(tc, psi, phi_ref, phi_jl))
-
-        init_guess = np.array([0., 0., 0., 0.])
-    elif use_psi:
-        def loss_func(args):
-            tc, psi, phi_ref = args
-            return 1.0 - overlap(wf1, wf2_shifted(tc, psi, phi_ref, None))
+    if opt_params is None:
+        if (use_phi_ref_and_phi_jl := test_hm_or_precessing(wf_params)):
+            # _opt_params = {'tc', 'psi', 'phi_ref', 'phi_jl'}
+            _opt_params = ['tc', 'psi', 'phi_ref', 'phi_jl']
+        else:
+            # _opt_params = {'tc', 'psi'}
+            _opt_params = ['tc', 'psi']
         
-        init_guess = np.array([0., 0., 0.])
-    elif is_precessing:
-        def loss_func(args):
-            tc, phi_ref, phi_jl = args
-            return 1.0 - overlap(wf1, wf2_shifted(tc, None, phi_ref, phi_jl))
-        
-        init_guess = np.array([0., 0., 0.])
+        return optimize_h_difference(
+            wf_params=wf_params,
+            reference_wf_generator=reference_wf_generator,
+            vary_wf_generator=vary_wf_generator,
+            opt_params=_opt_params,
+            **inner_prod_kwargs
+        )
+    elif isinstance(opt_params, str):
+        _opt_params = [opt_params]
+
+        return optimize_h_difference(
+            wf_params=wf_params,
+            reference_wf_generator=reference_wf_generator,
+            vary_wf_generator=vary_wf_generator,
+            opt_params=_opt_params,
+            **inner_prod_kwargs
+        )
     else:
-        # No precession or relevance of higher modes
-        def loss_func(args):
-            tc, phi_ref = args
-            return 1.0 - overlap(wf1, wf2_shifted(tc, None, phi_ref, None))
-        
-        init_guess = np.array([0., 0.])
+        # _opt_params = set(opt_params)
+        _opt_params = np.array(opt_params)  # Better because we can maintain order
+
+        if len(_opt_params) == 2 \
+            and ('tc' in _opt_params or 'time' in _opt_params) \
+            and ('psi' in _opt_params or 'phase' in _opt_params):
+            wf2 = vary_wf_generator(wf_params)
+
+            # time_index = np.argwhere()
+
+            def wf2_shifted(args):
+                t_shift, psi = args
+                # TODO: they might have different order!!! Is that accounted for?
+                # t_shift = args[]
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+        else:
+            if 'phase' in _opt_params:
+                # _opt_params.remove('phase')
+                # _opt_params.add('psi')
+                _opt_params[np.argwhere(_opt_params == 'phase')] = 'psi'
+            
+            if 'time' in _opt_params:
+                # _opt_params.remove('time')
+                # _opt_params.add('tc')
+                _opt_params[np.argwhere(_opt_params == 'time')] = 'tc'
+            
+            # TODO: maybe only allow psi and tc? And state that in doc
+            # -> time and phase might have ambiguous conventions for signs etc,
+            # but we have strict one
+            
+
+            # if 'phase' in _opt_params:
+            #     _opt_params.remove('phase')
+            #     _opt_params.add('psi')
+
+            #     _optimize_psi = True
+            # else:
+            #     _optimize_psi = True if 'psi' in _opt_params else False
+            # Not needed because of nice default
+
+
+            # _optimize_tc = True if 'tc' in _opt_params else False
+            # _optimize_psi = True if 'psi' in _opt_params else False
+
+            def wf2_shifted(args):
+                wf_args = wf_params | {param: args[i]*wf_params[param].unit for i, param in enumerate(_opt_params) if (param != 'tc' and param != 'psi')}
+                t_shift = wf_args.pop('tc', 0.)
+                psi = wf_args.pop('psi', 0.)
+                wf2 = vary_wf_generator(wf_args)
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+
+                # Older idea
+                # if _optimize_t_shift:
+                #     wf2 *= np.exp(-2.j * np.pi * wf2.frequencies.value * t_shift)
+                # if _optimize_psi:
+                #     wf2 *= np.exp(2.j * psi)
+                
+                # return wf2
+
+    def loss(args):
+        return 1. - overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
     
-    # result = minimize(loss_func, np.array([0.0, 0.0, 0.0, 0.0]))  # use 'Newton-CG'?
-    result = minimize(loss_func, init_guess)  # use 'Newton-CG'?
-    # No bounds usually works best, although true params are usually not
-    # recovered. But with bounds nothing works -> try something like
-    # periodic boundaries/constraints? Or would this be overkill?
+    init_guess = np.zeros(len(opt_params))
+    
+    # init_guess = np.zeros(_opt_params.shape)
+    # if 'psi' in _opt_params and 'phi_ref' in _opt_params:
+    #     init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    #     # init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
 
-    # result = minimize(loss_func, np.array([0.0, 0.0, 0.0, 0.0]),
-                    #   bounds=[(-np.inf, np.inf), (0.0, 2.*np.pi), (0.0, 2.*np.pi), (-np.pi, np.pi)])
-                    #   bounds=[(-np.inf, np.inf), (-2.*np.pi, 2.*np.pi), (-2.*np.pi, 2.*np.pi), (-np.pi, np.pi)])
-                    #   bounds=[(-np.inf, np.inf), (-2.*np.pi, 2.*np.pi), (-2.*np.pi, 2.*np.pi), (-2.*np.pi, 2.*np.pi)])
-                    #   bounds=[(-np.inf, np.inf), (0.0, 2.*np.pi), (0.0, 2.*np.pi), (-np.inf, np.inf)])
+    if 'psi' in _opt_params:
+        init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    if 'phi_ref' in _opt_params:
+        init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
+    # Has negative effect, for WFs that match in beginning it introduces error
+    
+    bounds = len(_opt_params)*[(None, None)]
+    if 'psi' in _opt_params:
+        # bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-np.pi, np.pi)
+        bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    if 'phi_ref' in _opt_params:
+        # bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-np.pi, np.pi)
+        bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    
+    result = minimize(fun=loss, x0=init_guess, bounds=bounds,
+                      method='Nelder-Mead', options=dict(fatol=1e-5))
+    # fatol is tolerable change in fun over subsequent iterations that
+    # indicates convergence. 1e-5 should be sufficient
 
-    opt_args = result.x
+    opt_params_results = {param: result.x[i] for i, param in enumerate(_opt_params)}
+    # Enumerating over _opt_params here would be bad idea, is set (unordered) -> changed, but maybe still over opt_params?
 
+    print(init_guess)
+    print(bounds)
     print(result)
-    # print(opt_args)
+    print(result.success == True)
 
-    # Idea 2: handle stuff via dictionary or so... Not sure anymore
+    print(overlap(wf1, wf2), overlap(wf1, wf2*np.exp(2.j * 0.2)), overlap(wf1, wf2*np.exp(2.j * 0.5)))
 
-    default_args = {
-        'tc': 0.,
-        'psi': 0.*u.rad,
-        'phi_ref': wf_params['phi_ref'],
-        'phi_jl': wf_params['phi_jl']  # To be tested
-    }
+    if not result.success:
+        logging.info('Optimization did not succeed.')
 
-    return wf1, wf2_shifted(*opt_args)
+    return wf1, wf2_shifted(result.x), opt_params_results

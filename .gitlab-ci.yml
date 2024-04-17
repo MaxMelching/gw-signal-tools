@@ -1,6 +1,6 @@
 # Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
 
-image: python:3.11.5
+image: python:3.11.5  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
@@ -10,6 +10,7 @@ cache:
     - .cache/pip
 
 before_script:  # Enabling virtual environment is recommended
+  # - apt-get update && apt-get install libgsl-dev  # For surrogate model -> not sure if still required (gwsurrogate not needed, but we still want to call surrogate)
   - python --version ; pip --version  # For debugging
   - pip install virtualenv
   - virtualenv venv
@@ -52,9 +53,10 @@ testing:
     - pip install .[dev]
     - python -m setuptools_scm  # Print package version for debugging
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
+    # TODO: add -v at the end? Shows names of test that fail/pass during running
     - coverage report
     - coverage html
-    - mv htmlcov/ public/
+    # - mv htmlcov/ public/  # Huh, cannot acces this because no GitLab pages??
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'  # From https://gitlab.aei.uni-hannover.de/help/ci/testing/code_coverage.md#view-code-coverage-results-in-the-mr
   rules:
     - if: $CI_COMMIT_TAG
@@ -63,5 +65,5 @@ testing:
       # when: manual  # Also possible for certain tests
   artifacts:
     paths:
-      # - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
-      - public
+      - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
+      # - public

@@ -1,14 +1,18 @@
-from typing import Optional
+# ----- Standard Lib Imports -----
+from typing import Optional, Any, Callable
 import logging
 
+# ----- Third Party Imports -----
 import numpy as np
 from scipy.integrate import simpson
+from scipy.optimize import minimize
 
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.testing.utils import assert_quantity_equal
 import astropy.units as u
 
+# ----- Local Package Imports -----
 from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs
@@ -29,7 +33,9 @@ def inner_product(
     psd: Optional[FrequencySeries] = None,
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
-    optimize_time_and_phase: bool = False  # Call it 'compute_match'?
+    optimize_time_and_phase: bool = False,
+    optimize_time: bool = False,
+    optimize_phase: bool = False
 ) -> u.Quantity | tuple[TimeSeries, u.Quantity, u.Quantity]:
     r"""
     Calculates the noise-weighted inner product
@@ -75,6 +81,9 @@ def inner_product(
         Determines if a match is computed or just a "regular" inner
         product. The match will be optimized over relative time and
         phase shifts between `signal1` and `signal2`.
+
+        It is also possible to optimize separately over time or phase
+        shifts by using the arguments `optimize_time`, `optimize_phase`.
 
     Returns
     -------
@@ -293,9 +302,18 @@ def inner_product(
             fill_val=1.0 * psd.unit,
             fill_bounds=non_zero_range
         )
-            
+        
+        if optimize_time_and_phase:
+            optimize_time = True
+            optimize_phase = True
 
-        return optimized_inner_product(signal1, signal2, psd)
+        return optimized_inner_product(
+            signal1,
+            signal2,
+            psd,
+            optimize_time,
+            optimize_phase
+        )
 
 
 def inner_product_computation(
@@ -368,11 +386,12 @@ def inner_product_computation(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
     ) * output_unit
 
-
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
     psd: FrequencySeries,
+    optimize_time: bool,
+    optimize_phase: bool
 ) -> tuple[TimeSeries, u.Quantity, u.Quantity]:
     """
     Lower level function for inner product calculation. Assumes that
@@ -390,6 +409,7 @@ def optimized_inner_product(
         Second signal to put into inner product.
     psd : ~gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
+    TODO: describe optimize keywords briefly
 
     Returns
     -------
@@ -403,7 +423,6 @@ def optimized_inner_product(
         of inner product over relative time and phase shifts
         (iii) time at which maximum value (ii) occurs in (i)
     """
-
     frequ_unit = signal1.frequencies.unit
 
     # ----- First step: assure same distance of samples -----
@@ -475,6 +494,8 @@ def optimized_inner_product(
         dt=dt
     )
 
+    # TODO: implement handling of optimize_phase etc
+
     match_result = match_series.abs().max()
 
     # Handle wrap-around of signal
@@ -487,7 +508,6 @@ def optimized_inner_product(
     peak_time = match_series.times[peak_index]
     
     return match_series, match_result, peak_time
-
 
 def norm(
     signal: TimeSeries | FrequencySeries,
@@ -524,14 +544,12 @@ def norm(
     gw_signal_tools.inner_product.inner_product :
         Arguments are passed to this function for calculations.
     """
-
     out = inner_product(signal, signal, *args, **kwargs)
 
     if isinstance(out, u.Quantity):
         return np.sqrt(out)
     else:
         return np.sqrt(out[0]), np.sqrt(out[1]), out[2]
-
 
 def overlap(
     signal1: TimeSeries | FrequencySeries,
@@ -572,7 +590,6 @@ def overlap(
     gw_signal_tools.inner_product.inner_product :
         Arguments are passed to this function for calculations.
     """
-
     out = inner_product(signal1, signal2, *args, **kwargs)
 
     normalization = 1.0  # Default value
@@ -592,3 +609,182 @@ def overlap(
         return out / normalization
     else:
         return out[0] / normalization, out[1] / normalization, out[2]
+
+
+# ---------- Optimization over Arbitrary Parameters ----------
+# TODO: put this into waveform_utils?
+def test_hm_or_precessing(wf_params: dict[str, Any]) -> bool:
+    # TODO: maybe test for valid spin config?
+    for i in [1, 2]:
+        # Check for cartesian components first
+        for index in ['x', 'y']:
+            try:
+                # if wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled:
+                if (wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled
+                    and wf_params[f'spin{i}z'] != 0.*u.dimensionless_unscaled):
+                    # Spins are not parallel to L and not in orbital plane
+                    return True
+            except KeyError:
+                pass
+        
+        # TODO: spins might not be parallel to L, but can still cancel
+        # and in that case, no precession!!!
+        # -> but that also depends on mass, very specific... Just neglect?
+    
+        # No precession in cartesian components, but spherical ones might be given
+        try:
+            if wf_params[f'spin{i}_tilt'] % (np.pi*u.rad) != 0.*u.rad:
+                return True
+        except KeyError:
+            pass
+        
+    return False
+
+def optimize_overlap(
+    wf_params: dict[str, u.Quantity],
+    fixed_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    opt_params: Optional[str | list[str] | set[str]] = None,
+    **inner_prod_kwargs
+) -> tuple[FrequencySeries, FrequencySeries, list]:
+    """
+    _summary_
+
+    Parameters
+    ----------
+    wf_params : dict[str, Any]
+        _description_
+    reference_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
+        _description_
+    vary_wf_generator : Callable[[dict[str, u.Quantity]], FrequencySeries]
+        Must accept phi_jl as keyword the configuration specified in
+        ``wf_params`` is precessing.
+
+    Returns
+    -------
+    tuple[FrequencySeries, FrequencySeries, list]
+        _description_
+    """
+    wf1 = fixed_wf_generator(wf_params)
+
+    if opt_params is None:
+        if (use_phi_ref_and_phi_jl := test_hm_or_precessing(wf_params)):
+            # _opt_params = {'tc', 'psi', 'phi_ref', 'phi_jl'}
+            _opt_params = ['tc', 'psi', 'phi_ref', 'phi_jl']
+        else:
+            # _opt_params = {'tc', 'psi'}
+            _opt_params = ['tc', 'psi']
+        
+        return optimize_overlap(
+            wf_params=wf_params,
+            fixed_wf_generator=fixed_wf_generator,
+            vary_wf_generator=vary_wf_generator,
+            opt_params=_opt_params,
+            **inner_prod_kwargs
+        )
+    elif isinstance(opt_params, str):
+        _opt_params = [opt_params]
+
+        return optimize_overlap(
+            wf_params=wf_params,
+            fixed_wf_generator=fixed_wf_generator,
+            vary_wf_generator=vary_wf_generator,
+            opt_params=_opt_params,
+            **inner_prod_kwargs
+        )
+    else:
+        # _opt_params = set(opt_params)
+        _opt_params = np.array(opt_params)  # Better because we can maintain order
+
+        if len(_opt_params) == 2 \
+            and ('tc' in _opt_params or 'time' in _opt_params) \
+            and ('psi' in _opt_params or 'phase' in _opt_params):
+            wf2 = vary_wf_generator(wf_params)
+
+            # time_index = np.argwhere()
+
+            def wf2_shifted(args):
+                t_shift, psi = args
+                # TODO: they might have different order!!! Is that accounted for?
+                # t_shift = args[]
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+        else:
+            if 'phase' in _opt_params:
+                # _opt_params.remove('phase')
+                # _opt_params.add('psi')
+                _opt_params[np.argwhere(_opt_params == 'phase')] = 'psi'
+            
+            if 'time' in _opt_params:
+                # _opt_params.remove('time')
+                # _opt_params.add('tc')
+                _opt_params[np.argwhere(_opt_params == 'time')] = 'tc'
+            
+            # TODO: maybe only allow psi and tc? And state that in doc
+            # -> time and phase might have ambiguous conventions for signs etc,
+            # but we have strict one
+            
+
+            # if 'phase' in _opt_params:
+            #     _opt_params.remove('phase')
+            #     _opt_params.add('psi')
+
+            #     _optimize_psi = True
+            # else:
+            #     _optimize_psi = True if 'psi' in _opt_params else False
+            # Not needed because of nice default
+
+
+            # _optimize_tc = True if 'tc' in _opt_params else False
+            # _optimize_psi = True if 'psi' in _opt_params else False
+
+            def wf2_shifted(args):
+                wf_args = wf_params | {param: args[i]*wf_params[param].unit for i, param in enumerate(_opt_params) if (param != 'tc' and param != 'psi')}
+                t_shift = wf_args.pop('tc', 0.)
+                psi = wf_args.pop('psi', 0.)
+                wf2 = vary_wf_generator(wf_args)
+                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*t_shift + 2.j*psi)
+
+                # Older idea
+                # if _optimize_t_shift:
+                #     wf2 *= np.exp(-2.j * np.pi * wf2.frequencies.value * t_shift)
+                # if _optimize_psi:
+                #     wf2 *= np.exp(2.j * psi)
+                
+                # return wf2
+
+    def loss(args):
+        return 1. - overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
+    
+    init_guess = np.zeros(len(opt_params))
+    
+    # init_guess = np.zeros(_opt_params.shape)
+    # if 'psi' in _opt_params and 'phi_ref' in _opt_params:
+    #     init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    #     # init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
+
+    if 'psi' in _opt_params:
+        init_guess[np.argwhere(_opt_params == 'psi')] = 0.1
+    if 'phi_ref' in _opt_params:
+        init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
+    # Has negative effect, for WFs that match in beginning it introduces error
+    
+    bounds = len(_opt_params)*[(None, None)]
+    if 'psi' in _opt_params:
+        # bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-np.pi, np.pi)
+        bounds[np.argwhere(_opt_params == 'psi')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    if 'phi_ref' in _opt_params:
+        # bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-np.pi, np.pi)
+        bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-2.*np.pi, 2.*np.pi)
+    
+    result = minimize(fun=loss, x0=init_guess, bounds=bounds,
+                      method='Nelder-Mead', options=dict(fatol=1e-5))
+    # fatol is tolerable change in fun over subsequent iterations that
+    # indicates convergence. 1e-5 should be sufficient
+
+    opt_params_results = {param: result.x[i] for i, param in enumerate(_opt_params)}
+    # Enumerating over _opt_params here would be bad idea, is set (unordered) -> changed, but maybe still over opt_params?
+
+    if not result.success:
+        logging.info(result.message)
+
+    return wf1, wf2_shifted(result.x), opt_params_results

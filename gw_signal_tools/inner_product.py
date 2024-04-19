@@ -1,5 +1,5 @@
 # ----- Standard Lib Imports -----
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, Literal
 import logging
 from copy import deepcopy
 
@@ -38,7 +38,8 @@ def inner_product(
     optimize_time: bool = False,
     optimize_phase: bool = False,
     return_opt_info: bool = False
-) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
+) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
+    'peak_time'], u.Quantity | TimeSeries]]:
     r"""
     Calculates the noise-weighted inner product
 
@@ -399,7 +400,8 @@ def optimized_inner_product(
     optimize_time: bool,
     optimize_phase: bool,
     return_opt_info: bool = False
-) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
+) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
+    'peak_time'], u.Quantity | TimeSeries]]:
     """
     Lower level function for inner product calculation. Assumes that
     signal conditioning has been done so that they contain values at the
@@ -425,8 +427,9 @@ def optimized_inner_product(
 
     Returns
     -------
-    ~astropy.units.Quantity or tuple[~astropy.units.Quantity, dict[str,
-    ~gwpy.timeseries.TimeSeries | ~astropy.units.Quantity]]
+    ~astropy.units.Quantity or tuple[~astropy.units.Quantity, dict[
+    Literal['match_series', 'peak_phase', 'peak_time'], ~astropy.units.
+    Quantity | ~gwpy.timeseries.TimeSeries]]
         Output depends on the value of `return_opt_info`. If False (the
         default), only the optimized value of the inner product is
         returned. If True, a tuple of this value and a dictionary is
@@ -437,8 +440,16 @@ def optimized_inner_product(
         return, but it can easily be done by taking the `.abs()` of the
         ``TimeSeries``. To get inner product values that are not
         optimized over phase, take `.real` of the ``TimeSeries``.
-        (ii) time at which maximum value occurs in (i)
-        (iii) phase shift needed to get maximum of (i) at time (ii)
+        (ii) time at which maximum value occurs in (i) if
+        `optimize_time=True` or `optimize_time_and_phase=True`.
+        Otherwise it is set to zero, which corresponds to no
+        optimization over time shift. This corresponds to a shift t0
+        from `signal1` to `signal2`, i.e. it is 'ahead in time' in the
+        sense that `signal1(t) = signal2(t+t0)`.
+        (iii) phase shift needed to get maximum of (i) at time (ii) if
+        `optimize_phase=True` or `optimize_time_and_phase=True`.
+        Otherwise it is set to zero, which corresponds to no
+        optimization over phase.
     """
     frequ_unit = signal1.frequencies.unit
 
@@ -506,9 +517,16 @@ def optimized_inner_product(
     match_series = TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
         unit=output_unit,
-        t0=0.0 * dt.unit,
+        t0=0.*dt.unit,
+        # TODO: set t0 based on epochs? Should be signal.epoch-signal2.epoch,
+        # because it is signal1 times conjugate of signal2
         dt=dt
     )
+
+    # Handle wrap-around of signal
+    number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
+    match_series = np.roll(match_series, shift=number_to_roll)
+    match_series.shift(-match_series.times[number_to_roll])
 
     if optimize_phase:
         _match_series = match_series.abs()
@@ -518,55 +536,21 @@ def optimized_inner_product(
     if optimize_time:
         peak_index = np.argmax(_match_series)
         match_result = _match_series[peak_index]
+        peak_time = _match_series.times[peak_index]
         # match_result = _match_series.max()
         # print(_match_series.max(), _match_series[peak_index])  # Always equal
     else:
         # Evaluation at t0=0 corresponds to usual inner product
-        peak_time = 0.*_match_series.times.unit
-        # peak_index = _match_series.times.value_at(peak_time)
-        peak_index = np.argwhere(_match_series.times == peak_time)[0,0]
-        # match_result = _match_series.value_at(peak_time)
+        peak_time = 0.*match_series.times.unit
+        peak_index = np.searchsorted(match_series.xindex.value,
+                                     peak_time.value, side="left")
         match_result = _match_series[peak_index]
-        # print(match_result, _match_series[peak_index])
     
     if return_opt_info:
-        # Handle wrap-around of signal
-        number_to_roll = _match_series.size // 2  # Arbitrary value, no deep meaning
-        _match_series = np.roll(_match_series, shift=number_to_roll)
-        _match_series.shift(-_match_series.times[number_to_roll])
-
-        # Compute peak time for shifted time series
-        _peak_index = np.argmax(_match_series)  # peak_index -= number_to_roll should be sufficient, right?
-        peak_time = _match_series.times[_peak_index]
-
-
-        # peak_index = np.argmax(match_series)
-        # peak_phase = np.unwrap(np.atleast_1d(-np.angle(match_series)[peak_index]))[0]
-        peak_phase = -np.angle(match_series)[peak_index]
-        # peak_phase = np.unwrap(np.atleast_1d(-np.angle(match_series)[peak_index]), discont=2.*np.pi)[0]
-        # PROBLEM: time shift also contributes to this...
+        peak_phase = -np.angle(match_series)[peak_index] if optimize_phase else 0.*u.rad
+        # TODO: think about if time shift also contributes to this...
         # TODO: think about whether or not a minus should be in there
         # -> Fourier convention (could) play role, but also what is phase and what we need to rotate to abs
-
-        # print(
-        #     -np.angle(match_series)[peak_index],
-        # #   -np.angle(match_series*np.exp(2.j*np.pi*peak_time.value))[peak_index],
-        # #   -np.angle(match_series*np.exp(-2.j*np.pi*peak_time.value))[peak_index],
-        #     -np.angle(match_series)[_peak_index],
-        #     -np.angle(match_series)[number_to_roll],
-        # #   -np.angle(match_series)[number_to_roll+peak_index],
-        # #   -np.angle(match_series)[number_to_roll-peak_index],
-        #     -np.angle(match_series)[-number_to_roll+_peak_index],
-        # #   -np.angle(match_series)[-number_to_roll-_peak_index],
-        #     -np.angle(match_series.value_at(0.*u.s)),
-        #     # -np.angle(np.roll(match_series, shift=_peak_index))[peak_index],
-        #     # -np.angle(np.roll(match_series, shift=-_peak_index))[peak_index]
-        # )
-
-        match_series = np.roll(match_series, shift=number_to_roll)
-        match_series.shift(-match_series.times[number_to_roll])
-
-        print(peak_phase, -np.angle(match_series)[_peak_index], -np.angle(_match_series)[_peak_index])  # Always equal
 
         return match_result, {'match_series': match_series,
                               'peak_phase': peak_phase,
@@ -578,7 +562,8 @@ def norm(
     signal: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
+) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
+    'peak_time'], u.Quantity | TimeSeries]]:
     """
     Wrapper function for calculation of the norm of the given `signal`
     (i.e. square root of inner product between `signal` and `signal`,
@@ -615,8 +600,6 @@ def norm(
         return np.sqrt(out)
     else:
         out[1]['match_series'] = np.sqrt(out[1]['match_series'])
-        # TODO: see how this changes phase where optimum is attained
-        # -> should we multiply peak phase with 1/2?
         return np.sqrt(out[0]), out[1]
 
 def overlap(
@@ -624,7 +607,8 @@ def overlap(
     signal2: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[u.Quantity, dict[str, u.Quantity, TimeSeries]]:
+) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
+    'peak_time'], u.Quantity | TimeSeries]]:
     """
     Wrapper for calculation of the overlap of two given signals as
     measured by the noise-weighted inner product implemented in

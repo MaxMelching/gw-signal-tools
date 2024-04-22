@@ -4,7 +4,8 @@ from gw_signal_tools.waveform_utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs,
-    get_strain, get_mass_scaled_wf,
+    get_strain, fill_f_range,
+    get_mass_scaled_wf,
     # rescale_with_Mtotal, scale_to_Mtotal,
 )
 
@@ -15,10 +16,11 @@ import numpy as np
 from numpy.testing import assert_allclose
 from gw_signal_tools.test_utils import (
     allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series
+    assert_allclose_series, assert_allequal_series
 )
 from gw_signal_tools.waveform_utils import get_wf_generator
 from gwpy.testing.utils import assert_quantity_equal
+from gwpy.frequencyseries import FrequencySeries
 
 import pytest
 
@@ -99,14 +101,14 @@ def test_fft_ifft_consistency():
     t_min_comp, t_max_comp = max(hp_t.t0, hp_t_fft_ifft.t0), min(hp_t.times[-1], hp_t_fft_ifft.times[-1])  # hp_t_fft_ifft_fine is padded to be much longer
     # t_min_comp, t_max_comp = -0.5, 0.01  # hp_t_fft_ifft_fine is padded to be much longer
 
-    hp_t_cropped = hp_t.crop(start=t_min_comp, end=t_max_comp)[2:]
-    hp_t_fft_ifft_cropped = hp_t_fft_ifft.crop(start=t_min_comp, end=t_max_comp)
+    hp_t_cropped = hp_t.crop(start=t_min_comp, end=t_max_comp)#[2:]
+    hp_t_fft_ifft_cropped = hp_t_fft_ifft.crop(start=t_min_comp, end=t_max_comp)[1:]
 
     # Have to apply different kind of threshold here because coarse sampling is indeed very coarse
     # -> slight phase shift due to that is biggest problem, causes amplitude errors in comparison of values at same time
-    assert_allclose_quantity(hp_t_cropped.times, hp_t_fft_ifft_cropped.times, atol=2 * hp_t.dt.value, rtol=0.0)  # Oof, this is a lot...
-    # assert_quantity_equal(hp_t_cropped.times, hp_t_fft_ifft_cropped.times)
-    assert_allclose_quantity(hp_t_cropped, hp_t_fft_ifft_cropped, atol=6e-21, rtol=0.0)
+    # assert_allclose_quantity(hp_t_cropped.times, hp_t_fft_ifft_cropped.times, atol=2*hp_t.dt.value, rtol=0.0)  # Oof, this is a lot...
+    assert_allclose_quantity(hp_t_cropped.times, hp_t_fft_ifft_cropped.times, atol=5e-4, rtol=0)
+    assert_allclose_quantity(hp_t_cropped, hp_t_fft_ifft_cropped, atol=2e-23, rtol=0.0)
     # assert_quantity_equal(hp_t_cropped, hp_t_fft_ifft_cropped)
 
 
@@ -119,10 +121,10 @@ def test_fft_ifft_consistency():
     # NOTE: for some reason, first sample is not equal. Thus excluded here
 
     # assert_allclose_quantity(hp_t_cropped.times, hp_t_fft_ifft_fine_cropped.times, atol=0.0, rtol=1e-10)
-    assert_quantity_equal(hp_t_cropped.times, hp_t_fft_ifft_fine_cropped.times)
-    assert_allclose_quantity(hp_t_cropped, hp_t_fft_ifft_fine_cropped, atol=0.0, rtol=1e-8)
+    assert_allclose_quantity(hp_t_cropped.times, hp_t_fft_ifft_fine_cropped.times, atol=5e-12, rtol=0)
+    assert_allclose_quantity(hp_t_cropped, hp_t_fft_ifft_fine_cropped, atol=1e-29, rtol=1e-8)
     # assert_quantity_equal(hp_t_cropped, hp_t_fft_ifft_fine_cropped)
-    
+
 
 #%% ---------- Testing transformations with generated signals from different domain ----------
 def test_fd_td_consistency():
@@ -176,7 +178,64 @@ def test_fd_td_consistency():
 
     assert_allclose(hp_f_fine_cropped, hp_t_f_fine_cropped, atol=0.0, rtol=0.01)
 
-# TODO: add tests for complex stuff (works, see plots in notebook; but still)
+
+#%% ---------- Verification of complex transformation ----------
+def test_complex_fft_ifft_consistency():
+    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
+    # Padding hp_t to make sure resolution is sufficient and to avoid
+    # wrap-around due to insufficient length
+    h_symm_t = fd_to_td_waveform(h_symm)
+
+    t_min, t_max = max(hp_t.times[0], h_symm_t.times[0]), min(hp_t.times[-1], h_symm_t.times[-1])
+    assert_allclose(hp_t.crop(t_min, t_max).times, h_symm_t.crop(t_min, t_max).times, atol=5e-12, rtol=0)
+    assert_allclose(hp_t.crop(t_min, t_max).value, h_symm_t.crop(t_min, t_max).value, atol=5e-27, rtol=0)
+
+def test_complex_ifft_fft_consistency():
+    h_symm = FrequencySeries(
+        np.flip(np.conjugate(hp_f_fine+0.j)[1:]),
+        f0=-hp_f_fine.frequencies[-1],
+        df=hp_f_fine.df
+    ).append(hp_f_fine+0.j, inplace=True)*u.s
+
+    h_symm_t = fd_to_td_waveform(h_symm)
+
+    # t_min, t_max = max(hp_t.times[0], h_symm_t.times[0]), min(hp_t.times[-1], h_symm_t.times[-1])
+    
+    h_symm_f = td_to_fd_waveform(h_symm_t)
+
+    # assert_allclose_series(h_symm, h_symm_f, atol=0., rtol=0.)
+    assert_allclose_quantity(h_symm.frequencies, h_symm_f.frequencies, atol=3e-11, rtol=0.)
+    assert_allclose_quantity(h_symm.value, h_symm_f.value, atol=4e-33, rtol=0.)
+    # Some residual imaginary part is there, but of negligible amplitude
+    # f_min_comp, f_max_comp = 25.0 * u.Hz, 512.0 * u.Hz  # Restrict to interesting region, elsewhere only values close to zero and thus numerical errors might occur
+    # assert_allclose_series(h_symm.crop(start=f_min_comp, end=f_max_comp), h_symm_f.crop(start=f_min_comp, end=f_max_comp), atol=0., rtol=0.)
+
+def test_complex_and_real_fft_consistency():
+    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
+    # Padding hp_t to make sure resolution is sufficient and to avoid
+    # wrap-around due to insufficient length
+    h_neg = h_symm[h_symm.frequencies < 0.*u.Hz][1:]  # Filter somehow includes 0 as well, thus excluding first one
+    h_pos = h_symm[h_symm.frequencies > 0.*u.Hz]
+
+    assert_allclose(-h_neg.frequencies[::-1], h_pos.frequencies, atol=0, rtol=0)
+    assert_allclose(h_neg[::-1].real, h_pos.real, atol=3e-38, rtol=0)
+    assert_allclose(-h_neg[::-1].imag, h_pos.imag, atol=3e-28, rtol=0)
+    # Note: as https://en.wikipedia.org/wiki/Fourier_transform#Conjugation
+    # shows, real signals have the following property: real part of Fourier
+    # spectrum is symmetric around f=0, while imaginary part is antisymmetric.
+
+def test_complex_and_real_ifft_consistency():
+    h_symm = FrequencySeries(
+        np.flip(np.conjugate(hp_f_fine)[1:]),
+        f0=-hp_f_fine.frequencies[-1],
+        df=hp_f_fine.df
+    ).append(hp_f_fine, inplace=True)
+
+    h_symm_t = fd_to_td_waveform(h_symm)
+    h_t = fd_to_td_waveform(hp_f_fine)
+
+    assert_allclose_quantity(h_t.times, h_symm_t[:-1].times, atol=5e-4, rtol=0)  # Deviations on scale of dt are ok
+    assert_allclose_quantity(h_t, h_symm_t[:-1], atol=2e-24, rtol=0)  # Context: peaks are at roughly 1e-21
 
 
 #%% ---------- Testing helper functions for frequency region stuff ----------
@@ -200,8 +259,9 @@ def test_pad_to_target_df_not_exact(df):
 
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, 0.007*u.Hz, 0.001*u.Hz])
-def test_pad_to_target_df_exact(df):
-    hp_f_interp = get_signal_at_target_df(hp_f_fine, df)
+@pytest.mark.parametrize('full_metadata', [False, True])
+def test_pad_to_target_df_exact(df, full_metadata):
+    hp_f_interp = get_signal_at_target_df(hp_f_fine, df, full_metadata=full_metadata)
 
     assert_quantity_equal(df, hp_f_interp.df)
 
@@ -626,6 +686,28 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
 # is to be filled, should not change original array
 
 
+@pytest.mark.parametrize('fill_val', [0., 2.])
+def test_fill_f_range(fill_val):
+    hf = hp_f_fine.copy()
+
+    fill_f_range(hf, fill_val, [-f_min, 1.1*f_max])
+
+    assert_allequal_series(hp_f_fine, hf)
+
+    f_lower, f_upper = 30.*u.Hz, 50.*u.Hz
+    fill_f_range(hf, fill_val, [f_lower, f_upper])
+
+    filter1 = hp_f_fine.frequencies < f_lower
+    filter2 = hp_f_fine.frequencies > f_upper
+    filter3 = np.logical_and(np.logical_not(filter1), np.logical_not(filter2))
+
+    fill_val = u.Quantity(fill_val, hf.unit)  # For assertions
+    assert_quantity_equal(hf[filter1], fill_val)
+    assert_quantity_equal(hf[filter2], fill_val)
+    assert_quantity_equal(hf[filter3], hp_f_fine[filter3])
+
+
+
  #%% ---------- Testing get_strain function ----------
 # Goal is essentially just to make sure code works
 def test_get_strain_no_extrinsic():
@@ -660,11 +742,19 @@ def test_get_strain_extrinsic():
     
     from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
 
-    ht_test = get_strain(wf_params, 'time', generator=gen, extrinsic_params=ext_params)
-    assert_quantity_equal(GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params), ht_test)
+    ht_test = get_strain(wf_params, 'time', generator=gen,
+                         extrinsic_params=ext_params)
+    assert_quantity_equal(
+        GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params),
+        ht_test
+    )
 
-    hf_test = get_strain(wf_params, 'frequency', generator=gen, extrinsic_params=ext_params)
-    assert_quantity_equal(GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params), hf_test)
+    hf_test = get_strain(wf_params, 'frequency', generator=gen,
+                         extrinsic_params=ext_params)
+    assert_quantity_equal(
+        GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params),
+        hf_test
+    )
 
 class ErrorRaising(unittest.TestCase):
     def test_domain_checking(self):
@@ -677,7 +767,12 @@ class ErrorRaising(unittest.TestCase):
     
     def test_extr_params_checking(self):
         with self.assertRaises(ValueError):
-            get_strain(wf_params, 'time', generator=gen, mode='mode', extrinsic_params=wf_params)
+            get_strain(wf_params, 'time', generator=gen, mode='mode',
+                       extrinsic_params=wf_params)
+
+        with self.assertRaises(ValueError):
+            get_strain(wf_params, 'time', generator=gen, mode='mode',
+                       extrinsic_params={'psi': 0.5*u.rad})
 
 #%% ---------- Testing mass rescaling ----------
 

@@ -52,45 +52,6 @@ def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
 
     return np.all(np.isclose(arr1.value, arr2.value, *args, **kwargs))
 
-def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
-                      **kwargs) -> bool:
-    """
-    Wrapper to apply numpy function `isclose` to astropy Quantities
-    (a `~numpy.all` wrapper is also added to support arrays as well).
-    Natively, numpy does not support this due to the units attached
-    to them. All arguments besides the Quantities to compare are passed
-    to `~numpy.isclose`.
-
-    Parameters
-    ----------
-    arr1 : ~astropy.units.Quantity
-        First value to compare.
-    arr2 : ~astropy.units.Quantity
-        Second value to compare.
-    
-    Returns
-    -------
-    bool
-        Result of the comparison of `arr1` and `arr2`.
-
-    Notes
-    -----
-    This function is heavily inspired by a function from GWPy, see
-    https://github.com/gwpy/gwpy/blob/v3.0.7/gwpy/testing/utils.py#L131.
-    """
-
-    if not isinstance(arr1, u.Quantity):
-        arr1 = u.Quantity(arr1)
-
-    if not isinstance(arr2, u.Quantity):
-        arr2 = u.Quantity(arr2)
-    
-    assert arr1.unit == arr2.unit, \
-        f'Cannot compare unequal units, {arr1.unit} != {arr2.unit}.'
-    
-
-    return np.all(np.isclose(arr1.value, arr2.value, *args, **kwargs))
-
 def assert_allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
                              **kwargs) -> None:
     """
@@ -200,3 +161,23 @@ def assert_allclose_series(
     """
     assert_allclose_quantity(series1.xindex, series2.xindex, *args, **kwargs)
     assert_allclose_quantity(series1, series2, *args, **kwargs)
+
+def assert_allequal_series(
+    series1: Series,
+    series2: Series
+) -> None:
+    """
+    Includes FrequencySeries and TimeSeries
+
+    Parameters
+    ----------
+    series1 : Series
+        _description_
+    series2 : Series
+        _description_
+    """
+    assert series1.xindex.unit == series2.xindex.unit
+    assert np.all(np.equal(series1.xindex.value, series2.xindex.value))
+    
+    assert series1.unit == series2.unit
+    assert np.all(np.equal(series1.value, series2.value))

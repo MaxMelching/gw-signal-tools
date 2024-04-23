@@ -214,7 +214,6 @@ def pad_to_get_target_df(
             f' signals ({frequ_unit}).'
         )
 
-
     # Compute what would be current df
     df_current = 1.0 / (signal.size * signal.dt)
 
@@ -236,7 +235,6 @@ def pad_to_get_target_df(
         padded_signal = signal
 
     return padded_signal
-
 
 def restrict_f_range(
     signal: FrequencySeries,
@@ -287,10 +285,8 @@ def restrict_f_range(
     ValueError
         If `f_range`, `fill_range` do not contain exactly two elements.
     """
-
     assert isinstance(signal, FrequencySeries), \
         '`signal` has to be a GWPy ``FrequencySeries``.'
-    
 
     # ----- Handling f_range -----
     frequ_unit = signal.frequencies.unit
@@ -320,7 +316,6 @@ def restrict_f_range(
             'Need consistent frequency units for `f_range` members'
             f' ({f_upper.unit}) and `signal` ({frequ_unit}).'
         )
-    
 
     # ----- Handling fill_val -----
     signal_unit = signal.unit
@@ -335,7 +330,6 @@ def restrict_f_range(
             f' `signal` ({signal_unit}).'
         )
 
-    
     # ----- Padding/trimming -----
     lower_number = abs(int(np.ceil((f_lower - signal.f0) / signal.df)))
 
@@ -355,7 +349,6 @@ def restrict_f_range(
     elif f_lower > signal.f0:
         signal = signal[lower_number:]
     
-
     upper_number = abs(int(np.ceil((f_upper - signal.frequencies[-1]) / signal.df)))
 
     if f_upper > signal.frequencies[-1]:  # Equivalent to upper_number > 0
@@ -371,7 +364,6 @@ def restrict_f_range(
         )  # Could avoid copy from beginning, right?
     elif f_upper < signal.frequencies[-1]:
         signal = signal[:signal.size - upper_number]
-
 
     # ----- Filling -----
     if fill_range is None:
@@ -399,7 +391,6 @@ def restrict_f_range(
             'Need consistent frequency units for `f_range` members'
             f' ({f_fill_upper.unit}) and `signal` ({frequ_unit}).'
         )
-    
 
     if f_fill_lower < f_lower:
         logging.info(
@@ -421,7 +412,6 @@ def restrict_f_range(
 
         f_fill_upper = f_upper
 
-
     if (copy and (lower_number == 0)
         and (f_fill_lower != f_lower) and (f_fill_upper != f_upper)):  # Check if fill_f_range will do something
         # Signal shall not be edited inplace and has not been copied in
@@ -431,7 +421,6 @@ def restrict_f_range(
     signal = fill_f_range(signal, fill_val, [f_fill_lower, f_fill_upper])
 
     return signal
-
 
 def fill_f_range(
     signal: FrequencySeries,
@@ -489,7 +478,7 @@ def fill_f_range(
             '`fill_bounds` must contain lower and upper frequency bounds.'
         )
     
-
+    # ----- ActuaL filling -----
     if (f_fill_lower := fill_bounds[0]) is not None:
         try:
             f_fill_lower = u.Quantity(f_fill_lower, unit=frequ_unit)
@@ -510,7 +499,6 @@ def fill_f_range(
             lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
             signal[:lower_number_to_fill].fill(fill_val)
 
-
     if (f_fill_upper := fill_bounds[1]) is not None:
         try:
             f_fill_upper = u.Quantity(f_fill_upper, unit=frequ_unit)
@@ -519,7 +507,6 @@ def fill_f_range(
                 'Need consistent frequency units for `f_range` members'
                 f' ({f_fill_upper.unit}) and `signal` ({frequ_unit}).'
             )
-        
 
         if f_fill_upper > f_upper:
             logging.info(
@@ -534,7 +521,6 @@ def fill_f_range(
 
     return signal
 
-
 def get_signal_at_target_df(
     signal: FrequencySeries,
     df: float | u.Quantity,
@@ -544,14 +530,15 @@ def get_signal_at_target_df(
     Return `signal` with required frequency spacing `df`. This is either
     done by interpolating or by copying.
 
-    This functions main purpose is to be used in 
+    This functions main purpose is to get equal frequency spacing
+    before calculating an inner product.
 
     Parameters
     ----------
     signal : ~gwpy.frequencyseries.FrequencySeries
-        _description_
+        Signal to be interpolated.
     df : float or ~astropy.units.Quantity
-        _description_
+        Target frequency spacing to evaluate `signal` on.
     full_metadata : bool, optional, default = True
         If `True`, all metadata of the FrequencySeries will be copied.
         If `False`, only values, unt and frequencies are copied (all
@@ -570,7 +557,6 @@ def get_signal_at_target_df(
     speed matters and the metadata is not needed (for example in the
     inner product from ~gw_signal_tools.inner_product).
     """
-
     if np.isclose(signal.df, df, atol=0.0, rtol=0.01):
         if full_metadata:
             return signal.copy()
@@ -592,11 +578,10 @@ def get_signal_at_target_df(
                 channel=signal.channel
             )
         
-    
 def get_signal_at_target_frequs(
     signal: FrequencySeries,
     target_frequencies: np.ndarray | u.Quantity,
-    fill_val: u.Quantity = np.nan,
+    fill_val: float | u.Quantity = np.nan,
     fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None
 ) -> FrequencySeries:
     """
@@ -605,14 +590,22 @@ def get_signal_at_target_frequs(
     filled with a specific value outside of the interval given by
     `fill_bounds`.
 
+    This functions main purpose is to get equal frequency spacing
+    before calculating an inner product.
+
     Parameters
     ----------
     signal : FrequencySeries
-        _description_
+        Signal to be interpolated.
     target_frequencies : ~numpy.array or ~astropy.units.Quantity
-        _description_
-    fill_val : ~astropy.units.Quantity, optional, default = ~numpy.nan
-        _description_
+        Frequency samples to evaluate `signal` in.
+    fill_val : float | ~astropy.units.Quantity, optional, default =
+    ~numpy.nan
+        Value to fill `signal` with in case `target_frequencies`
+        contains signals outside its frequency band.
+
+        If it is an astropy Quantity, it must have units compatible with
+        `signal.unit`.
     fill_bounds : ~numpy.array or ~astropy.units.Quantity, optional,
     default = None
         In case only a certain region inside of `target_frequencies`
@@ -624,13 +617,17 @@ def get_signal_at_target_frequs(
     -------
     FrequencySeries
         Input signal in required format.
+    
+    Raises
+    ------
+    ValueError
+        If `fill_val` has unit incompatible with `signal.unit`.
 
     See also
     -----
     numpy.interp : Interpolation and padding routine used.
     gw_signal_tools.restrict_f_range : Filling routine used.
     """
-
     # ----- Handling frequency input -----
     frequ_unit = signal.frequencies.unit
 
@@ -642,7 +639,6 @@ def get_signal_at_target_frequs(
             'Need consistent frequency units for `target_frequencies` '
             f'({target_frequencies.unit}) and signal ({frequ_unit}).'
         )
-
 
     # ----- Handling fill_val -----
     signal_unit = signal.unit
@@ -656,7 +652,6 @@ def get_signal_at_target_frequs(
             f'Need consistent units for `fill_val` ({fill_val.unit}) and'
             f' `signal` ({signal_unit}).'
         )
-    
 
     # ----- Actual computations -----
     if (signal.frequencies.size == target_frequencies.size
@@ -738,7 +733,6 @@ def get_strain(
         raise ValueError(
             'Invalid domain, select either `\'time\'` or `\'frequency\'`.'
         )
-
 
     if extrinsic_params is not None:
         expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']

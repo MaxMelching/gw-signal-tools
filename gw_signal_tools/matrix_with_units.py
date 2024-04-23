@@ -190,7 +190,6 @@ class MatrixWithUnits:
         except AttributeError:
             pass  # New class instance is created, nothing to check
         
-
         for _, val in np.ndenumerate(value):
             assert (isinstance(val, self._allowed_numeric_types)
                     and not isinstance(val, bool)), \
@@ -208,17 +207,16 @@ class MatrixWithUnits:
         return self._unit
     
     @unit.setter
-    def unit(self, unit: ArrayLike):
+    def unit(self, unit: ArrayLike) -> None:
         try:
-            if not (unit not in self._pure_unit_types
-                or self.unit not in self._pure_unit_types):
+            if (not isinstance(unit, self._pure_unit_types)
+                and not isinstance(self.unit, self._pure_unit_types)):
                 assert np.shape(unit) == np.shape(self.unit), \
-                    'New and old `unit` must have equal shape (if both are not a scalar unit).'
+                    ('New and old `unit` must have equal shape '
+                     '(if both are not a scalar unit).')
         except AttributeError:
-            pass  # New class instance is created, nothing to check
-                  # or unit is scalar, also ok
+            pass  # New class instance is created
         
-
         if not isinstance(unit, self._pure_unit_types):
             # Unit is also array (otherwise would have been converted
             # in __init__)
@@ -233,7 +231,6 @@ class MatrixWithUnits:
                 # u.Unit, presumably due to scale that is not 1)
                 # -> had other reason, Unit and CompositeUnit are equivalent
 
-            
         self._unit = unit
 
 
@@ -447,7 +444,7 @@ class MatrixWithUnits:
             new_value = self.value @ other.value
             new_shape = new_value.shape
 
-            # Hack for 1D output
+            # Need at least 1D output
             if len(new_shape) == 1:
                 raise ValueError(
                     'For the provided shapes, only ``MatrixWithUnits``'
@@ -460,20 +457,7 @@ class MatrixWithUnits:
             # Step 2: handle units (array or scalar are possible for both)
             new_unit = np.empty(new_shape, dtype=object)
             
-            if (not isinstance(self.unit, self._pure_unit_types) and
-                not isinstance(other.unit, other._pure_unit_types)):
-                # Both units are arrays
-                for index in np.ndindex(new_shape):
-                    i, j = index
-                    unit_test = self.unit[i, 0] * other.unit[0, j]
-                    
-                    assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
-                        'Need consistent units for matrix multiplication.'
-                        # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
-                    # NOTE: do NOT replace with == here, does not what we want
-                    
-                    new_unit[i, j] = unit_test
-            elif (isinstance(self.unit, self._pure_unit_types) and
+            if (isinstance(self.unit, self._pure_unit_types) and
                   isinstance(other.unit, self._pure_unit_types)):
                 # Both units are scalars
                 new_unit = np.full(new_shape, self.unit * other.unit, dtype=object)
@@ -502,6 +486,18 @@ class MatrixWithUnits:
                     # NOTE: do NOT replace with == here, does not what we want
                     
                     new_unit[i, j] = unit_test * other.unit
+            else:
+                # Both units are arrays
+                for index in np.ndindex(new_shape):
+                    i, j = index
+                    unit_test = self.unit[i, 0] * other.unit[0, j]
+                    
+                    assert np.all(np.equal(self.unit[i, :] * other.unit[:, j], unit_test)), \
+                        'Need consistent units for matrix multiplication.'
+                        # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
+                    # NOTE: do NOT replace with == here, does not what we want
+                    
+                    new_unit[i, j] = unit_test
 
             return MatrixWithUnits(new_value, new_unit)
         else:

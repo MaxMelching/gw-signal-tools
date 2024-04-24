@@ -443,13 +443,15 @@ def optimized_inner_product(
         (ii) time at which maximum value occurs in (i) if
         `optimize_time=True` or `optimize_time_and_phase=True`.
         Otherwise it is set to zero, which corresponds to no
-        optimization over time shift. This corresponds to a shift t0
-        from `signal1` to `signal2`, i.e. it is 'ahead in time' in the
-        sense that `signal1(t) = signal2(t+t0)`.
+        optimization over time shift. This number represents a shift t0
+        from `signal1` to `signal2`, i.e. `signal1` is 'ahead in time'
+        in the sense that `signal1(t) = signal2(t+t0)`.
         (iii) phase shift needed to get maximum of (i) at time (ii) if
-        `optimize_phase=True` or `optimize_time_and_phase=True`.
+        `optimize_phase=True` or `optimize_time_and_phase=True`, i.e.
+        it is the negative of the phase that the complex match series
+        returned in (i) has at the time returned in (ii).
         Otherwise it is set to zero, which corresponds to no
-        optimization over phase.
+        optimization over phase (the real part of (i) is taken).
     """
     frequ_unit = signal1.frequencies.unit
 
@@ -499,12 +501,16 @@ def optimized_inner_product(
     # Append zeros or bring into correct format so that ifft can be used.
     # The prefactor is added here already because it depends on the given
     # frequency range
-    if np.isclose(0.0, dft_vals.f0.value, atol=0.0, rtol=0.01):
+    if np.isclose(0., dft_vals.f0.value, atol=0.5*dft_vals.df.value, rtol=0.):
         full_dft_vals = 4.0 * np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
     else:
         full_dft_vals = 2.0 * np.fft.fftshift(dft_vals.value)
 
     dt = (1.0 / (full_dft_vals.size * signal1.df)).si
+
+    # TODO: enable padding via argument target_dt. If dt is smaller than this,
+    # we pad full_dft_vals (to the right in first case, symmetric in second case)
+    # -> or perhaps do padding before this if-clause (or in)?
 
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
     try:
@@ -537,8 +543,6 @@ def optimized_inner_product(
         peak_index = np.argmax(_match_series)
         match_result = _match_series[peak_index]
         peak_time = _match_series.times[peak_index]
-        # match_result = _match_series.max()
-        # print(_match_series.max(), _match_series[peak_index])  # Always equal
     else:
         # Evaluation at t0=0 corresponds to usual inner product
         peak_time = 0.*match_series.times.unit
@@ -548,9 +552,6 @@ def optimized_inner_product(
     
     if return_opt_info:
         peak_phase = -np.angle(match_series)[peak_index] if optimize_phase else 0.*u.rad
-        # TODO: think about if time shift also contributes to this...
-        # TODO: think about whether or not a minus should be in there
-        # -> Fourier convention (could) play role, but also what is phase and what we need to rotate to abs
 
         return match_result, {'match_series': match_series,
                               'peak_phase': peak_phase,
@@ -876,6 +877,14 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
             phase_index = np.argwhere(_opt_params == 'phase')[0,0]
         else:
             phase_index = None
+        
+        # For internal use, make sure only one name is used for
+        # time/tc and phase/psi. Corrected at the end
+        if time_index is not None:
+            _opt_params[time_index] = 'tc'
+
+        if phase_index is not None:
+            _opt_params[phase_index] = 'psi'
 
         if len(_opt_params) == 2 and time_index is not None \
             and phase_index is not None:
@@ -888,13 +897,13 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
                 tc, psi = args[time_index], args[phase_index]
                 return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*tc + 2.j*psi)
         else:
-            # For internal use, make sure only one name is used for
-            # time/tc and phase/psi. Corrected at the end
-            if time_index is not None:
-                _opt_params[time_index] = 'tc'
+            # # For internal use, make sure only one name is used for
+            # # time/tc and phase/psi. Corrected at the end
+            # if time_index is not None:
+            #     _opt_params[time_index] = 'tc'
 
-            if phase_index is not None:
-                _opt_params[phase_index] = 'psi'
+            # if phase_index is not None:
+            #     _opt_params[phase_index] = 'psi'
             
             # TODO: maybe only allow psi and tc? And state that in doc
             # -> time and phase might have ambiguous conventions for signs etc,

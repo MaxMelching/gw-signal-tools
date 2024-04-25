@@ -18,3 +18,5 @@ build/*
 
 # Documentation (is preliminary, thus ignored for now)
 docs/*
+
+!docs/tutorials/

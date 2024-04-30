@@ -160,10 +160,10 @@ def test_optimize_match(time_shift, phase_shift):
     # coarse performs REALLY bad, thus omitted for these tests
 
     norm_fine = norm(hp_f_fine)**2
-    hp_f_fine_shifted = hp_f_fine * np.exp(2.j*np.pi*hp_f_fine.frequencies*time_shift + 1.j*phase_shift)
+    hp_f_fine_shifted = hp_f_fine * np.exp(-2.j*np.pi*hp_f_fine.frequencies*time_shift + 1.j*phase_shift)
     overlap_fine, info_fine = inner_product(
-        hp_f_fine,
         hp_f_fine_shifted,
+        hp_f_fine,
         optimize_time_and_phase=True,
         return_opt_info=True
     )
@@ -176,6 +176,9 @@ def test_optimize_match(time_shift, phase_shift):
     assert_allclose_quantity(phase_shift, phase_fine, atol=0.061, rtol=0.0)
     # Phase error is higher than I like, but despite intensive testing,
     # I found no better implementation
+    # -> maybe increase in dt via padding helps, phase is HIGHLY sensitive
+    #    to time we look at (changing by a single dt yields pretty significant
+    #    differences, on the order of 0.2 or so)
 
 def test_different_optimizations():
     norm1 = norm(hp_f_fine, optimize_time_and_phase=False)
@@ -441,7 +444,11 @@ def test_match_pycbc():
 
     assert_allclose(overlap_pycbc, overlap_gw_signal_tools, atol=0.0, rtol=2e-3)
     assert_allclose(np.abs(time_pycbc), np.abs(time_gw_signal_tools), atol=0.0, rtol=2e-2)
-    # assert_allclose(phase_pycbc, phase_gw_signal_tools, atol=0.0, rtol=0.0)  # Not matching well, have to find out why
+    # assert_allclose(phase_pycbc, phase_gw_signal_tools, atol=0.0, rtol=0.0)
+    # Phase is not matching well, seems to be due to different conventions in
+    # what the phase output is (pycbc applies certain operations to phase
+    # beforehand, potentially leading to an unequal shift in the phases of
+    # different signals and thus a different phase needed to align them)
 
 
 def test_overlap_pycbc():

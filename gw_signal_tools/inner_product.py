@@ -1,6 +1,7 @@
 # ----- Standard Lib Imports -----
 from typing import Optional, Any, Callable, Literal
 import logging
+
 from copy import deepcopy
 
 # ----- Third Party Imports -----
@@ -63,8 +64,11 @@ def inner_product(
         Second signal
     psd : ~gwpy.frequencyseries.FrequencySeries, optional,
     default = None
-        Power spectral density to use in inner product. If None, it is taken
-        to be 1 1/Hz at all frequencies.
+        Power spectral density to use in inner product. If None, it is
+        taken to be 1 1/Hz at all frequencies. The frequency range of
+        this default PSD is [-2048 Hz, 2048 Hz], so in case larger
+        ranges shall be used, a custom PSD with suitable frequencies
+        has to be provided.
     f_range : list[float] or list[~astropy.units.Quantity], optional,
     default = None
         Frequency range to compute inner product over. Is potentially
@@ -73,7 +77,12 @@ def inner_product(
 
         The whole argument can be None, otherwise it must have length 2.
         However, one of the bounds (or both) can still be None, which
-        indicates that no boundary shall be set.
+        indicates that no boundary shall be set. If no bound is given,
+        automatic bounds are computed from the frequency ranges of the
+        input signals and `psd`. Note that conditioned waveforms might
+        have a larger range than the one specified during waveform
+        generation. For this reason, giving `f_range` may be very
+        important.
     df : float or ~astropy.units.Quantity, optional, default = None
         Distance df between samples in frequency domain to use in
         integration.
@@ -448,10 +457,17 @@ def optimized_inner_product(
         in the sense that `signal1(t) = signal2(t+t0)`.
         (iii) phase shift needed to get maximum of (i) at time (ii) if
         `optimize_phase=True` or `optimize_time_and_phase=True`, i.e.
-        it is the negative of the phase that the complex match series
-        returned in (i) has at the time returned in (ii).
+        it is the phase that the complex match series returned in (i)
+        has at the time returned in (ii).
         Otherwise it is set to zero, which corresponds to no
         optimization over phase (the real part of (i) is taken).
+
+        In other words, one can obtain the same inner product value by
+        calculating the non-optimized inner product between `signal1`
+        and `signal2*np.exp(-2.j*np.pi*signal2.frequencies*time_shift
+        + 1.j*phase_shift)`. Here, `time_shift` is the value returned
+        in (ii), i.e. with key `'peak_time'`, and `phase_shift` the
+        value returned in (iii), i.e. with key `'peak_phase'`.
     """
     frequ_unit = signal1.frequencies.unit
 
@@ -551,7 +567,7 @@ def optimized_inner_product(
         match_result = _match_series[peak_index]
     
     if return_opt_info:
-        peak_phase = -np.angle(match_series)[peak_index] if optimize_phase else 0.*u.rad
+        peak_phase = np.angle(match_series)[peak_index] if optimize_phase else 0.*u.rad
 
         return match_result, {'match_series': match_series,
                               'peak_phase': peak_phase,
@@ -783,6 +799,8 @@ def get_default_opt_params(
 
     if (use_phi_ref_and_phi_jl := test_precessing(wf_params)):
         default_opt_params += ['phi_ref', 'phi_jl']
+        # TODO: find good definition of phi_jl. Bilby seems to use it, but in
+        # "wrong order": https://git.ligo.org/lscsoft/bilby/-/blob/master/bilby/gw/source.py#L649
     elif (use_phi_ref := test_hm(wf_params, wf_generator)):
         # Higher modes might still be relevant for non-precessing
         default_opt_params += ['phi_ref']
@@ -866,6 +884,9 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         # time and phase indices are accessed frequently, thus store
         if 'tc' in _opt_params:
             time_index = np.argwhere(_opt_params == 'tc')[0,0]
+
+            if 'time' in _opt_params:
+                raise ValueError('Providing both `\'tc\'` and `\'time\'` is not permitted.')
         elif 'time' in _opt_params:
             time_index = np.argwhere(_opt_params == 'time')[0,0]
         else:
@@ -873,6 +894,9 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         
         if 'psi' in _opt_params:
             phase_index = np.argwhere(_opt_params == 'psi')[0,0]
+
+            if 'phase' in _opt_params:
+                raise ValueError('Providing both `\'psi\'` and `\'phase\'` is not permitted.')
         elif 'phase' in _opt_params:
             phase_index = np.argwhere(_opt_params == 'phase')[0,0]
         else:
@@ -922,8 +946,6 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
 
     def loss(args):
         return 1.-overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
-    
-    # init_guess = np.zeros(len(opt_params))
 
     init_guess = [wf_params[param].value if (param != 'tc' and param != 'psi') else 0. for param in _opt_params]
     
@@ -974,7 +996,12 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
     if phase_index is not None:
         opt_params_results[opt_params[phase_index]] *= u.rad
 
-    logging.info(result.message \
-                 + f' Remaining waveform overlap is {result.fun:.5f}.')
+        if opt_params[phase_index] == 'phase':
+            opt_params_results['phase'] *= 2
+
+    # logging.info(result.message \
+    #              + f' Remaining waveform mismatch is {result.fun:.5f}.')
+
+    logging.info(f'{result.message} Remaining waveform mismatch is {result.fun:.5f}.')
     
     return wf1, wf2_shifted(result.x), opt_params_results

@@ -1,6 +1,5 @@
 # ----- Standard Lib Imports -----
 from typing import Optional, Any, Callable, Literal
-import logging
 
 from copy import deepcopy
 
@@ -15,13 +14,12 @@ from gwpy.testing.utils import assert_quantity_equal
 import astropy.units as u
 
 # ----- Local Package Imports -----
+from gw_signal_tools import preferred_unit_system, logger
 from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs
 )
 from .test_utils import allclose_quantity, assert_allclose_quantity
-
-from gw_signal_tools import preferred_unit_system
 
 __doc__ = """
 Implementation of noise-weighted inner product that is
@@ -255,7 +253,7 @@ def inner_product(
             f_lower = f_lower_new
         else:
             # Leave lower bound at f_lower, no update
-            logging.info(
+            logger.info(
                 f'Given lower bound of {f_lower_new} is smaller than '
                 'values available from given signals. Taking a lower '
                 f'bound of {f_lower} instead.'
@@ -267,13 +265,13 @@ def inner_product(
             f_upper = f_upper_new
         else:
             # Leave upper bound at f_upper, no update
-            logging.info(
+            logger.info(
                 f'Given upper bound of {f_upper_new} is larger than '
                 'values available from given signals. Taking an upper '
                 f'bound of {f_upper} instead.'
             )
 
-    logging.debug([f_lower, f_upper])
+    logger.debug([f_lower, f_upper])
 
     # ----- Get signals to same frequencies, i.e. make df -----
     # ----- equal (if necessary) and then restrict range -----
@@ -999,9 +997,7 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         if opt_params[phase_index] == 'phase':
             opt_params_results['phase'] *= 2
 
-    # logging.info(result.message \
-    #              + f' Remaining waveform mismatch is {result.fun:.5f}.')
+    logger.info(result.message
+                + f' Remaining waveform mismatch is {result.fun:.5f}.')
 
-    logging.info(f'{result.message} Remaining waveform mismatch is {result.fun:.5f}.')
-    
     return wf1, wf2_shifted(result.x), opt_params_results

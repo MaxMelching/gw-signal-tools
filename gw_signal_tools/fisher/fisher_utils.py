@@ -1,5 +1,4 @@
 # ----- Standard Lib Imports -----
-import logging
 import warnings
 from typing import Optional, Any, Literal, Callable
 # from functools import cache, lru_cache
@@ -17,6 +16,7 @@ import astropy.units as u
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
+from gw_signal_tools import logger
 from ..inner_product import inner_product, norm
 from ..matrix_with_units import MatrixWithUnits
 from ..test_utils import allclose_quantity
@@ -467,7 +467,7 @@ def get_waveform_derivative_1D_with_convergence(
                 err_msg = str(err)
 
                 if 'Input domain error' in err_msg:
-                    logging.info(
+                    logger.info(
                         f'{step_size} is not a valid step size for a parameter'
                         f'value of {wf_params_at_point[param_to_vary]}. '
                         'Skipping this step size.'
@@ -579,7 +579,7 @@ def get_waveform_derivative_1D_with_convergence(
 
     # ----- Verification of result and information collection -----
     if not is_converged:
-        logging.info(
+        logger.info(
             'Calculations using the selected step sizes did not converge '
             f'for parameter `{param_to_vary}` using convergence check method '
             f'`{convergence_check}`, even after {refine_numb} refinements of '

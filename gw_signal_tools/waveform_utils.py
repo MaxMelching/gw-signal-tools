@@ -1,6 +1,5 @@
 # ----- Standard Lib Imports -----
 from typing import Optional, Literal, Any, Callable
-import logging
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -13,6 +12,7 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
+from gw_signal_tools import logger
 from .test_utils import allclose_quantity
 
 
@@ -393,7 +393,7 @@ def restrict_f_range(
         )
 
     if f_fill_lower < f_lower:
-        logging.info(
+        logger.info(
             f'Lower bound {f_fill_lower} in `fill_range` is smaller '
             f'than the signals smallest frequency {f_lower}. Please be '
             'aware that this function does nothing to change that, i.e.'
@@ -403,7 +403,7 @@ def restrict_f_range(
         f_fill_lower = f_lower
     
     if f_fill_upper > f_upper:
-        logging.info(
+        logger.info(
             f'Upper bound {f_fill_upper} in `fill_range` is larger '
             f'than the signals largest frequency {f_upper}. Please be '
             'aware that this function does nothing to change that, i.e.'
@@ -489,7 +489,7 @@ def fill_f_range(
             )
         
         if f_fill_lower < f_lower:
-            logging.info(
+            logger.info(
                 f'Lower bound {f_fill_lower} in `fill_bounds` is '
                 f'smaller than the signals smallest frequency {f_lower}'
                 '. Please be aware that this function does nothing to '
@@ -509,7 +509,7 @@ def fill_f_range(
             )
 
         if f_fill_upper > f_upper:
-            logging.info(
+            logger.info(
                 f'Upper bound {f_fill_upper} in `fill_bounds` is larger'
                 f' than the signals end frequency {f_upper}. Please be'
                 ' aware that this function does nothing to change that,'
@@ -749,7 +749,7 @@ def get_strain(
         mode = 'plus'
     else:
         if return_detector_output:
-            logging.info(
+            logger.info(
                 '`mode` argument has been set, but is ignored because '
                 'extrinsic parameters have been passed.'
             )
@@ -910,8 +910,8 @@ def get_mass_scaled_wf(
 
     # NOTE: /= operator overwrites original dictionary, thus not used
     
-    logging.debug(total_mass)
-    logging.debug(wf_params)
+    logger.debug(total_mass)
+    logger.debug(wf_params)
     
 
     if target_unit_sys == 'cosmo':

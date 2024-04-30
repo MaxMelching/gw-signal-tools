@@ -11,7 +11,6 @@ from gwpy.frequencyseries import FrequencySeries
 # ---------- Local Package Imports ----------
 from ..fisher import FisherMatrix
 from ..inner_product import inner_product, norm, overlap
-from gw_signal_tools import phenomx_generator
 from ..matrix_with_units import MatrixWithUnits
 
 
@@ -19,10 +18,9 @@ def distance(
     param_to_vary: str,
     param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     param_step_size: Optional[u.Quantity | float] = None,
     distance_kind: Literal['diff_norm', 'mismatch_norm'] = 'diff_norm',
-    wf_generator: Optional[Callable[[dict[str, u.Quantity]],
-                                    FrequencySeries]] = None,
     **inner_prod_kwargs
 ) -> Series:
     r"""
@@ -53,6 +51,10 @@ def distance(
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
         `wf_generator` and must contain the `param_to_vary` as key.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries]
+        Function that takes dicionary of waveform parameters as input
+        and produces a waveform (stored in a GWpy ``FrequencySeries``).
     param_step_size : ~astropy.units.Quantity | float, default = None
         Step size of points in the discretized interval `param_vals`, at
         which the distance values will be calculated. Can be a ``float``
@@ -70,10 +72,6 @@ def distance(
         Distance notion to use. At the moment, two possibilities can be
         selected, 'diff_norm' and 'mismatch_norm'. For details on them,
         refer to the **Notes** section.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
-    FrequencySeries], optional, default = None
-        Function that takes dicionary of waveform parameters as input
-        and produces a waveform (stored in a GWpy ``FrequencySeries``).
 
     Returns
     -------
@@ -108,9 +106,6 @@ def distance(
 
     in the same language as before (i.e. same inner product etc.).
     """
-    if wf_generator is None:
-        wf_generator = phenomx_generator
-
     center_val = wf_params[param_to_vary]
 
     # ----- Parameter range handling -----
@@ -174,10 +169,9 @@ def linearized_distance(
     param_to_vary: str | list[str],
     param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     params_to_project: Optional[list[str]] = None,
     param_step_size: Optional[u.Quantity] = None,
-    wf_generator: Optional[Callable[[dict[str, u.Quantity]],
-                                    FrequencySeries]] = None,
     **inner_prod_kwargs
 ) -> Series:
     r"""
@@ -218,6 +212,10 @@ def linearized_distance(
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
         `wf_generator` and must contain the `param_to_vary` as key.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
+    FrequencySeries]
+        Function that takes dicionary of waveform parameters as input
+        and produces a waveform (stored in a GWpy ``FrequencySeries``).
     params_to_project : str | list[str], optional, default = None
         One or multiple parameters that the linearized distance will
         be optimized over (by projecting the Fisher matrix on the
@@ -237,10 +235,6 @@ def linearized_distance(
         is passed), make sure the values are given in the correct units.
         To avoid potential inconsistencies, giving a Quantity as input
         here is recommended.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
-    FrequencySeries], optional, default = None
-        Function that takes dicionary of waveform parameters as input
-        and produces a waveform (stored in a GWpy ``FrequencySeries``).
 
     Returns
     -------
@@ -253,10 +247,7 @@ def linearized_distance(
     ValueError
         For invalid combinations of `param_to_vary` and
         `params_to_project`.
-    """
-    if wf_generator is None:
-        wf_generator = phenomx_generator
-    
+    """    
     # ----- Parameter input handling -----
     if not isinstance(param_to_vary, str):
         if len(param_to_vary) == 1:

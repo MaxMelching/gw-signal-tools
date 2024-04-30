@@ -1,6 +1,5 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
-import logging
 import warnings
 from typing import Optional, Any, Literal, Self, Callable
 
@@ -14,11 +13,11 @@ import astropy.units as u
 from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 
 # ----- Local Package Imports -----
+from gw_signal_tools import preferred_unit_system, logger
 from ..inner_product import inner_product, optimize_overlap
 from ..waveform_utils import get_wf_generator
 from ..matrix_with_units import MatrixWithUnits
 from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
-from gw_signal_tools import preferred_unit_system
 
 
 class FisherMatrix:
@@ -580,7 +579,7 @@ class FisherMatrix:
             fisher_inverse = opt_fisher.fisher_inverse
 
 
-            # logging.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
+            # logger.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
             optimization_info['opt_fisher'] = opt_fisher
             
 

@@ -185,11 +185,17 @@ class FisherMatrix:
             self._fisher_inverse = MatrixWithUnits.inv(self.fisher)
 
             return self._fisher_inverse
-        
-    # TODO: make getattr and setattr where we either pass it to self.fisher
-    # (debatable if it makes sense; for numerical input it might) or we only
-    # accept string input so that parameters can be accessed using strings
-    # -> but would also be cool for inverse, right? So think of way to do this
+    
+    def __getattr__(self, attr):
+        if attr == 'fisher' or attr == '_fisher':
+            # If call goes here, that means the fisher and _fisher property
+            # have not been set yet (perhaps because direct_computation=False).
+            # Thus we have to calculate them first and then return
+            self._calc_fisher()
+
+            return self.__getattribute__(attr)
+        else:
+            return MatrixWithUnits.__getattribute__(self.fisher, attr)
 
     @property
     def deriv_info(self):
@@ -774,28 +780,6 @@ class FisherMatrix:
     # color denotes uncertainty in fisher_inverse. And then one general
     # function plot where output is plot of fisher and fisher_inverse
 
-    def cond(self, matrix_norm: float | str = 'fro'):
-        """
-        Condition number of the Fisher matrix.
-
-        Parameters
-        ----------
-        matrix_norm : float | Literal['fro', 'nuc'], optional,
-        default = 'fro'
-            Matrix norm that shall be used for the calculation. Must be
-            compatible with argument `p` of `~numpy.linalg.cond`.
-
-        Returns
-        -------
-        float
-            Condition number of `self.fisher`.
-
-        See also
-        --------
-        numpy.linalg.cond : Routine used for calculation.
-        """
-        return self.fisher.cond(matrix_norm)
-
     @staticmethod
     def get_wf_generator(
         approximant: str,
@@ -859,10 +843,6 @@ class FisherMatrix:
 {get_name_header('Fisher Matrix Inverse')}
 {self.fisher_inverse.__repr__()}
         '''
-
-    def __array__(self) -> np.ndarray:
-        # Most intuitive behaviour: indeed return a Fisher matrix as array
-        return self.fisher.__array__()
     
     def __copy__(self) -> FisherMatrix:
         new_matrix = FisherMatrix(

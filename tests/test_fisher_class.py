@@ -61,7 +61,6 @@ try:
 except KeyError:
     pass
 
-
 fisher_tot_mass = FisherMatrix(
     wf_params,
     'total_mass',
@@ -70,7 +69,7 @@ fisher_tot_mass = FisherMatrix(
 )
 
 
-#%% Simple consistency tests
+#%% ----- Simple consistency tests -----
 def test_unit():
     # Both ways of accessing must work
     assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
@@ -97,7 +96,7 @@ def test_criterion_consistency():
                                     atol=0.0, rtol=5e-5)
 
 
-#%% Feature tests
+#%% ----- Feature tests -----
 def test_get_indices():
     test_params = ['total_mass', 'time', 'phase']
 
@@ -130,6 +129,46 @@ def test_get_indices():
         assert fisher.fisher[grid_1][i, j] == sub_matr_1[i][j]
         assert fisher.fisher[grid_2][i, j] == sub_matr_2[i][j]
 
+# Fancy version does not work, unfortunately
+# @pytest.mark.parametrize('attr', ['project_fisher(\'total_mass\')', 'cond()',
+#                                   'inv(fisher_tot_mass.fisher)'])
+# def test_getattr(attr):
+#     fisher = FisherMatrix(
+#         wf_params,
+#         'total_mass',
+#         wf_generator=phenomx_generator,
+#         return_info=True,
+#         direct_computation=False
+#     )
+#     fisher.__getattribute__(attr)
+def test_getattr():
+    fisher = FisherMatrix(
+        wf_params,
+        'total_mass',
+        wf_generator=phenomx_generator,
+        return_info=True,
+        direct_computation=False
+    )
+    fisher.project_fisher('total_mass')
+
+    fisher = FisherMatrix(
+        wf_params,
+        'total_mass',
+        wf_generator=phenomx_generator,
+        return_info=True,
+        direct_computation=False
+    )
+    fisher.cond()
+
+    fisher = FisherMatrix(
+        wf_params,
+        'total_mass',
+        wf_generator=phenomx_generator,
+        return_info=True,
+        direct_computation=False
+    )
+    fisher.inv(fisher_tot_mass.fisher)
+
 def test_project():
     test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
 
@@ -148,12 +187,30 @@ def test_project():
 def test_stat_error(params):
     fisher_tot_mass.statistical_error(params)
 
-@pytest.mark.skip  # Work in progress
-@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass', 'time', 'phase']])
 def test_sys_error(params):
     phenomd_generator = FisherMatrix.get_wf_generator('IMRPhenomD')
+    fisher = FisherMatrix(
+        wf_params,
+        ['total_mass', 'time', 'phase'],
+        wf_generator=phenomx_generator,
+        return_info=True
+    )
 
-    fisher_tot_mass.systematic_error(phenomd_generator, params)
+    fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False)
+
+    fisher.systematic_error(phenomd_generator, params)
+    
+    fisher.systematic_error(phenomd_generator, optimize=True)
+    
+    fisher.systematic_error(phenomd_generator,
+                            optimize=['time', 'phase'])
+    
+    fisher.systematic_error(phenomd_generator,
+                            optimize_fisher=['time', 'phase'])
+    
+    fisher.systematic_error(phenomd_generator, optimize=True,
+                            optimize_fisher=['time', 'phase'])
 
 def test_plot():
     fisher = FisherMatrix(
@@ -188,7 +245,7 @@ def test_cond():
 def test_array():
     assert np.all(np.array(fisher_tot_mass) == np.array(fisher_tot_mass.fisher))
 
-@pytest.mark.skip  # Note finished yet
+# @pytest.mark.skip  # Note finished yet
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
@@ -210,11 +267,10 @@ def test_copy():
     ...
 
 #%% Confirm that certain errors are raised
-class ErrorRaising(unittest.TestCase):
-    def test_immutable(self):
-        # Setting Fisher matrix related attributes should throw error
-        with self.assertRaises(AttributeError):
-            fisher_tot_mass.fisher = 42
-    
-        with self.assertRaises(AttributeError):
-            fisher_tot_mass.fisher_inverse = 42
+def test_immutable():
+    # Setting Fisher matrix related attributes should throw error
+    with pytest.raises(AttributeError):
+        fisher_tot_mass.fisher = 42
+
+    with pytest.raises(AttributeError):
+        fisher_tot_mass.fisher_inverse = 42

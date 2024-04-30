@@ -147,7 +147,9 @@ class FisherMatrix:
         try:
             return self._fisher
         except AttributeError:
-            return self._calc_fisher()
+            self._calc_fisher()
+
+            return self._fisher
     
     @property
     def value(self) -> np.ndarray:
@@ -188,8 +190,7 @@ class FisherMatrix:
     # (debatable if it makes sense; for numerical input it might) or we only
     # accept string input so that parameters can be accessed using strings
     # -> but would also be cool for inverse, right? So think of way to do this
-        
-    
+
     @property
     def deriv_info(self):
         # TODO: self._deriv_info is available... Soooo, shall we something with it?
@@ -202,7 +203,7 @@ class FisherMatrix:
         for param in params:
             assert param in self.params_to_vary, \
                 (f'Parameter \'{param}\' was not used to calculate the Fisher '
-                'matrix.')
+                'matrix (which can also mean it was projected out).')
         
         # param_indices = np.where(np.isin(self.params_to_vary, params))[0]
         # param_indices = np.nonzero(np.isin(self.params_to_vary, params))[0]  # Recommended by numpy doc
@@ -308,6 +309,9 @@ class FisherMatrix:
             Matrix with same shape as initial Fisher matrix, but
             potentially different component values.
         """
+        if isinstance(params, str):
+            params = [params]
+        
         index_grid = self.get_sub_matrix_indices(params)
 
         n = len(self.params_to_vary)  # Equal to self.fisher.shape[0]
@@ -421,8 +425,9 @@ class FisherMatrix:
     def systematic_error(self,
         reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         params: Optional[str | list[str]] = None,
-        # optimize_extrinsic_params: bool = False,
-        optimize: Optional[bool | str | list[str]] = True,
+        optimize: bool | str | list[str] = True,
+        optimize_fisher: Optional[str | list[str]] = None,
+        return_opt_info: bool = True,
         **inner_prod_kwargs
     ) -> tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
@@ -452,7 +457,9 @@ class FisherMatrix:
             Option that allows the to control the optimization procedure
             that is used. Can be True or False to switch automatic
             version on and off, but also a list with parameter names
-            that the optimization will be carried out for.
+            that the optimization will be carried out for. Using True is
+            recommended because it has been shown that estimates become
+            more reliable in that case, so this is the default.
 
             If it is given as a list, the corresponding parameters must
             be in the instances ``wf_params_at_point`` dictionary or
@@ -467,14 +474,12 @@ class FisherMatrix:
             Column vector containing the systematic errors and
             dictionary with information about the calculation.
         """
-        if params is not None:
-            params = self.wf_params_at_point
-            param_indices = self.get_param_indices(params)
-        else:
-            # Take all parameters
-            param_indices = len(self.params_to_vary)*[True]
+        if isinstance(optimize, str):
+            optimize = [optimize]
         
-
+        if isinstance(optimize_fisher, str):
+            optimize_fisher = [optimize_fisher]
+        
         if len(inner_prod_kwargs) > 0:
             # Update keywords from initial input to the instance
 
@@ -496,31 +501,27 @@ class FisherMatrix:
             
             inner_prod_kwargs = init_inner_prod_kwargs | inner_prod_kwargs
 
-
         optimization_info = {}
 
-
-        # General thoughts on function:
-        # It might be better not to return optimized Fisher (or even
-        # replace self with opt_fisher; printing as replacement).
-        # Instead, we just calculate the systematic error here and
-        # return it, as one would expect
-        # -> maybe in info_dict; along with optimized point
-
-
-        if isinstance(optimize, (str, list)):
-            # TODO: think about accepted parameters etc
-            ...
-            optimization_info['general'] = 'Custom optimization was carried out.'
-        elif isinstance(optimize, bool) and optimize:
-            # TODO: maybe just call with certain default param list for optimize?
+        if ((opt_is_bool := isinstance(optimize, bool) and optimize)
+            or isinstance(optimize, list)):
+            # Order is crucial, opt_is_bool needs to be defined
+            if opt_is_bool:
+                opt_params = None
+                
+                optimization_info['general'] = 'Default optimization was carried out.'
+            else:
+                # Is list
+                opt_params = optimize
+            
+                optimization_info['general'] = 'Custom optimization was carried out.'
 
             # Do optimization, get optimal parameters
             opt_wf_1, opt_wf_2, opt_params = optimize_overlap(
                 wf_params=self.wf_params_at_point,
                 fixed_wf_generator=reference_wf_generator,
                 vary_wf_generator=self.wf_generator,
-                opt_params=[...],
+                opt_params=opt_params,
                 **inner_prod_kwargs
             )
             delta_h = opt_wf_1 - opt_wf_2
@@ -529,16 +530,37 @@ class FisherMatrix:
 
             opt_wf_params = self.wf_params_at_point | opt_params
             # Remove parameters that are not used in wf generation
-            opt_wf_params.pop('t_shift')
-            opt_wf_params.pop('psi')  # TODO: only remove this optionally? Or just always add as global phase to waveforms?
+            # if 'tc' in opt_params or 'time' in opt_params:
+            #     tc = opt_wf_params.pop('tc', 0.*u.s) + opt_wf_params.pop('time', 0.*u.s)
+            # else:
+            #     tc = 0.*u.s
+            # if 'psi' in opt_params or 'phase' in opt_params:
+            #     psi = opt_wf_params.pop('psi', 0.*u.rad) + opt_wf_params.pop('phase', 0.*u.rad)
+            # else:
+            #     psi = 0.*u.rad
+            tc = opt_wf_params.pop('tc', 0.*u.s) + opt_wf_params.pop('time', 0.*u.s)
+            # psi = opt_wf_params.pop('psi', 0.*u.rad) + opt_wf_params.pop('phase', 0.*u.rad)
+            psi = opt_wf_params.pop('psi', 0.*u.rad) + 0.5*opt_wf_params.pop('phase', 0.*u.rad)  # 0.5 for separate interpretation of phase, psi
+            # TODO: maybe test if vary_wf_generator accepts the keywords? And only pop them if not
 
             optimization_info['opt_params'] = opt_wf_params  # Or opt_params?
 
             opt_fisher = FisherMatrix(
                 opt_wf_params,
                 self.params_to_vary,
-                self.wf_generator
+                self.wf_generator,
+                return_info=True
             )
+
+            if optimize_fisher is not None:
+                opt_fisher = opt_fisher.project_fisher(optimize_fisher)
+
+                optimization_info['general'] += (
+                    ' Fisher Matrix optimization was carried out as well.'
+                )
+
+                optimization_info['fisher_opt_params'] = optimize_fisher
+            
             fisher_inverse = opt_fisher.fisher_inverse
 
 
@@ -547,24 +569,88 @@ class FisherMatrix:
             
 
             # Need to calculate derivatives at new point
-            derivs = [
-                get_waveform_derivative_1D_with_convergence(
-                    opt_wf_params,
-                    param_to_vary,
-                    self.wf_generator
-                ) for param_to_vary in self.params_to_vary
-            ]
+            # derivs = [
+            #     get_waveform_derivative_1D_with_convergence(
+            #         opt_wf_params,
+            #         param_to_vary,
+            #         self.wf_generator
+            #     ) for param_to_vary in self.params_to_vary
+            # ]
             # TODO: don't forget to add phase shifts here, have to evaluate
             # derivatives in the optimized point
+            # -> but phase and time shifts would cancel out in every
+            #    inner product and thus in whole Fisher, right?
+            # -> and even derivatives w.r.t. phase and tc are independent
+            #    of phase shifts we evaluate them in, except for dependence
+            #    through the waveforms, which cancels out again in inner prod
+            derivs = [
+                opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
+            ]
 
-            optimization_info['general'] = 'Default optimization was carried out.'
+            # TODO: if there was optimization over time/phase, definitely
+            # account for that in derivatives!!! This is where the
+            # phase term does not cancel out!!!
+
+
+            for i, deriv in enumerate(derivs):
+                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*tc + 2.j*psi)
         elif isinstance(optimize, bool) and not optimize:
             delta_h = reference_wf_generator(self.wf_params_at_point) \
                 - self.wf_generator(self.wf_params_at_point)
 
-            if self.metadata['return_info']:
+            # if self.metadata['return_info']:
+            #     self.fisher  # Test call in case direct_computation was False
+
+            #     derivs = [
+            #         self.deriv_info[param]['deriv'] for param in self.params_to_vary
+            #     ]
+            # else:
+            #     # NOTE: I don't think we can/should calculate derivs for the
+            #     # parameters in params only because this argument is meant
+            #     # to determine return. For error, parameters that are not in
+            #     # in params still play a role and have to be accounted for.
+            #     derivs = [
+            #         get_waveform_derivative_1D_with_convergence(
+            #             self.wf_params_at_point,
+            #             param_to_vary,
+            #             self.wf_generator
+            #         ) for param_to_vary in self.params_to_vary
+            #     ]
+
+            # if optimize_fisher is not None:
+            #     opt_fisher = self.project_fisher(optimize_fisher)
+            #     fisher_inverse = opt_fisher.fisher_inverse
+        
+            #     optimization_info['general'] = (
+            #         'No optimization of the waveform difference was done, '
+            #         'but Fisher Matrix optimization was carried out.'
+            #     )
+            # else:
+            #     fisher_inverse = self.fisher_inverse
+
+            #     optimization_info['general'] = 'No optimization was carried out.'
+            
+            # opt_params = None
+
+            if optimize_fisher is not None:
+                opt_fisher = self.project_fisher(optimize_fisher)
+        
+                optimization_info['general'] = (
+                    'No optimization of the waveform difference was done, '
+                    'but Fisher Matrix optimization was carried out.'
+                )
+
+                optimization_info['fisher_opt_params'] = optimize_fisher
+            else:
+                opt_fisher = self
+
+                optimization_info['general'] = 'No optimization was carried out.'
+            
+            fisher_inverse = opt_fisher.fisher_inverse
+
+            if opt_fisher.metadata['return_info']:
                 derivs = [
-                    self.deriv_info[param]['deriv'] for param in self.params_to_vary
+                    opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
                 ]
             else:
                 # NOTE: I don't think we can/should calculate derivs for the
@@ -573,41 +659,34 @@ class FisherMatrix:
                 # in params still play a role and have to be accounted for.
                 derivs = [
                     get_waveform_derivative_1D_with_convergence(
-                        self.wf_params_at_point,
+                        opt_fisher.wf_params_at_point,
                         param_to_vary,
-                        self.wf_generator
-                    ) for param_to_vary in self.params_to_vary
+                        opt_fisher.wf_generator
+                    ) for param_to_vary in opt_fisher.params_to_vary
                 ]
 
-            fisher_inverse = self.fisher_inverse
-
-            optimization_info['general'] = 'No optimization was carried out.'
+            opt_params = None
         else:
             raise ValueError('Given `optimize` input not accepted.')
         
-
-        # Parameters that all branches/cases define: optimized_params
-        # -> no matter if actual optimization shall be carried out
-
-        # TODO: maybe do things differently. For no opt, we can take
-        # stored derivs and Fisher, potentially. Thus it might be best
-        # to just store/define delta_h, derivs and fisher_inverse in
-        # each case and then only do computation afterwards
-
-        # TODO: think about how Fisher optimization can be incorporated
-        # -> extra keyword?
-
-
         vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
+        
+        # Check which params shall be returned
+        if params is not None:
+            param_indices = opt_fisher.get_param_indices(params)
+        else:
+            # Take all parameters
+            params = opt_fisher.params_to_vary
+            param_indices = len(params)*[True]
         
         fisher_bias = (fisher_inverse @ vector)[param_indices]
 
         # Bias from Fisher calculation might not be the only one we have
         # to account for, some parameters might change in optimization
         # procedure (has to be taken into account as well).
-        if np.any(np.isin(opt_params, params)):
+        if opt_params is not None and np.any(np.isin(opt_params, params)):
             opt_bias = MatrixWithUnits.from_numpy_array(vector.shape)
             for index in np.ndindex(opt_bias.shape):
                 param = param_indices[index]
@@ -617,10 +696,22 @@ class FisherMatrix:
             
             # TODO: account for correlations with parameters that are
             # not from opt_params, they might still change
+            # -> but how to verify this? Maybe don't and argue that
+            #    optimization is only meant to be carried out for
+            #    external parameters, which fulfil this requirement of
+            #    independence.
 
             # TODO: especially check what they mean by summation of errors after eq 13
 
-            return fisher_bias + opt_bias, optimization_info
+        #     return fisher_bias + opt_bias, optimization_info
+        # else:
+        #     return fisher_bias, optimization_info
+        # TODO: maybe only return optimization_info in case optimize != False
+
+            fisher_bias += opt_bias
+        
+        if optimize is False or return_opt_info is False:
+            return fisher_bias
         else:
             return fisher_bias, optimization_info
 
@@ -671,12 +762,12 @@ class FisherMatrix:
     def plot(self, only_fisher: bool = False, only_fisher_inverse: bool = False) -> None:
         # NOT final version
 
-        if not (only_fisher or only_fisher_inverse):
-            self.plot_matrix(self.fisher)
-            self.plot_matrix(self.fisher_inverse)
-        elif only_fisher:
+        if only_fisher:
             self.plot_matrix(self.fisher)
         elif only_fisher_inverse:
+            self.plot_matrix(self.fisher_inverse)
+        else:
+            self.plot_matrix(self.fisher)
             self.plot_matrix(self.fisher_inverse)
 
     # Plans for plotting: make one function plot_uncertainty where
@@ -791,8 +882,3 @@ class FisherMatrix:
     
     def copy(self) -> FisherMatrix:
         return self.__copy__()
-    
-    def __hash__(self) -> int:
-        return hash(self.fisher) ^ hash(self.fisher_inverse) \
-            ^ hash(self.metadata) ^ hash(self.wf_params_at_point) \
-            ^ hash(self.params_to_vary) ^ hash(self.is_projected)

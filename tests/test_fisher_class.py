@@ -179,9 +179,11 @@ def test_project():
     )
 
     project_params = ['time']
-    fisher_projected = fisher.project_fisher(project_params).fisher
+    fisher_projected = fisher.project_fisher(project_params)
 
-    assert fisher_projected.shape == (len(test_params) - len(project_params), len(test_params) - len(project_params))
+    assert fisher_projected.shape == 2*(len(test_params)-len(project_params), )
+    assert np.all(np.equal(fisher_projected.params_to_vary,
+                           ['total_mass', 'mass_ratio', 'phase', 'distance']))
 
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
 def test_stat_error(params):

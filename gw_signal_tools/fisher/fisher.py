@@ -14,7 +14,7 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 
 # ----- Local Package Imports -----
 from gw_signal_tools import preferred_unit_system, logger
-from ..inner_product import inner_product, optimize_overlap
+from ..inner_product import inner_product, optimize_overlap, get_default_opt_params
 from ..waveform_utils import get_wf_generator
 from ..matrix_with_units import MatrixWithUnits
 from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
@@ -541,7 +541,9 @@ class FisherMatrix:
             or isinstance(optimize, list)):
             # Order is crucial, opt_is_bool needs to be defined
             if opt_is_bool:
-                opt_params = None
+                opt_params = get_default_opt_params(self.wf_params_at_point,
+                                                    self.wf_generator)
+                # Not leaving at none is important, we check for this below
                 
                 optimization_info['general'] = 'Default optimization was carried out.'
             else:
@@ -551,7 +553,7 @@ class FisherMatrix:
                 optimization_info['general'] = 'Custom optimization was carried out.'
 
             # Do optimization, get optimal parameters
-            opt_wf_1, opt_wf_2, opt_params = optimize_overlap(
+            opt_wf_1, opt_wf_2, opt_vals = optimize_overlap(
                 wf_params=self.wf_params_at_point,
                 fixed_wf_generator=reference_wf_generator,
                 vary_wf_generator=self.wf_generator,
@@ -560,14 +562,17 @@ class FisherMatrix:
             )
             delta_h = opt_wf_1 - opt_wf_2
 
-            opt_wf_params = self.wf_params_at_point | opt_params
+            opt_wf_params = self.wf_params_at_point | opt_vals
+            optimization_info['opt_params'] = opt_wf_params.copy()
+            # TODO: decide if tc, psi should be included in here or not (I think it does make sense to do so)
+
             # Remove parameters that are not used in wf generation
             tc = opt_wf_params.pop('tc', 0.*u.s) + opt_wf_params.pop('time', 0.*u.s)
             psi = opt_wf_params.pop('psi', 0.*u.rad) + 0.5*opt_wf_params.pop('phase', 0.*u.rad)  # 0.5 for separate interpretation of phase, psi
             # Idea with addition: only one of them will be non-zero, giving
             # multiple would not make sense due to their equivalency
             
-            optimization_info['opt_params'] = opt_wf_params
+            # optimization_info['opt_params'] = opt_wf_params
 
             opt_fisher = FisherMatrix(
                 opt_wf_params,
@@ -635,7 +640,7 @@ class FisherMatrix:
 
             #     optimization_info['general'] = 'No optimization was carried out.'
             
-            # opt_params = None
+            # opt_vals = None
 
             if optimize_fisher is not None:
                 opt_fisher = self.project_fisher(optimize_fisher)
@@ -692,13 +697,42 @@ class FisherMatrix:
         # Bias from Fisher calculation might not be the only one we have
         # to account for, some parameters might change in optimization
         # procedure (has to be taken into account as well).
-        if opt_params is not None and np.any(np.isin(opt_params, params)):
-            opt_bias = MatrixWithUnits.from_numpy_array(vector.shape)
-            for index in np.ndindex(opt_bias.shape):
-                param = param_indices[index]
-                if param in params.keys():
-                    # param was changed by optimization procedure
-                    opt_bias = opt_params[param] - params[param]  # Is this the correct order?
+        if opt_params is not None and (np.any(np.isin(opt_params, params))
+                                       or tc != 0.*u.s or psi != 0.*u.rad):
+        # if optimize != False and np.any(np.isin(opt_params, params)):
+            opt_bias = MatrixWithUnits.from_numpy_array(np.zeros(fisher_bias.shape))
+            # for index in np.ndindex(opt_bias.shape):
+            #     param = param_indices[index]
+            #     if param in params.keys():
+            #         # param was changed by optimization procedure
+            #         opt_bias = opt_vals[param] - params[param]  # Is this the correct order?
+            
+            # for i, param in enumerate(params):
+            for param in params:
+                i = opt_fisher.get_param_indices(param)
+                # wf_param_val = opt_fisher.wf_params_at_point.get(param, 0.)
+                # # 0.0 for keys time and phase, where values we found are
+                # # already relative differences
+                
+                # opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
+                # # Value remains 0.0 if no corresponding key in opt_vals
+                try:
+                    wf_param_val = opt_fisher.wf_params_at_point[param]
+                    # opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
+                    opt_bias[i] = wf_param_val - opt_vals.get(param, wf_param_val)
+                except KeyError:
+                    # Must be a time or phase parameter
+                    if param in ['tc', 'time']:
+                        # opt_bias[i] = tc
+                        opt_bias[i] = -tc
+                    elif param == 'psi':
+                        # opt_bias[i] = psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                        opt_bias[i] = -psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    elif param == 'phase':
+                        # opt_bias[i] = 2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                        opt_bias[i] = -2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    else:
+                        raise ValueError('Must not happen')
             
             # TODO: account for correlations with parameters that are
             # not from opt_params, they might still change
@@ -711,6 +745,7 @@ class FisherMatrix:
 
             # TODO: definitely check if this works as intended with tc, phase
             # (they are removed from opt_params beforehand)
+            # -> ah, they are removed from opt_wf_params, but not opt_vals. So everything allright
 
             fisher_bias += opt_bias
         

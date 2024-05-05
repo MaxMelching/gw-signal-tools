@@ -1,9 +1,6 @@
 gw\_signal\_tools package
 =========================
 
-Module contents
----------------
-
 .. automodule:: gw_signal_tools
    :members:
    :undoc-members:
@@ -16,6 +13,7 @@ Subpackages
    :maxdepth: 4
 
    gw_signal_tools.PSDs
+
    gw_signal_tools.fisher
 
 Submodules

@@ -1,9 +1,6 @@
 gw\_signal\_tools.fisher package
 ================================
 
-Module contents
----------------
-
 .. automodule:: gw_signal_tools.fisher
    :members:
    :undoc-members:

@@ -1,5 +1,5 @@
 import numpy as np
-from gw_signal_tools.inner_product import psd_to_file
+from gw_signal_tools.psd import psd_to_file
 from gwpy.frequencyseries import FrequencySeries
 
 

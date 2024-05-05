@@ -6,50 +6,33 @@
 Welcome to gw-signal-tools's documentation!
 ===========================================
 
+gw-signal-tools
+---------------
+
 .. toctree::
    :maxdepth: 1
-   :caption: Contents:
+   :caption: Contents
 
    Getting Started <introduction>
 
    Code Overview <overview>
 
-
 .. toctree::
    :maxdepth: 1
    :caption: Examples
 
+   tutorials/tips.rst
 
-API
----
 .. toctree::
+   :maxdepth: 2
    :caption: API
 
    modules/gw_signal_tools
 
-.. API
-.. ---
-.. .. autosummary::
-..    :toctree: api
-..    :caption: API:
-..    :recursive:
-
-..    modules
-
-   .. :template: custom-module-template.rst
-
-   .. This is how things are handled in pyseobnr package
-   .. pyseobnr.generate_waveform
-   .. pyseobnr.eob.dynamics
-   .. pyseobnr.eob.waveform
-   .. pyseobnr.eob.fits
-
-   .. pyseobnr.models
-   .. pyseobnr.auxiliary.mode_mixing.auxiliary_functions_modemixing
-
+.. Following need not appear in table of contents on side, thus with caption
 
 Indices and tables
-==================
+------------------
 
 * :ref:`genindex`
 * :ref:`modindex`

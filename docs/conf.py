@@ -8,7 +8,6 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
 import os
 import sys
 sys.path.insert(0, os.path.abspath('.'))
@@ -20,8 +19,8 @@ sys.path.insert(0, os.path.abspath('../gw_signal_tools/'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'gw-signal-tools'
-copyright = '2024, Max Melching, Frank Ohme'
 author = 'Max Melching, Frank Ohme'
+copyright = '2024, ' + author
 
 from gw_signal_tools._version import version as VERSION
 release = VERSION
@@ -35,7 +34,10 @@ extensions = [
     'sphinx.ext.viewcode',  # syntax highlighting
     'sphinx.ext.autodoc',  # includes documentation from docstrings
     'sphinx.ext.napoleon',  # support other docstring formats
+    'sphinx.ext.mathjax',
     'sphinx.ext.intersphinx',
+    'sphinxcontrib.programoutput',
+    # 'numpydoc',
     'm2r2',  # including markdown files
     # 'sphinx_mdinclude',  # including markdown files -> then comment m2r2 -> seems to work much better -> but not compatible with nbsphinx...
     # 'nbsphinx',
@@ -59,7 +61,7 @@ html_theme = 'sphinx_rtd_theme'
 
 todo_include_todos = True
 
-# napoleon_numpy_docstring = True
+napoleon_numpy_docstring = True
 numpydoc_use_blockquotes = True
 
 

@@ -15,8 +15,4 @@ build/*
 
 *_version.py
 
-
-# Documentation (is preliminary, thus ignored for now)
-docs/*
-
-!docs/tutorials/
+docs/_build

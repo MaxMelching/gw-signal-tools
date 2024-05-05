@@ -1,6 +1,14 @@
 gw\_signal\_tools.fisher package
 ================================
 
+Module contents
+---------------
+
+.. automodule:: gw_signal_tools.fisher
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Submodules
 ----------
 
@@ -24,14 +32,6 @@ gw\_signal\_tools.fisher.fisher\_utils module
 ---------------------------------------------
 
 .. automodule:: gw_signal_tools.fisher.fisher_utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: gw_signal_tools.fisher
    :members:
    :undoc-members:
    :show-inheritance:

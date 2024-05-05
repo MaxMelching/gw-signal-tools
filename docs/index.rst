@@ -25,9 +25,7 @@ API
 .. toctree::
    :caption: API
 
-   .. modules
-
-   gw_signal_tools
+   modules/gw_signal_tools
 
 .. API
 .. ---

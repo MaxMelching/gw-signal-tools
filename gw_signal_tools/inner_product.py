@@ -36,6 +36,7 @@ def inner_product(
     optimize_time_and_phase: bool = False,
     optimize_time: bool = False,
     optimize_phase: bool = False,
+    min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False
 ) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
     'peak_time'], u.Quantity | TimeSeries]]:
@@ -271,11 +272,8 @@ def inner_product(
                 f'bound of {f_upper} instead.'
             )
 
-    logger.debug([f_lower, f_upper])
-
     # ----- Get signals to same frequencies, i.e. make df -----
     # ----- equal (if necessary) and then restrict range -----
-    # if not optimize_time_and_phase and not optimize_time and not optimize_phase:
     if not (optimize_time_and_phase or optimize_time or optimize_phase):
         target_range = np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
 
@@ -289,6 +287,11 @@ def inner_product(
         return inner_product_computation(signal1, signal2, psd)
     else:
         non_zero_range = [f_lower, f_upper]  # Ensure all signals are non-zero on same range
+
+        # TODO: adjust df here? Maybe based on input for min_dt or so
+        # Get estimate of length of signals (= maximum shift we have to take
+        # into account), select df to represent this (?)
+        # duration = 1./df.value  # Number of points times dt
 
         if f_lower >= 0.0 * frequ_unit:
             target_range = np.arange(0.0, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
@@ -328,6 +331,7 @@ def inner_product(
             psd=psd,
             optimize_time=optimize_time,
             optimize_phase=optimize_phase,
+            min_dt_prec=min_dt_prec,
             return_opt_info=return_opt_info
         )
 
@@ -406,6 +410,7 @@ def optimized_inner_product(
     psd: FrequencySeries,
     optimize_time: bool,
     optimize_phase: bool,
+    min_dt_prec: Optional[float] = None,  # Or something like 1e-6 as default?
     return_opt_info: bool = False
 ) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
     'peak_time'], u.Quantity | TimeSeries]]:
@@ -486,7 +491,7 @@ def optimized_inner_product(
          'even sample size, on the other hand, the number of samples for '
          'positive frequencies is expected to be one less than the number of '
          'samples for negative frequencies, in accordance with the format '
-         'expected by `~numpy.fft.fftshift`. Note that the conditions just'
+         'expected by `~numpy.fft.ifftshift`. Note that the conditions just'
          'mentioned do not apply to the case of a starting frequency f=0, '
          'where both even and odd sample sizes are accepted.')
     
@@ -516,15 +521,67 @@ def optimized_inner_product(
     # The prefactor is added here already because it depends on the given
     # frequency range
     if np.isclose(0., dft_vals.f0.value, atol=0.5*dft_vals.df.value, rtol=0.):
-        full_dft_vals = 4.0 * np.append(dft_vals.value, np.zeros(dft_vals.size - 1))
+        n_append = dft_vals.size - 1
+        n_total = dft_vals.size + n_append
+        dt = 1. / (n_total*signal1.df)
+
+        if min_dt_prec is None:
+            min_dt_prec = dt
+        
+        if dt > min_dt_prec:  # TODO: make sure min_dt_prec is Quantity
+            n_required = np.ceil(1. / (min_dt_prec*signal1.df))
+        else:
+            n_required = n_total
+
+        n_required = next_power_of_two(n_required)
+
+        n_append = n_required - dft_vals.size
+        
+        full_dft_vals = 4.*np.append(dft_vals.value, np.zeros(n_append))
+        dt = (1. / (full_dft_vals.size*signal1.df)).si
     else:
-        full_dft_vals = 2.0 * np.fft.fftshift(dft_vals.value)
+        n_append = 0
+        n_total = dft_vals.size
+        dt = 1. / (n_total*signal1.df)
 
-    dt = (1.0 / (full_dft_vals.size * signal1.df)).si
+        if min_dt_prec is None:
+            min_dt_prec = dt
+        
+        if dt > min_dt_prec:  # TODO: make sure min_dt_prec is Quantity
+            n_required = np.ceil(1. / (min_dt_prec*signal1.df))
+        else:
+            n_required = n_total
 
-    # TODO: enable padding via argument min_dt. If dt is smaller than this,
-    # we pad full_dft_vals (to the right in first case, symmetric in second case)
-    # -> or perhaps do padding before this if-clause (or in)?
+        n_required = next_power_of_two(n_required)
+        # -> is this worth it here? Operation-wise (in case dt is already big enough)
+
+        n_append = n_required - dft_vals.size
+
+        # if dft_vals.size % 2 == 0:
+        if n_append % 2 == 0:
+            # Symmetric appending
+            n_append_lower = n_append_upper = n_append//2
+        else:
+            # Odd means start or beginning is larger
+            if -dft_vals.f0 > dft_vals.frequencies[-1]:
+                n_append_lower = n_append//2
+                n_append_upper = n_append//2 + 1
+            else:
+                n_append_lower = n_append//2 + 1
+                n_append_upper = n_append//2
+
+        dft_vals = np.append(np.append(np.zeros(n_append_lower), dft_vals.value),
+                             np.zeros(n_append_upper))
+
+        dt = (1. / (dft_vals.size*signal1.df)).si
+        
+        full_dft_vals = 2.*np.fft.ifftshift(dft_vals)
+
+        # full_dft_vals = 2.*np.fft.ifftshift(dft_vals.value)  # From before
+
+        # TODO: check when to take .value, in ifftshift or in appending
+
+    # TODO: not use .si, but .compose? Or at least try this?
 
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
     try:
@@ -538,8 +595,6 @@ def optimized_inner_product(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
         unit=output_unit,
         t0=0.*dt.unit,
-        # TODO: set t0 based on epochs? Should be signal.epoch-signal2.epoch,
-        # because it is signal1 times conjugate of signal2
         dt=dt
     )
 
@@ -572,6 +627,9 @@ def optimized_inner_product(
                               'peak_time': peak_time}
     else:
         return match_result
+
+def next_power_of_two(x):
+    return 1 if x == 0 else int(2**np.ceil(np.log2(x)))
 
 def norm(
     signal: TimeSeries | FrequencySeries,

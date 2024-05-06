@@ -4,6 +4,9 @@ try:
 except ModuleNotFoundError:  # development mode
     __version__ = ''
 
+__doc__ = """
+Repository with files surrounding computations with waveforms from lal.
+"""
 
 from os.path import dirname as _path_dirname
 

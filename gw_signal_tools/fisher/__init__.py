@@ -10,6 +10,12 @@ from .fisher import FisherMatrix
 from .distances import distance, linearized_distance
 # Order important. We import phenomx_generator there, must already be defined
 
+__doc__ = """
+A subpackage of `gw_signal_tools`, containing a Fisher matrix
+implementation along with various funcions based on this (for instance
+to calculate statistical and systematic errors).
+"""
+
 # Dictionary fo get nicer display of parameters in Fisher plotting method
 latexparams = {
     # ----- Masses -----

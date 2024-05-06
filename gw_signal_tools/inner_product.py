@@ -43,7 +43,7 @@ def inner_product(
     Calculates the noise-weighted inner product
 
     .. math:: \langle a, b \rangle = 2 \Re \int_{-\infty}^{\infty}
-        \frac{\tilde{a}(f) \tilde{b}(f)}{S_n(f)} \, df
+        \frac{\tilde{a}(f) \tilde{b}^*(f)}{S_n(f)} \, df
     
     of two signals using their representations
     :math:`\tilde{a}(f), \tilde{b}(f)` in frequency domain.
@@ -522,7 +522,7 @@ def optimized_inner_product(
 
     dt = (1.0 / (full_dft_vals.size * signal1.df)).si
 
-    # TODO: enable padding via argument target_dt. If dt is smaller than this,
+    # TODO: enable padding via argument min_dt. If dt is smaller than this,
     # we pad full_dft_vals (to the right in first case, symmetric in second case)
     # -> or perhaps do padding before this if-clause (or in)?
 
@@ -1034,6 +1034,8 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
         # NOTE: if only time or phase is optimized, the respective other
         # value tc/phic will be zero, so it has no influence in that case
+
+        # TODO: check if this is correct!!! Or if we should do minus of peak_phase or so
     else:
         wf2 = wf2_shifted(result.x)
 

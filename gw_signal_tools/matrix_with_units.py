@@ -8,6 +8,12 @@ from numpy.typing import ArrayLike
 import astropy.units as u
 
 
+__doc__ = """
+Module for the ``MatrixWithUnits`` class that is intended to enable the
+use of astropy units with matrices.
+"""
+
+
 class MatrixWithUnits:
     """
     Class for a matrix where entries can have differing units, following
@@ -16,9 +22,10 @@ class MatrixWithUnits:
     Parameters
     ----------
     value : 
-        ...
+        __description_
     unit : 
-        ...
+        __description_
+        
         Note that no care is taken to produce irreducible units (i.e.
         unscaled ones, while applying the scale from units to the
         values). This is because units of sun masses etc. that are

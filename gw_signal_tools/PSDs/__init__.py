@@ -1,3 +1,7 @@
+__doc__ = """
+Folder with several power spectral densities (PSDs).
+"""
+
 from os.path import dirname as _path_dirname
 
 PSD_PATH = _path_dirname(__file__)

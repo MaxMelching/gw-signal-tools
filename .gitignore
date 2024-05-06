@@ -16,3 +16,5 @@ build/*
 *_version.py
 
 docs/_build
+
+docs/no_psd.txt

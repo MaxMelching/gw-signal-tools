@@ -570,18 +570,56 @@ def optimized_inner_product(
                 n_append_lower = n_append//2 + 1
                 n_append_upper = n_append//2
 
-        dft_vals = np.append(np.append(np.zeros(n_append_lower), dft_vals.value),
-                             np.zeros(n_append_upper))
+        # dft_vals = np.append(np.append(np.zeros(n_append_lower), dft_vals.value),
+        #                      np.zeros(n_append_upper))
 
-        dt = (1. / (dft_vals.size*signal1.df)).si
+        # dt = (1. / (dft_vals.size*signal1.df)).si
         
-        full_dft_vals = 2.*np.fft.ifftshift(dft_vals)
+        # full_dft_vals = 2.*np.fft.ifftshift(dft_vals)
 
+
+        # if dft_vals.size % 2 == 0:
+        #     n_split = dft_vals.size//2 - 1
+        # else:
+        #     n_split = dft_vals.size//2
+        
+        n_split = dft_vals.size//2
+        # Should actually work for all cases. For odd, this rounds down and
+        # thus takes only until f=0 and for even, the positive ones are
+        # expected to be one less than in number than negative
+
+
+        # full_dft_vals = 2.*np.fft.ifftshift(np.concatenate(
+        #     (np.zeros(n_append_lower), dft_vals.value, np.zeros(n_append_upper))
+        # ))
+        # Shouldn't we be able to avoid ifftshift call?
+
+        full_dft_vals = 2.*np.concatenate(
+            (dft_vals.value[n_split:], np.zeros(n_append_upper),
+             np.zeros(n_append_lower), dft_vals.value[:n_split])
+        )
+
+        # logger.info(dft_vals.frequencies[n_split:])
+        # logger.info(dft_vals.frequencies[:n_split])
+
+        dt = (1. / (full_dft_vals.size*signal1.df)).si
         # full_dft_vals = 2.*np.fft.ifftshift(dft_vals.value)  # From before
 
         # TODO: check when to take .value, in ifftshift or in appending
+    
+    assert next_power_of_two(full_dft_vals.size) == full_dft_vals.size, \
+        'Consistency check, not your fault if it fails.'
 
     # TODO: not use .si, but .compose? Or at least try this?
+    # logger.info([full_dft_vals.size, np.log2(full_dft_vals.size)])
+
+    # logger.info(np.nonzero(full_dft_vals[full_dft_vals.size//2:]))
+    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals.value)[dft_vals.size//2:]))
+    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals)[dft_vals.size//2:]))
+
+    # logger.info(np.nonzero(full_dft_vals[:full_dft_vals.size//2]))
+    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals.value)[:dft_vals.size//2]))
+    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals)[:dft_vals.size//2]))
 
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
     try:

@@ -259,6 +259,20 @@ def test_f_range(f_min, f_max):
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-3)
     # Not fully equal due to potentially being one sample off when filling
 
+@pytest.mark.parametrize('f_range', [
+    [-f_min, 1.1*f_max],  # Too large, should be adjusted by function
+    [None, None],
+    pytest.param([0.*u.m, None], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid unit for f_lower')),
+    pytest.param([None, f_max.value*u.m], marks=pytest.mark.xfail(
+        raises=ValueError, strict=True, reason='Invalid unit for f_upper'))
+])
+def test_f_range_handling(f_range):
+    norm1 = norm(hp_f_fine)
+    norm2 = norm(hp_f_fine, f_range=f_range)
+
+    assert_allclose_quantity(norm1, norm2, atol=0., rtol=0.)
+
 def test_positive_negative_f_range_consistency():
     h = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df))
     h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
@@ -319,15 +333,17 @@ def test_df_consistency():
     assert_allclose_quantity(norm1, norm3, atol=0.0, rtol=6e-4)
     assert_allclose_quantity(norm2, norm3, atol=0.0, rtol=2e-4)
 
-
-def test_df_no_unit():
-    df_val = 2**-5
-
-    norm1 = norm(hp_f_fine, df=df_val)
-    norm2 = norm(hp_f_fine, df=df_val * u.Hz)
+@pytest.mark.parametrize('df1,df2', [
+    [2**-5, 2**-5*u.Hz],
+    [2**-5, 2**-2*u.mHz],
+    pytest.param(2**-5, 2**-5*u.m, marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid unit for df'))
+])
+def test_df_handling(df1, df2):
+    norm1 = norm(hp_f_fine, df=df1)
+    norm2 = norm(hp_f_fine, df=df2)
 
     assert_quantity_equal(norm1, norm2)
-
 
 def test_different_units():
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
@@ -637,8 +653,14 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
     assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast
-@pytest.mark.parametrize('params', [['time'], ['mass1', 'time'],
-                                    ['phase'], ['mass1', 'phase']])
+@pytest.mark.parametrize('params', [
+    'time', ['mass1', 'time'],
+    'phase', ['mass1', 'phase'],
+    pytest.param(['time', 'tc'], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid input')),
+    pytest.param(['phase', 'psi'], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid input'))
+])
 def test_time_phase_arg_handling(params):
     # Testing strange combinations for handling
     def wf_gen(wf_params):
@@ -651,6 +673,8 @@ def test_time_phase_arg_handling(params):
         opt_params=params,
     )
 
+    if isinstance(params, str):
+        params = [params]  # For length comparison
     assert len(opt_params) == len(params)
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast

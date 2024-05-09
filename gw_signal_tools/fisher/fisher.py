@@ -457,10 +457,11 @@ class FisherMatrix:
         .. math:: \Delta \theta^\mu = \sum_{\nu} \Gamma^{-1}_{\mu \nu}
         \langle \frac{\partial h}{\partial \theta^\nu}, \delta h \rangle
 
-        where :math:`\delta h = h - h_2`. Here, :math:`h` is the
+        where :math:`\delta h = h_2 - h`. Here, :math:`h` is the
         waveform model used to calculate the Fisher matrix instance and
         :math:`h_2` is a second model, with respect to which we want to
-        compute the systematic error.
+        compute the systematic error `\Delta \theta = \theta - \theta_2`
+        where `\theta` is the maximum.
 
         Parameters
         ----------
@@ -691,6 +692,8 @@ class FisherMatrix:
         
         # Check which params shall be returned
         if params is not None:
+            if isinstance(params, str):
+                params = [params]
             param_indices = opt_fisher.get_param_indices(params)
         else:
             # Take all parameters

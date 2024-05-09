@@ -364,8 +364,8 @@ def inner_product_computation(
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
     # ----- Assure same distance of samples -----
-    assert (allclose_quantity(signal1.df, psd.df, rtol=0.01)
-            and allclose_quantity(signal2.df, psd.df, rtol=0.01)), \
+    assert (allclose_quantity(signal1.df, psd.df, atol=0., rtol=1e-5)
+            and allclose_quantity(signal2.df, psd.df, atol=0., rtol=1e-5)), \
         'Signals must have equal frequency spacing.'
     
     # Second step: make sure frequencies are sufficiently equal.
@@ -379,9 +379,9 @@ def inner_product_computation(
 
     try:
         assert (allclose_quantity(signal1.frequencies, signal2.frequencies,
-                                  atol=0.0, rtol=0.01)
+                                  atol=0.5*signal1.df.value, rtol=0.)
                 and allclose_quantity(signal1.frequencies, psd.frequencies,
-                                      atol=0.0, rtol=0.01)), \
+                                  atol=0.5*signal1.df.value, rtol=0.)), \
             custom_error_msg
     except ValueError:
         # Due to unequal sample size. Since this is automatically checked by
@@ -395,9 +395,7 @@ def inner_product_computation(
     except u.UnitsError:
         output_unit = output_unit.si
         # Resets scale only for units, not for value. Best we can do in that case
-    # TODO: check if composing result into units=preferred_unit_system is
-    # better option. In current way, we still only change scale etc. of unit
-
+    
     return (4.0 if ((signal1.frequencies[0].value >= 0.0)
                     or (signal1.frequencies[-1].value <= 0.0)) else 2.0  # Check if one-sided or not
             ) * np.real(
@@ -410,7 +408,7 @@ def optimized_inner_product(
     psd: FrequencySeries,
     optimize_time: bool,
     optimize_phase: bool,
-    min_dt_prec: Optional[float] = None,  # Or something like 1e-6 as default?
+    min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False
 ) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
     'peak_time'], u.Quantity | TimeSeries]]:
@@ -430,7 +428,19 @@ def optimized_inner_product(
         Second signal to put into inner product.
     psd : ~gwpy.frequencyseries.FrequencySeries
         Power spectral density to use in inner product.
-    TODO: describe optimize keywords briefly
+    optimize_time : boolean
+        Whether or not optimization over time shall be carried out.
+    optimize_phase : boolean
+        Whether or not optimization over phase shall be carried out.
+    min_dt_prec : float, optional, default = None
+        Maximum time spacing allowed in the time series that is
+        calculated via the inverse Fourier transform. Not only does this
+        determine the accuracy of the inferred optimal time shift, but
+        it also has substantial influence of the inferred phase because
+        this quantity can be very sensitive to even little changes in
+        the optimal time (of course, the match value is also affected by
+        all of this, but typically not as much as the other quantities
+        that have just been mentioned).
     return_opt_info : boolean, optional, default = False
         Whether or not to return a dictionary with additional
         information about the optimization results. Contains the full
@@ -483,9 +493,9 @@ def optimized_inner_product(
     assert ((allclose_quantity(signal1.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
              and allclose_quantity(signal2.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
              and allclose_quantity(psd.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0))
-            or (allclose_quantity(-signal1.f0, signal1.frequencies[-1], atol=signal1.df, rtol=0.0)
-                and allclose_quantity(-signal2.f0, signal2.frequencies[-1], atol=signal2.df, rtol=0.0)
-                and allclose_quantity(-psd.f0, psd.frequencies[-1], atol=psd.df, rtol=0.0))), \
+            or (allclose_quantity(-(signal1.f0 + signal1.df), signal1.frequencies[-1], atol=signal1.df.value, rtol=0.0)
+                and allclose_quantity(-(signal2.f0 + signal2.df), signal2.frequencies[-1], atol=signal2.df.value, rtol=0.0)
+                and allclose_quantity(-(psd.f0 + psd.df), psd.frequencies[-1], atol=psd.df.value, rtol=0.0))), \
         ('All signals must start either at f=0 or be symmetric around f=0, '
          'where the latter refers to the case of an odd sample size. For an '
          'even sample size, on the other hand, the number of samples for '
@@ -506,9 +516,9 @@ def optimized_inner_product(
     # Is perhaps because interpolate uses fft, which works best with powers of two
     try:
         assert_allclose_quantity(signal1.frequencies, signal2.frequencies,
-                                 atol=0.0, rtol=0.01)
+                                 atol=0.5*signal1.df.value, rtol=0.)
         assert_allclose_quantity(signal1.frequencies, psd.frequencies,
-                                 atol=0.0, rtol=0.01)
+                                 atol=0.5*signal1.df.value, rtol=0.)
     except ValueError:
         # Due to unequal sample size. Since this is automatically checked by
         # numpy, we can be sure that signal1.size = signal2.size = psd.size
@@ -516,6 +526,17 @@ def optimized_inner_product(
     
     # ----- Fourth step: computations -----
     dft_vals = (signal1 * signal2.conjugate() / psd)
+
+    if min_dt_prec is not None:
+        try:
+            min_dt_prec = u.Quantity(min_dt_prec, unit=1./frequ_unit)
+        except u.UnitConversionError:
+            # Conversion only fails if min_dt_prec is already Quantity and has
+            # non-matching unit, so we can assume that min_dt_prec.unit works
+            raise ValueError(
+                f'Need consistent units for `min_dt_prec` ({min_dt_prec.unit})'
+                f' and inverse frequency unit of signals ({1./frequ_unit}).'
+            )
 
     # Append zeros or bring into correct format so that ifft can be used.
     # The prefactor is added here already because it depends on the given
@@ -538,10 +559,10 @@ def optimized_inner_product(
         n_append = n_required - dft_vals.size
         
         full_dft_vals = 4.*np.append(dft_vals.value, np.zeros(n_append))
-        dt = (1. / (full_dft_vals.size*signal1.df)).si
     else:
         n_append = 0
         n_total = dft_vals.size
+        print(n_total)
         dt = 1. / (n_total*signal1.df)
 
         if min_dt_prec is None:
@@ -563,63 +584,32 @@ def optimized_inner_product(
             n_append_lower = n_append_upper = n_append//2
         else:
             # Odd means start or beginning is larger
-            if -dft_vals.f0 > dft_vals.frequencies[-1]:
-                n_append_lower = n_append//2
-                n_append_upper = n_append//2 + 1
-            else:
-                n_append_lower = n_append//2 + 1
-                n_append_upper = n_append//2
-
-        # dft_vals = np.append(np.append(np.zeros(n_append_lower), dft_vals.value),
-        #                      np.zeros(n_append_upper))
-
-        # dt = (1. / (dft_vals.size*signal1.df)).si
-        
-        # full_dft_vals = 2.*np.fft.ifftshift(dft_vals)
-
-
-        # if dft_vals.size % 2 == 0:
-        #     n_split = dft_vals.size//2 - 1
-        # else:
-        #     n_split = dft_vals.size//2
+            # if -dft_vals.f0 > dft_vals.frequencies[-1]:  # pragma: no cover
+            #     n_append_lower = n_append//2
+            #     n_append_upper = n_append//2 + 1
+            # else:
+            #     n_append_lower = n_append//2 + 1
+            #     n_append_upper = n_append//2
+            
+            # Via checks at beginning of function, we know that less
+            # values at positive frequencies
+            n_append_lower = n_append//2 + 1
+            n_append_upper = n_append//2
         
         n_split = dft_vals.size//2
         # Should actually work for all cases. For odd, this rounds down and
         # thus takes only until f=0 and for even, the positive ones are
         # expected to be one less than in number than negative
 
-
-        # full_dft_vals = 2.*np.fft.ifftshift(np.concatenate(
-        #     (np.zeros(n_append_lower), dft_vals.value, np.zeros(n_append_upper))
-        # ))
-        # Shouldn't we be able to avoid ifftshift call?
-
         full_dft_vals = 2.*np.concatenate(
             (dft_vals.value[n_split:], np.zeros(n_append_upper),
              np.zeros(n_append_lower), dft_vals.value[:n_split])
         )
 
-        # logger.info(dft_vals.frequencies[n_split:])
-        # logger.info(dft_vals.frequencies[:n_split])
-
-        dt = (1. / (full_dft_vals.size*signal1.df)).si
-        # full_dft_vals = 2.*np.fft.ifftshift(dft_vals.value)  # From before
-
-        # TODO: check when to take .value, in ifftshift or in appending
-    
     assert next_power_of_two(full_dft_vals.size) == full_dft_vals.size, \
         'Consistency check, not your fault if it fails.'
 
-    # TODO: not use .si, but .compose? Or at least try this?
-    # logger.info([full_dft_vals.size, np.log2(full_dft_vals.size)])
-
-    # logger.info(np.nonzero(full_dft_vals[full_dft_vals.size//2:]))
-    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals.value)[dft_vals.size//2:]))
-    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals)[dft_vals.size//2:]))
-
-    # logger.info(np.nonzero(full_dft_vals[:full_dft_vals.size//2]))
-    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals.value)[:dft_vals.size//2]))
-    # logger.info(np.nonzero(np.fft.ifftshift(dft_vals)[:dft_vals.size//2]))
+    dt = 1. / (full_dft_vals.size*signal1.df)
 
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
     try:
@@ -873,8 +863,8 @@ def get_default_opt_params(
     """
     Determine external parameters to optimize over for the given
     waveform configuration and generator. The "base set" consists of
-    'tc' and 'psi', but more might be added depending on the outputs of
-    `test_precessing` and `test_hm`.
+    'time' and 'phase', but more might be added depending on the outputs
+    of `test_precessing` and `test_hm`.
 
     Parameters
     ----------
@@ -889,7 +879,7 @@ def get_default_opt_params(
     list[str]
         List of waveform parameters to optimize over.
     """
-    default_opt_params = ['tc', 'psi']
+    default_opt_params = ['time', 'phase']
 
     if (use_phi_ref_and_phi_jl := test_precessing(wf_params)):
         default_opt_params += ['phi_ref', 'phi_jl']
@@ -910,9 +900,14 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
 ) -> tuple[FrequencySeries, FrequencySeries, dict[str, u.Quantity]]:
     r"""
     Maximize the overlap between two waveforms at the given point in the
-    parameter space. This is done by varying certain parameters for one
-    of the waveform generators while keeping them fixed for the other
-    waveform generator and then minimizing the mismatch (1-overlap).
+    parameter space. For the majority of parameters, this is done by
+    varying certain parameters for one of the waveform generators while
+    keeping them fixed for the other waveform generator and then
+    minimizing the mismatch (1-overlap). Two exceptions to this rule
+    exist: relative time and phase shifts (corresponding parameters are
+    mentioned in description of the `opt_params` argument). These are
+    optimized using the inner product itself, which allows to infer
+    the required shifts for these parameters simply by evaluating it.
 
     Parameters
     ----------
@@ -941,14 +936,12 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         Commonly used names for them are coalescence time and
         polarization angle.
 
-        Note that it is also possible to optimize over phase and time
+        Note that it is also possible to optimize over phase and/or time
         by enabling optimization over phase and time in the inner
         product function (by passing keyword arguments like
-        `optimize_time_and_phase=True`, will be given to inner product),
-        which can have a more desirable behaviour compared to passing
-        `'time'` and `'phase'` in `opt_params`. The corresponding result
-        will also be part of the output, despite potentially not being
-        part of `opt_params`.
+        `optimize_time_and_phase=True`, will be given to inner product)
+        The corresponding result will also be part of the output,
+        despite potentially not being part of `opt_params`.
         
     Returns
     -------
@@ -958,6 +951,16 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         `fixed_wf_generator` at `wf_params`, (ii) the optimized waveform
         generated by `vary_wf_generator` and (iii) a dictionary where
         the optimal values for all elements of `opt_params` are stored.
+
+    Notes
+    -----
+    When conducting tests using this function, it turned out to be
+    beneficial to use it with `optimize_time_and_phase=True` even if
+    no optimization over time and phase was desired. If no shifts in
+    those parameters were present, the function recovers this, but the
+    behaviour seems to be much more benefitial for the minimization
+    routine because the convergence worked for many cases where "raw"
+    optimizing over certain parameters (e.g. 'mass1') did not work.
     """
     wf1 = fixed_wf_generator(wf_params)
 
@@ -988,151 +991,159 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
         # time and phase indices are accessed frequently, thus store
         if 'tc' in _opt_params:
             time_index = np.argwhere(_opt_params == 'tc')[0,0]
+            inner_prod_kwargs['optimize_time'] = True
 
             if 'time' in _opt_params:
                 raise ValueError('Providing both `\'tc\'` and `\'time\'` is not permitted.')
         elif 'time' in _opt_params:
             time_index = np.argwhere(_opt_params == 'time')[0,0]
+            inner_prod_kwargs['optimize_time'] = True
         else:
             time_index = None
         
         if 'psi' in _opt_params:
             phase_index = np.argwhere(_opt_params == 'psi')[0,0]
+            inner_prod_kwargs['optimize_phase'] = True
 
             if 'phase' in _opt_params:
                 raise ValueError('Providing both `\'psi\'` and `\'phase\'` is not permitted.')
         elif 'phase' in _opt_params:
             phase_index = np.argwhere(_opt_params == 'phase')[0,0]
+            inner_prod_kwargs['optimize_phase'] = True
         else:
             phase_index = None
         
+        print(inner_prod_kwargs)
+
+        # If only time and/or phase shall be optimized, we can take shortcut
+        if (len(_opt_params) == 2 and time_index is not None and phase_index is not None
+            or len(_opt_params) == 1 and (time_index is not None or phase_index is not None)):
+            inner_prod_kwargs['optimize_time_and_phase'] = True
+            inner_prod_kwargs['return_opt_info'] = True
+            wf2 = vary_wf_generator(wf_params)
+
+            _match_val, opt_info = overlap(wf1, wf2, **inner_prod_kwargs)
+
+            logger.info('Optimization was conducted successfully. Remaining '
+                        f' waveform mismatch is {1.-_match_val:.5f}.')
+            
+            opt_params_results = {}
+            tc = opt_info['peak_time']
+            phic = opt_info['peak_phase']
+
+            # if ((time_opt := inner_prod_kwargs.get('optimize_time', False))
+            #     and (time_param := opt_params[time_index]) == 'time'):
+            if time_index is not None and (time_param := opt_params[time_index]) == 'time':
+                # Either time was given or optimization was turned on with no
+                # corresponding parameter in opt_params
+                opt_params_results['time'] = tc
+            # elif time_opt and time_param == 'tc':
+            elif time_index is not None and time_param == 'tc':
+                opt_params_results['tc'] = tc
+            else:
+                # No time optimization was carried out
+                pass
+
+            # if ((phase_opt := inner_prod_kwargs.get('optimize_phase', False))
+            #     and (phase_param := opt_params[phase_index]) == 'phase'):
+            if phase_index is not None and (phase_param := opt_params[phase_index]) == 'phase':
+                opt_params_results['phase'] = phic
+            # elif phase_opt and phase_param == 'psi':
+            elif phase_index is not None and phase_param == 'psi':
+                opt_params_results['psi'] = 0.5*phic
+            else:
+                # No phase optimization was carried out
+                pass
+
+            wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
+
+            return wf1, wf2, opt_params_results
+        
         # Check if optimization in inner product is carried out
+        # (can be given as equivalent input to )
         if inner_prod_kwargs.get('optimize_time_and_phase', False) \
             or inner_prod_kwargs.get('optimize_time', False) \
             or inner_prod_kwargs.get('optimize_phase', False):
             _inner_prod_is_optimized = True
-        else:
-            _inner_prod_is_optimized = False
-        
-        if _inner_prod_is_optimized and \
-            (time_index is not None or phase_index is not None):
-            # logger.info(
-            #     'Optimization in inner product is switched on, but so is '
-            #     'numerical optimization over time and/or phase. This will '
-            #     'most likely produce strange results.'
-            # )
 
-            logger.info(
-                'Optimization in inner product is switched on, but so is '
-                'numerical optimization over time and/or phase. Only the '
-                'former will be conducted.'
-            )
-
-            opt_params = opt_params.copy()  # Otherwise popping bad
+            _opt_params = opt_params.copy()  # Otherwise popping bad
 
             if time_index is not None:
-                opt_params.pop(time_index)
-                time_index = None
+                _opt_params.remove(opt_params[time_index])
             
             if phase_index is not None:
-                opt_params.pop(phase_index)
-                phase_index = None
+                _opt_params.remove(opt_params[phase_index])
             
-            _opt_params = np.array(opt_params)
-        
-        # For internal use, make sure only one name is used for
-        # time/tc and phase/psi. Reverted at the end
-        if time_index is not None:
-            _opt_params[time_index] = 'tc'
-
-        if phase_index is not None:
-            _opt_params[phase_index] = 'psi'
-
-        if len(_opt_params) == 2 and time_index is not None \
-            and phase_index is not None:
-            # Optimize over global time and phase shifts only. In that case,
-            # one can make things much faster by generating the waveform
-            # beforehand and just multiplying with phase
-            wf2 = vary_wf_generator(wf_params)
-
-            def wf2_shifted(args):
-                tc, psi = args[time_index], args[phase_index]
-                return wf2 * np.exp(-2.j*np.pi*wf2.frequencies.value*tc + 2.j*psi)
+            _opt_params = np.array(_opt_params)
         else:
-            def wf2_shifted(args):
-                wf_args = wf_params | {param: args[i]*wf_params[param].unit for i, param in enumerate(_opt_params) if (param != 'tc' and param != 'psi')}
-                tc = wf_args.pop('tc', 0.)
-                psi = wf_args.pop('psi', 0.)
-                wf2 = vary_wf_generator(wf_args)
-                return wf2 * np.exp(-2.j*np.pi*tc*wf2.frequencies.value + 2.j*psi)
+            _inner_prod_is_optimized = False
+    
+    # We only get to this point if opt_params is list of parameters
+    def wf2_shifted(args):
+        wf_args = wf_params | {param: args[i]*wf_params[param].unit
+                               for i, param in enumerate(_opt_params)}
+        return vary_wf_generator(wf_args)
 
+    inner_prod_kwargs['return_opt_info'] = False
+    # Ensure overlap returns number, allows for more convenient loss definition
     def loss(args):
         _match = overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
-        if isinstance(_match, u.Quantity):
-            return 1.-_match
-        else:
-            return 1.-_match[0]
+        return 1.-_match
 
-    init_guess = [wf_params[param].value if (param != 'tc' and param != 'psi') else 0. for param in _opt_params]
-    
-    # if phase_index is not None and 'phi_ref' in _opt_params:
-    #     init_guess[phase_index] = 0.1
-    #     init_guess[np.argwhere(_opt_params == 'phi_ref')] = -0.1
-    # Does not even seem to be necessary anymore, default selection makes sure
-    # this is only done if needed
+    init_guess = [wf_params[param].value for param in _opt_params]
     
     bounds = len(_opt_params)*[(None, None)]
-    if phase_index is not None:
-        bounds[phase_index] = (-np.pi, np.pi)
-        # bounds[phase_index] = (-2.*np.pi, 2.*np.pi)
     if 'phi_ref' in _opt_params:
         bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-np.pi, np.pi)
         # bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-2.*np.pi, 2.*np.pi)
-    # At some point during testing, 2pi was better. But pi should be sufficient
-    # because we use twice of this value each time. In principle, 0 to pi
-    # should be sufficient as well because we cover full range 0 to 2pi then,
-    # but if gradient points to negative phase values, but we bound there,
-    # no optimization will be reached, so we allow for same negative range
+
+    # TODO: maybe also set bounds for f_ref for example?
     
     result = minimize(fun=loss, x0=init_guess, bounds=bounds,
-                      method='Nelder-Mead')#, tol=1e-6, options=dict(fatol=1e-6, xatol=1e-6))
-    # fatol is tolerable change in fun over subsequent iterations that
-    # indicates convergence. 1e-5 should be sufficient
-    # -> does not change behaviour much, so we just let automatic do its magic
-
-    opt_params_results = {param: result.x[i] for i, param in enumerate(opt_params)}
+                      method='Nelder-Mead')
+    # If possible, will find parameters so that mismatch <= 1e-5
+    
+    opt_params_results = {param: result.x[i]
+                          for i, param in enumerate(_opt_params)}
     for param, param_val in wf_params.items():
         if param in opt_params_results:
             opt_params_results[param] *= param_val.unit
 
-    # Add units to phase, time shifts and potentially revert renaming
-    if time_index is not None:
-        opt_params_results[opt_params[time_index]] *= u.s
-
-    if phase_index is not None:
-        opt_params_results[opt_params[phase_index]] *= u.rad
-
-        if opt_params[phase_index] == 'phase':
-            opt_params_results['phase'] *= 2
-
     logger.info(result.message
                 + f' Remaining waveform mismatch is {result.fun:.5f}.')
     
+    wf2 = wf2_shifted(result.x)
+
     if _inner_prod_is_optimized:
         # For return of truly optimized waveform, time and phase have to
         # be optimized to respective values of optimized inner product result
-        wf2 = wf2_shifted(result.x)
 
         _, opt_info = inner_product(wf1, wf2, **(inner_prod_kwargs | {'return_opt_info': True}))
-        opt_params_results['time'] = tc = opt_info['peak_time']
-        opt_params_results['phase'] = phic = opt_info['peak_phase']
+        tc = opt_info['peak_time']
+        phic = opt_info['peak_phase']
+
+        if time_index is not None and (time_param := opt_params[time_index]) == 'time':
+            # Either time was given or optimization was turned on with no
+            # corresponding parameter in opt_params
+            opt_params_results['time'] = tc
+        elif time_index is not None and time_param == 'tc':
+            opt_params_results['tc'] = tc
+        else:
+            # No time optimization was carried out
+            pass
+
+        if phase_index is not None and (phase_param := opt_params[phase_index]) == 'phase':
+            # Either phase was given or optimization was turned on with no
+            # corresponding parameter in opt_params
+            opt_params_results['phase'] = phic
+        elif phase_index is not None and phase_param == 'psi':
+            opt_params_results['psi'] = 0.5*phic
+        else:
+            # No phase optimization was carried out
+            pass
+        
+        # TODO: only put in opt_params_results if optimize_phase, optimize_time are True
 
         wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
-        # NOTE: if only time or phase is optimized, the respective other
-        # value tc/phic will be zero, so it has no influence in that case
-
-        # TODO: check if this is correct!!! Or if we should do minus of peak_phase or so
-    else:
-        wf2 = wf2_shifted(result.x)
 
     return wf1, wf2, opt_params_results

@@ -107,6 +107,10 @@ addopts = [
   '--doctest-modules',
 ]
 
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+
 filterwarnings = [
   'ignore:pkg_resources is deprecated as an API..*',
   # ignore: Deprecated call to `pkg_resources.declare_namespace('ligo')`..*  ; Including string 'ligo' does not work

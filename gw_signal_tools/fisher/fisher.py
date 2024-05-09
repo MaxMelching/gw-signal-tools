@@ -511,26 +511,29 @@ class FisherMatrix:
         if isinstance(optimize_fisher, str):
             optimize_fisher = [optimize_fisher]
         
+
+        # Note: we want to use same kwargs for inner product as for
+        # calculation of Fisher matrix here, have to be extracted from
+        # metadata property
+        # -> changed this now, we might want to optimize over some stuff here
+        from inspect import signature
+        fisher_args = list(signature(fisher_matrix).parameters)
+        fisher_args.remove('inner_prod_kwargs')
+        init_inner_prod_kwargs = self.metadata.copy()
+
+        # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
+        for key in fisher_args:
+            init_inner_prod_kwargs.pop(key, None)
+            
         if len(inner_prod_kwargs) > 0:
             # Update keywords from initial input to the instance
-
-            # Note: we want to use same kwargs for inner product as for
-            # calculation of Fisher matrix here, have to be extracted from
-            # metadata property
-            # -> changed this now, we might want to optimize over some stuff here
-            from inspect import signature
-            fisher_args = list(signature(fisher_matrix).parameters)
-            fisher_args.remove('inner_prod_kwargs')
-            init_inner_prod_kwargs = self.metadata.copy()
-
-            # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
-            for key in fisher_args:
-                try:
-                    init_inner_prod_kwargs.pop(key)
-                except KeyError:
-                    pass
-            
             inner_prod_kwargs = init_inner_prod_kwargs | inner_prod_kwargs
+        else:
+            inner_prod_kwargs = init_inner_prod_kwargs
+        # Not a good idea I think now. This will lead to optimization in case
+        # e.g. optimized inner product is used for derivative overlap calculation,
+        # which is not desirable behaviour
+        # -> is this a robust argument?
 
         optimization_info = {}
 
@@ -578,7 +581,7 @@ class FisherMatrix:
                 opt_wf_params,
                 self.params_to_vary,
                 self.wf_generator,
-                return_info=True
+                **(self.metadata | {'return_info': True} | inner_prod_kwargs)
             )
 
             if optimize_fisher is not None:
@@ -671,7 +674,9 @@ class FisherMatrix:
                     get_waveform_derivative_1D_with_convergence(
                         opt_fisher.wf_params_at_point,
                         param_to_vary,
-                        opt_fisher.wf_generator
+                        opt_fisher.wf_generator,
+                        # TODO: pass inner_prod_kwargs or even opt_fisher.metadata as a whole
+                        **opt_fisher.metadata
                     ) for param_to_vary in opt_fisher.params_to_vary
                 ]
 
@@ -710,29 +715,21 @@ class FisherMatrix:
             # for i, param in enumerate(params):
             for param in params:
                 i = opt_fisher.get_param_indices(param)
-                # wf_param_val = opt_fisher.wf_params_at_point.get(param, 0.)
-                # # 0.0 for keys time and phase, where values we found are
-                # # already relative differences
                 
-                # opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
-                # # Value remains 0.0 if no corresponding key in opt_vals
-                try:
+                # Must be a time or phase parameter
+                if param in ['tc', 'time']:
+                    # opt_bias[i] = tc
+                    opt_bias[i] = -tc
+                elif param == 'psi':
+                    # opt_bias[i] = psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = -psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                elif param == 'phase':
+                    # opt_bias[i] = 2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = -2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                else:
                     wf_param_val = opt_fisher.wf_params_at_point[param]
                     # opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
                     opt_bias[i] = wf_param_val - opt_vals.get(param, wf_param_val)
-                except KeyError:
-                    # Must be a time or phase parameter
-                    if param in ['tc', 'time']:
-                        # opt_bias[i] = tc
-                        opt_bias[i] = -tc
-                    elif param == 'psi':
-                        # opt_bias[i] = psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                        opt_bias[i] = -psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                    elif param == 'phase':
-                        # opt_bias[i] = 2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                        opt_bias[i] = -2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                    else:
-                        raise ValueError('Must not happen')
             
             # TODO: account for correlations with parameters that are
             # not from opt_params, they might still change

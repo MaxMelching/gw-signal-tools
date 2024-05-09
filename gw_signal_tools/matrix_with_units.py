@@ -727,7 +727,7 @@ class MatrixWithUnits:
             lum = relative_luminance(color)
             text_color = '.15' if lum > .408 else 'w'
 
-            plt.text(
+            ax.text(
                 x=j+0.5,
                 y=i+0.5,
                 s=f'{val:.3e}$\\,${unit:latex}',

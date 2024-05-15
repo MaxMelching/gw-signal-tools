@@ -714,7 +714,9 @@ class MatrixWithUnits:
         if ax is None:
             fig, ax = plt.subplots()
 
-        mesh = ax.pcolormesh(np.log10(np.abs(self)), cmap='magma')
+        non_zero_mask = np.not_equal(self.value, 0.)
+        mesh = ax.pcolormesh(np.log10(np.abs(self), where=non_zero_mask),
+                             cmap='magma')
         mesh.update_scalarmappable()
 
         ax.invert_yaxis()  # Otherwise indices would start at bottom

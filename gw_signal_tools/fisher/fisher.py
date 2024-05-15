@@ -66,6 +66,13 @@ class FisherMatrix:
         if a systematic error shall be computed, where the Fisher
         matrix might be computed in some optimized point and not the one
         given by `wf_params_at_point`).
+    metadata :
+        All other keyword arguments will be treated as input for
+        metadata of the Fisher matrix. This metadata consists of
+        information relevant for derivative calculation. In particular,
+        all settings for the inner products that are involved all the
+        time can be specified here (e.g. the power spectral density or
+        frequency range).
 
     See also
     --------
@@ -187,13 +194,25 @@ class FisherMatrix:
         """
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
-            return self._fisher_inverse  # type: ignore
+            self._fisher_inverse
+            # return self._fisher_inverse  # type: ignore
             # Explanation of ignore: neither can type be inferred nor hinted
         except AttributeError:
             # Inverse is called for the first time or has been deleted
             self._fisher_inverse = MatrixWithUnits.inv(self.fisher)
 
-            return self._fisher_inverse
+            # return self._fisher_inverse
+        
+        if (cond_numb := self.cond()) > 1e15:
+            # Conservative threshold choice for double precision,
+            # as quoted e.g. in gwbench paper
+            logger.info(
+                f'This Fisher matrix has a condition number of {cond_numb}, '
+                'meaning it is ill-conditioned. Keep this in mind for any '
+                'results based on it.'
+            )
+        
+        return self._fisher_inverse
     
     def __getattr__(self, attr):
         if attr == 'fisher' or attr == '_fisher':
@@ -463,6 +482,12 @@ class FisherMatrix:
         compute the systematic error `\Delta \theta = \theta - \theta_2`
         where `\theta` is the maximum.
 
+        Note that for this function, `self.wf_params` corresponds to the
+        best-fitting point :math:`\theta_\mathrm{bf}` inferred using
+        `self.wf_generator`, and not the "true" parameters
+        :math:`\theta_\mathrm{tr}` of the signal injected using
+        `reference_wf_generator`.
+
         Parameters
         ----------
         reference_wf_generator : Callable[[dict[str, ~astropy.units.
@@ -498,7 +523,11 @@ class FisherMatrix:
         return_opt_info : bool, optional, default = True
         inner_prod_kwargs : 
             Key word arguments used for the calculations here, i.e. for
-            waveform difference and more.
+            waveform difference and more. These will be combined with
+            the inner product arguments that have been passed to the
+            Fisher matrix instance (but the arguments passed to the
+            routine have a higher priority, i.e. they will overwrite
+            that have already been given to the Fisher matrix).
 
         Returns
         -------
@@ -699,7 +728,7 @@ class FisherMatrix:
             # Take all parameters
             params = opt_fisher.params_to_vary
             param_indices = len(params)*[True]
-        
+
         fisher_bias = (fisher_inverse @ vector)[param_indices]
 
         # Bias from Fisher calculation might not be the only one we have
@@ -721,18 +750,19 @@ class FisherMatrix:
                 
                 # Must be a time or phase parameter
                 if param in ['tc', 'time']:
-                    # opt_bias[i] = tc
-                    opt_bias[i] = -tc
+                    opt_bias[i] = tc
+                    # opt_bias[i] = -tc
                 elif param == 'psi':
-                    # opt_bias[i] = psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                    opt_bias[i] = -psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    # opt_bias[i] = -psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
                 elif param == 'phase':
-                    # opt_bias[i] = 2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
-                    opt_bias[i] = -2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = 2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    # opt_bias[i] = -2.*psi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
                 else:
-                    wf_param_val = opt_fisher.wf_params_at_point[param]
-                    # opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
-                    opt_bias[i] = wf_param_val - opt_vals.get(param, wf_param_val)
+                    # wf_param_val = opt_fisher.wf_params_at_point[param]
+                    wf_param_val = self.wf_params_at_point[param]
+                    opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
+                    # opt_bias[i] = wf_param_val - opt_vals.get(param, wf_param_val)
             
             # TODO: account for correlations with parameters that are
             # not from opt_params, they might still change

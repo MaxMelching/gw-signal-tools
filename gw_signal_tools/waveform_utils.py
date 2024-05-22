@@ -683,10 +683,9 @@ def get_signal_at_target_frequs(
 
 # ---------- Wrapper functions for strain generation ----------
 def get_strain(
-    intrinsic_params: dict[str, float | u.Quantity],
+    params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
     generator: Any,
-    extrinsic_params: Optional[dict[str, str | u.Quantity]] = None,
     mode: Optional[Literal['plus', 'cross', 'mixed']] = None
 ) -> FrequencySeries | TimeSeries:
     """
@@ -695,22 +694,23 @@ def get_strain(
 
     Parameters
     ----------
-    intrinsic_params : dict[str, float or ~astropy.units.Quantity]
+    params : dict[str, float or ~astropy.units.Quantity]
         Parameters to use for waveform generation. Is passed straight to
         `~lalsimulation.gwsignal.core.waveform.GenerateTDWaveform` or
         `~lalsimulation.gwsignal.core.waveform.GenerateFDWaveform`,
         depending on the value of `domain`.
+
+        Moreover, extrinsic parameters as accepted by
+        `~lalsimulation.gwsignal.core.gw.GravitationalWavePolarizations.
+        strain` can be passed in the same dictionary. If none of them
+        are given, no projection on a detector is performed and instead,
+        the output is generated based on the given `mode`.
     domain : Literal['time', 'frequency']
         Determines domain that waveform is generated in.
     generator : Any
         Instance of `~lalsimulation.gwsignal.core.waveform.
         LALCompactBinaryCoalescenceGenerator` class that is used for
         waveform generation.
-    extrinsic_params : dict[str, str or ~astropy.units.Quantity],
-    optional, default = None
-        All arguments required to call `~lalsimulation.gwsignal.core.gw.
-        GravitationalWavePolarizations.strain`.
-        If None, no projection on a detector is performed.         
     mode : Literal['plus', 'cross', 'mixed'], optional, default = None
         If output is not projected on a detector (i.e.
         `extrinsic_params` is `None`), this argument determines which
@@ -733,17 +733,27 @@ def get_strain(
         raise ValueError(
             'Invalid domain, select either `\'time\'` or `\'frequency\'`.'
         )
-
-    if extrinsic_params is not None:
-        expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
-
-        if not all(param in extrinsic_params for param in expected_extr_params):
+    
+    expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
+    # extr_params_mask = np.isin(params.keys(), expected_extr_params, assume_unique=True)
+    extr_params_mask = [param in params for param in expected_extr_params]
+    if np.any(extr_params_mask):
+        if not np.all(extr_params_mask):
             raise ValueError('Need complete set of extrinsic parameters: '
                              + f'{expected_extr_params}')
-
+        
         return_detector_output = True
+        intrinsic_params = params.copy()
+        extrinsic_params = {}
+
+        for param in expected_extr_params:
+            extrinsic_params[param] = intrinsic_params.pop(param)
+
+        # TODO: check if copy is less efficient than looping over params
+        # and putting in intrinsic_params or extrinsic_params using .get
     else:
         return_detector_output = False
+        intrinsic_params = params
     
     if mode is None:
         mode = 'plus'

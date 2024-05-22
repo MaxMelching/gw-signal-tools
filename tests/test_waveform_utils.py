@@ -742,20 +742,20 @@ def test_get_strain_extrinsic():
     
     from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
 
-    ht_test = get_strain(wf_params, 'time', generator=gen,
-                         extrinsic_params=ext_params)
+    params = wf_params | ext_params
+    ht_test = get_strain(params, 'time', generator=gen)
+    ht_test = get_strain(params, 'time', generator=gen)
     assert_quantity_equal(
         GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params),
         ht_test
     )
 
-    hf_test = get_strain(wf_params, 'frequency', generator=gen,
-                         extrinsic_params=ext_params)
+    hf_test = get_strain(wf_params | ext_params, 'frequency', generator=gen)
     assert_quantity_equal(
         GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params),
         hf_test
     )
-
+test_get_strain_extrinsic()
 class ErrorRaising(unittest.TestCase):
     def test_domain_checking(self):
         with self.assertRaises(ValueError):
@@ -767,12 +767,7 @@ class ErrorRaising(unittest.TestCase):
     
     def test_extr_params_checking(self):
         with self.assertRaises(ValueError):
-            get_strain(wf_params, 'time', generator=gen, mode='mode',
-                       extrinsic_params=wf_params)
-
-        with self.assertRaises(ValueError):
-            get_strain(wf_params, 'time', generator=gen, mode='mode',
-                       extrinsic_params={'psi': 0.5*u.rad})
+            get_strain(wf_params | {'psi': 0.5*u.rad}, 'time', generator=gen)
 
 #%% ---------- Testing mass rescaling ----------
 

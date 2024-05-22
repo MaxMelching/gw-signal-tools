@@ -376,7 +376,7 @@ def get_waveform_derivative_1D_with_convergence(
     """
     # ----- Check defaults -----
     if step_sizes is None:
-        step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+        step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
         # NOTE: keeping 1e-2 as default start_step_size is most likely too
         # high for relative ones. But depending on point that derivative is
         # evaluated in, absolute step sizes are used sometimes, too, and in
@@ -398,7 +398,7 @@ def get_waveform_derivative_1D_with_convergence(
                 convergence_threshold = 0.001
             case 'mismatch':
                 convergence_threshold = 0.001
-                
+
     # ----- Calculation -----
     if (param_to_vary == 'time' or param_to_vary == 'tc'):
         wf = wf_generator(wf_params_at_point)
@@ -533,6 +533,8 @@ def get_waveform_derivative_1D_with_convergence(
             if (len(convergence_vals) >= 2
                 and (convergence_vals[-2] <= convergence_threshold)
                 and (convergence_vals[-1] <= convergence_threshold)):
+                # Double checking does not seem to lead to serious loss
+                # in performance for most points, thus we keep
                 is_converged = True  # Remains true, is never set to False again
 
                 if break_upon_convergence:
@@ -584,8 +586,11 @@ def get_waveform_derivative_1D_with_convergence(
             f'for parameter `{param_to_vary}` using convergence check method '
             f'`{convergence_check}`, even after {refine_numb} refinements of '
             'step sizes. The minimal value of the criterion was '
-            f'{convergence_vals[min_dev_index]}, which is above the selected '
-            f'threshold of {convergence_threshold}. '
+            f'{convergence_vals[min_dev_index]}, ' + ((f'which is above the '
+            f'selected threshold of {convergence_threshold}. ')
+            if convergence_vals[min_dev_index] > convergence_threshold else (
+            f'which is below the selected threshold of {convergence_threshold}'
+            ', but the previous and following value were not.')) +
             'If you are not satisfied with the result (for an eye test, you '
             'can plot the `convergence_plot` value returned in case '
             '`return_info=True`), consider changing the initial step sizes.'
@@ -596,7 +601,8 @@ def get_waveform_derivative_1D_with_convergence(
         ax = fig.subplots(nrows=2, sharex=True)
 
         for i in range(len(derivative_vals)):
-            ax[0].plot(derivative_vals[i].real, '--', label=f'{step_sizes[i]:.6f}')
+            ax[0].plot(derivative_vals[i].real, '--',
+                       label=f'{step_sizes[i]:.3e}')
             ax[1].plot(derivative_vals[i].imag, '--')
             # No label for second because otherwise, everything shows up twice
             # in figure legend
@@ -673,16 +679,28 @@ def get_waveform_derivative_1D(
         step_size = u.Quantity(step_size, unit=param_center_val.unit)
     else:
         step_size = u.Quantity(step_size * param_center_val, unit=param_center_val.unit)
-    param_vals = param_center_val + np.array([-2., -1., 1., 2.]) * step_size
+    
+    if not (param_to_vary == 'mass_ratio'
+            and (param_center_val + 2*step_size) > 1.):
+        param_vals = param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
+        waveforms = [
+            wf_generator(wf_params_at_point | {param_to_vary: param_val}
+                        ) for param_val in param_vals
+        ]
 
-    waveforms = [
-        wf_generator(wf_params_at_point | {param_to_vary: param_val}
-                    ) for param_val in param_vals
-    ]
+        deriv_series = (waveforms[0] - 8.*waveforms[1]
+                        + 8.*waveforms[2] - waveforms[3])
+        deriv_series /= 12.*step_size
+    else:
+        param_vals = param_center_val + np.array([0., -1.])*step_size
 
-    deriv_series = waveforms[0] - 8.0 * waveforms[1] + 8.0 * waveforms[2] - waveforms[3]    
-    deriv_series /= 12.0 * step_size
+        waveforms = [
+            wf_generator(wf_params_at_point | {param_to_vary: param_val}
+                        ) for param_val in param_vals
+        ]
+
+        deriv_series = (waveforms[0] - waveforms[1]) / step_size
 
     # Central Difference -> make this option in function?
     # deriv_series = waveforms[1] - waveforms[0]

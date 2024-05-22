@@ -23,6 +23,16 @@ gw-signal-tools
 
    tutorials/tips.rst
 
+.. nbgallery::
+   :titlesonly:
+
+   tutorials/inner_product_tests.ipynb
+   tutorials/derivative_tests.ipynb
+   tutorials/fisher_tests.ipynb
+   tutorials/waveform_conversion_tests.ipynb
+   tutorials/units.ipynb
+   tutorials/performance_tests.ipynb
+
 .. toctree::
    :maxdepth: 2
    :caption: API

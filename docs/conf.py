@@ -36,16 +36,17 @@ extensions = [
     'sphinx.ext.napoleon',  # support other docstring formats
     'sphinx.ext.mathjax',
     'sphinx.ext.intersphinx',
+    'sphinx.ext.autosectionlabel',  # Enables :ref:`section name`
     'sphinxcontrib.programoutput',
-    # 'numpydoc',
+    'numpydoc',
     'm2r2',  # including markdown files
     # 'sphinx_mdinclude',  # including markdown files -> then comment m2r2 -> seems to work much better -> but not compatible with nbsphinx...
-    # 'nbsphinx',
-    # 'nbsphinx_link'
+    'nbsphinx',
+    'nbsphinx_link'
 ]
 
-# nbsphinx_execute = 'never'
-# nbsphinx_allow_errors = True
+nbsphinx_execute = 'never'
+nbsphinx_allow_errors = True
 
 
 templates_path = ['_templates']

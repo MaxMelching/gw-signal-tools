@@ -624,7 +624,7 @@ def get_signal_at_target_frequs(
         If `fill_val` has unit incompatible with `signal.unit`.
 
     See also
-    -----
+    --------
     numpy.interp : Interpolation and padding routine used.
     gw_signal_tools.restrict_f_range : Filling routine used.
     """

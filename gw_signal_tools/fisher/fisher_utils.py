@@ -152,21 +152,25 @@ def fisher_matrix(
         Criterion used to asses stability of the result. Currently, two
         are available:
 
-        - diff_norm: calculates the norm of the difference of two
-        consecutive derivatives (using the function `~gw_signal_tools.
-        inner_product.norm`). This is compared to the norm of the most
-        recent derivative and if their fraction is smaller than some
-        threshold (specified in `convergence_threshold`), the result
-        is taken to be converged because the differences become
-        negligible on the relevant scales (provided by the norm of
-        the derivative).
-        - mismatch: calculates the mismatch between consecutive
-        derivatives (also using the function `~gw_signal_tools.
-        inner_product.norm`), which is defined as :math:`1 - overlap`.
-        Again, the result is taken to be converged if this mismatch
-        falls under a certain threshold, provided by
-        `convergence_threshold`.
-            
+            * diff_norm: calculates the norm of the difference of two
+              consecutive derivatives (using the function
+              `~gw_signal_tools.inner_product.norm`). This is compared
+              to the norm of the most recent derivative and if their
+              fraction is smaller than some threshold (specified in
+              `convergence_threshold`), the result is taken to be
+              converged because the differences become negligible on the
+              relevant scales (provided by the norm of the derivative).
+            * mismatch: calculates the mismatch between consecutive
+              derivatives (also using the function `~gw_signal_tools.
+              inner_product.norm`), which is defined as `1-overlap`.
+              Again, the result is taken to be converged if this mismatch
+              falls under a certain threshold, provided by
+              `convergence_threshold`.
+
+        For larger differences, they might produce different results,
+        but their behaviour for small distances should be very similar
+        because they coincide in the infinitesimal limit (they induce
+        the same metric).
     convergence_threshold : float, optional, default = None
         Threshold that is used to decide if result is converged. This
         will be the case once the value of the criterion specified in
@@ -330,26 +334,25 @@ def get_waveform_derivative_1D_with_convergence(
         Criterion used to asses stability of the result. Currently, two
         are available:
 
-        - diff_norm: calculates the norm of the difference of two
-        consecutive derivatives (using the function `~gw_signal_tools.
-        inner_product.norm`). This is compared to the norm of the most
-        recent derivative and if their fraction is smaller than some
-        threshold (specified in `convergence_threshold`), the result
-        is taken to be converged because the differences become
-        negligible on the relevant scales (provided by the norm of
-        the derivative).
-        - mismatch: calculates the mismatch between consecutive
-        derivatives (also using the function `~gw_signal_tools.
-        inner_product.norm`), which is defined as `1 - overlap`.
-        Again, the result is taken to be converged if this mismatch
-        falls under a certain threshold, provided by
-        `convergence_threshold`.
+            * diff_norm: calculates the norm of the difference of two
+              consecutive derivatives (using the function
+              `~gw_signal_tools.inner_product.norm`). This is compared
+              to the norm of the most recent derivative and if their
+              fraction is smaller than some threshold (specified in
+              `convergence_threshold`), the result is taken to be
+              converged because the differences become negligible on the
+              relevant scales (provided by the norm of the derivative).
+            * mismatch: calculates the mismatch between consecutive
+              derivatives (also using the function `~gw_signal_tools.
+              inner_product.norm`), which is defined as `1-overlap`.
+              Again, the result is taken to be converged if this mismatch
+              falls under a certain threshold, provided by
+              `convergence_threshold`.
 
         For larger differences, they might produce different results,
-        but their behaviour for small distances should be very simliar
+        but their behaviour for small distances should be very similar
         because they coincide in the infinitesimal limit (they induce
         the same metric).
-
     convergence_threshold : float, optional, default = None
         Threshold that is used to decide if result is converged. This
         will be the case once the value of the criterion specified in
@@ -613,7 +616,7 @@ def get_waveform_derivative_1D_with_convergence(
             loc='center left'
         )
         
-        fig.suptitle(f'Parameter: {param_to_vary}')
+        fig.suptitle(f'Parameter: {param_to_vary}')  # TODO: use latexparams here?
         ax[1].set_xlabel('$f$')
         ax[0].set_ylabel('Derivative Re')
         ax[1].set_ylabel('Derivative Im')

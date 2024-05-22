@@ -180,8 +180,9 @@ def linearized_distance(
     here is a simple linearization around the point that distances are
     calculated with respect to (:math:`\theta_1`),
 
-    .. math:: ||h_1 - h_2|| = ||h(\theta_1) - h(\theta_2)||
-    \simeq \sqrt{\Gamma_{\mu \nu} (\theta_1 - \theta_2)^2}
+    .. math::
+        ||h_1 - h_2|| = ||h(\theta_1) - h(\theta_2)||
+        \simeq \sqrt{\Gamma_{\mu \nu} (\theta_1 - \theta_2)^2}
 
     where :math:`\Gamma_{\mu \nu}` is the Fisher matrix (evaluated at
     :math:`\theta_1`).

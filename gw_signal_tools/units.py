@@ -65,13 +65,34 @@ cd = _si.cd
 K = _si.K
 mol = _si.mol
 
-bases = {pc, s, Msun, A, cd, rad, K, mol}
-# bases = {Mpc, s, Msun, A, cd, rad, K, mol}
-
-
 import gwpy.detector.units  # Adds strain to astropy units
 # -> custom adding would cause problems when GWPy and this package are loaded
-strain = u.Unit('strain')
+u.get_current_unit_registry()._registry.pop('strain', None)
+# Potential problem is that strain was equivalent to
+# dimensionless_unscaled at some point. Avoid by custom definition.
+u.def_unit('strain', namespace=_ns)
+u.add_enabled_units(_ns)
+
+strain = u.strain = u.Unit('strain')  # For convenient access
+strain.si = strain
+
+# Following seems weird (importing this file as a module), thus commented
+# import gw_signal_tools.units as gw_units
+# u.add_enabled_units(gw_units)
+
+# strain = gw_units.Unit('strain')
+# u.strain = gw_units.Unit('strain')
+
+# Testing with bases
+# bases = {pc, s, Msun, A, cd, rad, K, mol, strain}
+# bases = {pc, s, Msun, A, cd, rad, K, mol}
+# bases = {Mpc, s, Msun, A, cd, rad, K, mol}
+
+# u.add_enabled_units(_ns)
+
+
+bases = {pc, s, Msun, A, cd, rad, K, mol, strain}
+# Definitely needed. Other stuff above pretty much useless, does not work as intended
 
 
 u.set_enabled_equivalencies(u.dimensionless_angles())

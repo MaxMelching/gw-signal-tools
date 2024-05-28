@@ -8,7 +8,7 @@ import gw_signal_tools.units as gw_signal_tools_units
 
 
 # Could also test with units=[u.astrophys, gw_signal_tools_units]
-@pytest.mark.parametrize('unit', [u.pc, u.s, u.Msun, u.A, u.cd, u.rad, u.K, u.mol])
+@pytest.mark.parametrize('unit', [u.pc, u.s, u.Msun, u.A, u.cd, u.rad, u.K, u.mol, u.strain])
 def test_pure_base_units(unit):
     if unit == u.rad:
         assert unit.to_system(gw_signal_tools_units)[0] == u.dimensionless_unscaled
@@ -16,6 +16,8 @@ def test_pure_base_units(unit):
     else:
         assert unit.to_system(gw_signal_tools_units)[0] == unit
         assert unit.compose(units=gw_signal_tools_units)[0] == unit
+    
+    unit.si  # Is fallback option, access must work
 
 def test_composite_units():
     test_unit = u.Hz**2 * u.s
@@ -63,7 +65,7 @@ def test_composite_units():
     assert test_unit_converted1 == (42 * u.Gpc * u.Msun)
 
 def test_strain_definition():
-    strain1 = u.Unit('strain')
+    strain1 = u.Unit('strain')  # Same as u.strain
 
     strain2 = gw_signal_tools_units.strain
 

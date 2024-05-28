@@ -1,20 +1,21 @@
 # ----- Make all important functions/classes from module available here -----
-from .fisher_utils import (
-    num_diff, get_waveform_derivative_1D, 
+from .fisher_utils import (  # noqa: F401
+    num_diff, get_waveform_derivative_1D,
     get_waveform_derivative_1D_with_convergence,
     fisher_matrix
 )
-from .fisher import FisherMatrix
+from .fisher import FisherMatrix  # noqa: F401
 # from .matrix_with_units import MatrixWithUnits  # Do this? 
 
-from .distances import distance, linearized_distance
-# Order important. We import phenomx_generator there, must already be defined
+from .distances import distance, linearized_distance  # noqa: F401
+
 
 __doc__ = """
 A subpackage of `gw_signal_tools`, containing a Fisher matrix
 implementation along with various funcions based on this (for instance
 to calculate statistical and systematic errors).
 """
+
 
 # Dictionary fo get nicer display of parameters in Fisher plotting method
 latexparams = {

@@ -2,9 +2,6 @@
 import unittest
 
 # ----- Third Party Imports -----
-import numpy as np
-from numpy.testing import assert_allclose
-
 import matplotlib.pyplot as plt
 
 import astropy.units as u
@@ -15,13 +12,11 @@ import pytest
 
 # ----- Local Package Imports -----
 from gw_signal_tools.waveform_utils import get_wf_generator
-from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
-    fisher_matrix, FisherMatrix, distance, linearized_distance
+    distance, linearized_distance
 )
 from gw_signal_tools.test_utils import (
-    allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series
+    assert_allclose_quantity, assert_allclose_series
 )
 from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)

@@ -4,14 +4,18 @@ from typing import Optional, Literal, Callable
 # ---------- Third Party Imports ----------
 import numpy as np
 import astropy.units as u
-
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 
 # ---------- Local Package Imports ----------
 from ..fisher import FisherMatrix
 from ..inner_product import inner_product, norm, overlap
-from ..matrix_with_units import MatrixWithUnits
+
+
+__doc__ = """
+Module that allows convenient calculation of various distances that can
+be defined on signal manifolds in gravitational wave data analysis.
+"""
 
 
 def distance(
@@ -194,27 +198,27 @@ def linearized_distance(
         principle, this should be just one parameter. However, giving
         more than one is permitted as long as they are also in
         `params_to_project`.
-    param_vals : ~astropy.units.Quantity | float | list[~astropy.units.
-    Quantity] | list[float]
+    param_vals : ~astropy.units.Quantity | float | list[~astropy.units.Quantity] | list[float]
         Interval over which distances for different values of
-        `param_to_vary` are calculated. The way this is input is
-        interpreted depends on the value of `param_step_size`: if this
-        is None, the distances are evaluated at the points given in
-        `param_vals`; if it is not None, the interval is resampled in
-        the bounds given by first and last element of `param_vals`.
+        :code:`param_to_vary` are calculated. The way this is input is
+        interpreted depends on the value of :code:`param_step_size`:
+        if this is None, the distances are evaluated at the points given
+        in :code:`param_vals`; if it is not None, the interval is
+        resampled in the bounds given by first and last element of
+        :code:`param_vals`.
 
         Note that it will be converted to an astropy Quantity with the
-        same unit that `param_to_vary` has in `wf_params`. Thus, if no
-        units are specified for `param_vals` (i.e. a list of floats is
-        passed), make sure the values are given in the correct units. To
-        avoid potential inconsistencies, giving a Quantity as input here
-        is recommended.
+        same unit that :code:`param_to_vary` has in :code:`wf_params`.
+        Thus, if no units are specified for :code:`param_vals` (i.e. a
+        list of floats is passed), make sure the values are given in the
+        correct units. To avoid potential inconsistencies, giving an
+        astropy ``Quantity`` as input here is recommended.
     wf_params : dict[str, ~astropy.units.Quantity]
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
-        `wf_generator` and must contain the `param_to_vary` as key.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
-    FrequencySeries]
+        :code:`wf_generator` and must contain :code:`param_to_vary` as
+        a key.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],FrequencySeries]
         Function that takes dicionary of waveform parameters as input
         and produces a waveform (stored in a GWpy ``FrequencySeries``).
     params_to_project : str | list[str], optional, default = None
@@ -222,20 +226,21 @@ def linearized_distance(
         be optimized over (by projecting the Fisher matrix on the
         subspace that is orthogonal to this parameter).
 
-        Need not be in `param_to_vary`, but can as long as just a single
-        element of `param_to_vary` is not in `params_to_project`.
+        Need not be in :code:`param_to_vary`, but can as long as just a
+        single element of :code:`param_to_vary` is not in
+        :code:`params_to_project`.
     param_step_size : ~astropy.units.Quantity | float, default = None
-        Step size of points in the discretized interval `param_vals`, at
-        which the distance values will be calculated. Can be a ``float``
-        or an astropy Quantity. Its effect is described in the
-        description of `param_vals`.
+        Step size of points in the discretized interval
+        :code:`param_vals`, at which the distance values will be
+        calculated. Can be a ``float`` or an astropy ``Quantity``. Its
+        effect is described in the description of :code:`param_vals`.
 
         Note that it will be converted to an astropy Quantity with the
-        same unit that `param_to_vary` has in `wf_params`. Thus, if no
-        units are specified for `param_step_size` (i.e. a list of floats
-        is passed), make sure the values are given in the correct units.
-        To avoid potential inconsistencies, giving a Quantity as input
-        here is recommended.
+        same unit that :code:`param_to_vary` has in :code:`wf_params`.
+        Thus, if no units are specified for :code:`param_step_size`
+        (i.e. a list of floats is passed), make sure the values are
+        given in the correct units. To avoid potential inconsistencies,
+        giving an astropy ``Quantity`` as input here is recommended.
 
     Returns
     -------

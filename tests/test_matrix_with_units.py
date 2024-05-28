@@ -3,12 +3,8 @@ import unittest
 
 # ----- Third Party Imports -----
 import numpy as np
-from numpy.testing import assert_allclose
-
 import astropy.units as u
-
 import pytest
-
 import matplotlib.pyplot as plt
 
 # ----- Local Package Imports -----

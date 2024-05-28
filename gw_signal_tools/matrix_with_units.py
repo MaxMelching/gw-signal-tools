@@ -1,6 +1,6 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self
+from typing import Optional, Any, Literal
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -22,9 +22,9 @@ class MatrixWithUnits:
     Parameters
     ----------
     value : 
-        __description_
+        Matrix-like object with numerical values.
     unit : 
-        __description_
+        Matrix-like object with corresponding units to :code:`value`.
         
         Note that no care is taken to produce irreducible units (i.e.
         unscaled ones, while applying the scale from units to the
@@ -132,6 +132,7 @@ class MatrixWithUnits:
 
 
     def  __init__(self, value: ArrayLike, unit: ArrayLike) -> None:
+        """Initialize a ``MatrixWithUnits``."""
         # Internally, value and unit are stored as numpy arrays due to their
         # versatility. Now we have to make sure the conversion works
         try:
@@ -637,8 +638,7 @@ class MatrixWithUnits:
 
         Parameters
         ----------
-        matrix_norm : float | Literal['fro', 'nuc'], optional,
-        default = 'fro'
+        matrix_norm : float | Literal['fro', 'nuc'], optional, default = 'fro'
             Matrix norm that shall be used for the calculation. Must be
             compatible with argument `p` of `~numpy.linalg.cond`.
 
@@ -647,7 +647,7 @@ class MatrixWithUnits:
         float
             Condition number of `self.value`.
 
-        See also
+        See Also
         --------
         numpy.linalg.cond : Routine used for calculation.
         """

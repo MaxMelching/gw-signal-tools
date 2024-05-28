@@ -1,28 +1,27 @@
+# ----- Standard Lib Imports -----
 import unittest
 
+# ----- Third Party Imports -----
+import numpy as np
+from numpy.testing import assert_allclose
+import astropy.units as u
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
+import lalsimulation.gwsignal.core.waveform as wfm
+from gwpy.testing.utils import assert_quantity_equal
+from gwpy.frequencyseries import FrequencySeries
+import pytest
+
+# ----- Local Package Imports -----
 from gw_signal_tools.waveform_utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs,
     get_strain, fill_f_range,
-    get_mass_scaled_wf,
-    # rescale_with_Mtotal, scale_to_Mtotal,
+    # get_mass_scaled_wf
 )
-
-import astropy.units as u
-from lalsimulation.gwsignal import gwsignal_get_waveform_generator
-import lalsimulation.gwsignal.core.waveform as wfm
-import numpy as np
-from numpy.testing import assert_allclose
 from gw_signal_tools.test_utils import (
-    allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series, assert_allequal_series
+    assert_allclose_quantity, assert_allequal_series
 )
-from gw_signal_tools.waveform_utils import get_wf_generator
-from gwpy.testing.utils import assert_quantity_equal
-from gwpy.frequencyseries import FrequencySeries
-
-import pytest
 
 
 # We will perform tests with a GW150914-like signal

@@ -5,8 +5,9 @@
 # (parts of each file are here). In particular, virtually all credit
 # belongs to the astropy developers
 
+# ----- Third Party Imports -----
 import astropy.units as u
-from astropy.units.core import Unit, UnitBase, def_unit
+from astropy.units.core import def_unit
 from astropy.constants import si as _const_si
 import astropy.units.si as _si
 import astropy.units.astrophys as _astrophys
@@ -24,7 +25,7 @@ enable exponentiation with angles).
 """
 
 
-__all__: list[str] = []  #  Units are added at the end
+__all__: list[str] = []  # Units are added at the end
 
 _ns = globals()
 
@@ -65,7 +66,7 @@ cd = _si.cd
 K = _si.K
 mol = _si.mol
 
-import gwpy.detector.units  # Adds strain to astropy units
+import gwpy.detector.units  # noqa: F401 - Adds strain to astropy units
 # -> custom adding would cause problems when GWPy and this package are loaded
 u.get_current_unit_registry()._registry.pop('strain', None)
 # Potential problem is that strain was equivalent to
@@ -76,29 +77,14 @@ u.add_enabled_units(_ns)
 strain = u.strain = u.Unit('strain')  # For convenient access
 strain.si = strain
 
-# Following seems weird (importing this file as a module), thus commented
-# import gw_signal_tools.units as gw_units
-# u.add_enabled_units(gw_units)
-
-# strain = gw_units.Unit('strain')
-# u.strain = gw_units.Unit('strain')
-
-# Testing with bases
-# bases = {pc, s, Msun, A, cd, rad, K, mol, strain}
-# bases = {pc, s, Msun, A, cd, rad, K, mol}
-# bases = {Mpc, s, Msun, A, cd, rad, K, mol}
-
-# u.add_enabled_units(_ns)
-
 
 bases = {pc, s, Msun, A, cd, rad, K, mol, strain}
-# Definitely needed. Other stuff above pretty much useless, does not work as intended
 
 
 u.set_enabled_equivalencies(u.dimensionless_angles())
 
 
-__all__ += [n for n, v in _ns.items() if isinstance(v, UnitBase)]
+__all__ += [n for n, v in _ns.items() if isinstance(v, u.UnitBase)]
 
 
 # This generates a docstring for this module that describes all of the

@@ -1,15 +1,16 @@
 # ----- Third Party Imports -----
 import numpy as np
 from numpy.testing import assert_allclose
-
 import astropy.units as u
-
 from gwpy.types import Series
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
 
 # ----- Local Package Imports -----
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
+
+
+__doc__ = """
+Convenient wrappers to test closeness or equality of various types.
+"""
 
 
 # ----- Quantity equalities -----
@@ -46,8 +47,9 @@ def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
     if not isinstance(arr2, u.Quantity):
         arr2 = u.Quantity(arr2)
     
-    assert arr1.unit == arr2.unit, \
+    assert arr1.unit == arr2.unit, (
         f'Cannot compare unequal units, {arr1.unit} != {arr2.unit}.'
+    )
     
 
     return np.all(np.isclose(arr1.value, arr2.value, *args, **kwargs))
@@ -150,14 +152,16 @@ def assert_allclose_series(
     **kwargs
 ) -> None:
     """
-    Includes FrequencySeries and TimeSeries
+    Wrapper for application of `~gw_signal_tools.
+    assert_allclose_quantity` to a GWPy ``Series`` instance (includes
+    ``FrequencySeries`` and ``TimeSeries``).
 
     Parameters
     ----------
-    series1 : Series
-        _description_
-    series2 : Series
-        _description_
+    series1 :  ~gwpy.types.series.Series
+        First value to compare.
+    series2 : ~gwpy.types.series.Series
+        Second value to compare.
     """
     assert_allclose_quantity(series1.xindex, series2.xindex, *args, **kwargs)
     assert_allclose_quantity(series1, series2, *args, **kwargs)
@@ -167,14 +171,15 @@ def assert_allequal_series(
     series2: Series
 ) -> None:
     """
-    Includes FrequencySeries and TimeSeries
+    Assert that two GWPy ``Series`` instances are equal (includes
+    ``FrequencySeries`` and ``TimeSeries``).
 
     Parameters
     ----------
-    series1 : Series
-        _description_
-    series2 : Series
-        _description_
+    series1 : ~gwpy.types.series.Series
+        First value to compare.
+    series2 : ~gwpy.types.series.Series
+        Second value to compare.
     """
     assert series1.xindex.unit == series2.xindex.unit
     assert np.all(np.equal(series1.xindex.value, series2.xindex.value))

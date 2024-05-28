@@ -1,18 +1,10 @@
-# ----- Standard Lib Imports -----
-import unittest
-
 # ----- Third Party Imports -----
 import numpy as np
-from numpy.testing import assert_allclose
-
 import astropy.units as u
-
 import matplotlib.pyplot as plt
-
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.inner_product import norm
 from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
@@ -50,16 +42,8 @@ phenomx_cross_generator = get_wf_generator(approximant, mode='cross')
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc
-
-try:
-    pc.default_dict.pop('mass1')
-except KeyError:
-    pass
-
-try:
-    pc.default_dict.pop('mass2')
-except KeyError:
-    pass
+pc.default_dict.pop('mass1', None);
+pc.default_dict.pop('mass2', None);
 
 fisher_tot_mass = FisherMatrix(
     wf_params,
@@ -71,9 +55,10 @@ fisher_tot_mass = FisherMatrix(
 
 #%% ----- Simple consistency tests -----
 def test_unit():
-    # Both ways of accessing must work
+    # All ways of accessing must work
     assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
     assert fisher_tot_mass.fisher.unit[0, 0] == 1/u.solMass**2
+    assert fisher_tot_mass.unit[0, 0] == 1/u.solMass**2
 
 def test_inverse():
     assert np.all(np.equal(np.linalg.inv(fisher_tot_mass.fisher.value),

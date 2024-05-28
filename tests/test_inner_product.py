@@ -1,28 +1,24 @@
-import numpy as np
+# ----- Standard Lib Imports -----
 import unittest
+
+# ----- Third Party Imports -----
+import numpy as np
 from numpy.testing import assert_allclose
-
-from gw_signal_tools.waveform_utils import (
-    td_to_fd_waveform, pad_to_get_target_df, get_wf_generator,
-    get_signal_at_target_frequs
-)
-from gw_signal_tools.test_utils import (
-    allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series
-)
-from gwpy.testing.utils import assert_quantity_equal
-
-from gw_signal_tools.inner_product import (
-    inner_product, norm, overlap, optimize_overlap, optimized_inner_product
-)
-
-from gw_signal_tools.PSDs import psd_gw150914, psd_no_noise
-
 import astropy.units as u
 from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
-
 import pytest
+
+# ----- Local Package Imports -----
+from gw_signal_tools.waveform_utils import (
+    td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
+)
+from gwpy.testing.utils import assert_quantity_equal
+from gw_signal_tools.inner_product import (
+    inner_product, norm, overlap, optimize_overlap, optimized_inner_product
+)
+from gw_signal_tools.PSDs import psd_no_noise
+from gw_signal_tools.test_utils import assert_allclose_quantity
 
 
 #%% Initializing commonly used variables

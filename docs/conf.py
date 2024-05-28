@@ -53,6 +53,11 @@ templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
 
+# Autodoc options
+autoclass_content = 'class'
+autodoc_default_flags = ['show-inheritance', 'members', 'inherited-members']
+autosummary_generate = True
+
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
@@ -64,7 +69,6 @@ todo_include_todos = True
 
 napoleon_numpy_docstring = True
 numpydoc_use_blockquotes = True
-
 
 
 html_static_path = ['_static']

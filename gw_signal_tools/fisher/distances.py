@@ -133,27 +133,29 @@ def distance(
     distances = []
     center_wf = wf_generator(wf_params)
     norm_center_wf = norm(center_wf, **inner_prod_kwargs)
+    use_opt_dist = (inner_prod_kwargs.get('optimize_time_and_phase', False)
+                    or inner_prod_kwargs.get('optimize_time', False)
+                    or inner_prod_kwargs.get('optimize_phase', False))
+    inner_prod_kwargs['return_opt_info'] = False
 
     for param_val in param_vals:
         wf = wf_generator(wf_params | {param_to_vary: param_val})
 
         if distance_kind == 'diff_norm':  
-            if isinstance(norm_center_wf, u.Quantity):
+            if not use_opt_dist:
                 distance_val = norm(wf - center_wf, **inner_prod_kwargs)
             else:
                 # Optimization is wanted, have to rewrite for this to take action
                 norm_wf = norm(wf, **inner_prod_kwargs)
                 wf_overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
-                # distance_val = (norm_wf[1]**2 + norm_center_wf[1]**2 - 2*wf_overlap[1])**(1/2)
-                distance_val = np.sqrt(norm_wf[1]**2 + norm_center_wf[1]**2 - 2*wf_overlap[1])
+                # distance_val = (norm_wf**2 + norm_center_wf**2 - 2*wf_overlap)**(1/2)
+                distance_val = np.sqrt(np.abs(norm_wf**2 + norm_center_wf**2 - 2*wf_overlap))
+                # Numerical errors can make it smaller than zero, thus
+                # taking absolute value here is needed
         elif distance_kind == 'mismatch_norm':
-            # wf_overlap = inner_product(wf, center_wf, **inner_prod_kwargs)
             wf_overlap = overlap(wf, center_wf, **inner_prod_kwargs)
 
-            if isinstance(wf_overlap, u.Quantity):
-                distance_val = 1 - wf_overlap
-            else:
-                distance_val = 1 - wf_overlap[1]
+            distance_val = 1 - wf_overlap
             
             # distance_val = 1 - wf_overlap(wf, center_wf, **inner_prod_kwargs)
             # distance_val = norm(center_wf, **inner_prod_kwargs)**2 - inner_product(wf, center_wf, **inner_prod_kwargs)

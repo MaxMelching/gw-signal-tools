@@ -52,8 +52,7 @@ def num_diff(
     -------
     gwpy.types.series.Series or numpy.ndarray
         Derivative of `signal`.
-    """
-    
+    """    
     if isinstance(signal, Series):
         if h is None:
             h = signal.dx
@@ -76,9 +75,8 @@ def num_diff(
             if isinstance(h, u.Quantity):
                 signal = u.Quantity(signal, u.dimensionless_unscaled)
 
-
-    signal_deriv = np.roll(signal, 2) - 8.0 * np.roll(signal, 1) + 8.0 * np.roll(signal, -1) - np.roll(signal, -2)
-
+    signal_deriv = (np.roll(signal, 2) - 8.*np.roll(signal, 1)
+                    + 8.*np.roll(signal, -1) - np.roll(signal, -2))
     signal_deriv /= 12.0 * h
 
     signal_deriv[0] = (signal[1] - signal[0]) / h  # Forward difference
@@ -88,6 +86,7 @@ def num_diff(
     signal_deriv[-1] = (signal[-1] - signal[-2]) / h  # Backward difference
 
     return signal_deriv
+
 
 # NOTE: removing some of the arguments to pass all kwargs to derivative does
 # not work because we want to be able to pass kwargs to inner_product function
@@ -209,7 +208,10 @@ def fisher_matrix(
         Method used for numerical differentiation. Almost all arguments
         are passed straight to this function.
     """
-    # ----- Handle some default values -----
+    # ----- Check defaults -----
+    inner_prod_kwargs['return_opt_info'] = False
+    # Ensure float output of inner_product, even if optimization on
+
     if isinstance(params_to_vary, str):
         params_to_vary = [params_to_vary]
 
@@ -254,19 +256,14 @@ def fisher_matrix(
         for j, param_j in enumerate(params_to_vary):
 
             if i == j:
+                # Was already set in previous loop
                 continue
             else:
-                fisher_val = inner_product(
+                fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
                     deriv_series_storage[param_i],
                     deriv_series_storage[param_j],
                     **inner_prod_kwargs
                 )
-
-                if not isinstance(fisher_val, u.Quantity):
-                    # Optimization info is returned
-                    fisher_val = fisher_val[0]
-
-                fisher_matrix[i, j] = fisher_matrix[j, i] = fisher_val
 
     if return_info:
         return fisher_matrix, deriv_info
@@ -386,6 +383,9 @@ def get_waveform_derivative_1D_with_convergence(
         If an invalid value for convergence_check is provided.
     """
     # ----- Check defaults -----
+    inner_prod_kwargs['return_opt_info'] = False
+    # Ensure float output of inner_product, even if optimization on
+
     if step_sizes is None:
         step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
         # NOTE: keeping 1e-2 as default start_step_size is most likely too
@@ -415,13 +415,7 @@ def get_waveform_derivative_1D_with_convergence(
         wf = wf_generator(wf_params_at_point)
         deriv = wf * (-1.j * 2. * np.pi * wf.frequencies)
 
-        derivative_norm = norm(deriv, **inner_prod_kwargs)
-
-        if isinstance(derivative_norm, u.Quantity):
-            derivative_norm **= 2
-        else:
-            # Optimization info is returned
-            derivative_norm = derivative_norm[0]**2
+        derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
         if return_info:
             return deriv, {
@@ -438,13 +432,7 @@ def get_waveform_derivative_1D_with_convergence(
         else:
             deriv = wf * 2.j
 
-        derivative_norm = norm(deriv, **inner_prod_kwargs)
-
-        if isinstance(derivative_norm, u.Quantity):
-            derivative_norm **= 2
-        else:
-            # Optimization info is returned
-            derivative_norm = derivative_norm[0]**2
+        derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
         if return_info:
             return deriv, {
@@ -493,13 +481,7 @@ def get_waveform_derivative_1D_with_convergence(
                     raise ValueError(err_msg)
 
 
-            derivative_norm = norm(deriv_param, **inner_prod_kwargs)
-
-            if isinstance(derivative_norm, u.Quantity):
-                derivative_norm **= 2
-            else:
-                # Optimization info is returned
-                derivative_norm = derivative_norm[0]**2
+            derivative_norm = norm(deriv_param, **inner_prod_kwargs)**2
 
             derivative_vals += [deriv_param]
             deriv_norms += [derivative_norm]
@@ -508,14 +490,9 @@ def get_waveform_derivative_1D_with_convergence(
             match convergence_check:
                 case 'diff_norm':
                     if len(derivative_vals) >= 2:
-                        diff_norm = norm(deriv_param - derivative_vals[-2],
-                                    **inner_prod_kwargs)
-                        
-                        if not isinstance(diff_norm, u.Quantity):
-                            diff_norm = diff_norm[0]
-                        
                         convergence_vals += [
-                            diff_norm / np.sqrt(derivative_norm)
+                            norm(deriv_param - derivative_vals[-2],
+                                 **inner_prod_kwargs)/np.sqrt(derivative_norm)
                         ]
                     else:
                         convergence_vals += [np.inf]
@@ -523,18 +500,12 @@ def get_waveform_derivative_1D_with_convergence(
                 case 'mismatch':
                     # Compute mismatch, using that we already know norms
                     if len(derivative_vals) >= 2:
-                        inner_prod = inner_product(
+                        convergence_vals += [
+                            1. - inner_product(
                             deriv_param,
                             derivative_vals[-2],
                             **inner_prod_kwargs
-                        )
-                        
-                        if not isinstance(inner_prod, u.Quantity):
-                            inner_prod = inner_prod[0]
-
-                        convergence_vals += [
-                            1.0 - inner_prod\
-                            / np.sqrt(derivative_norm * deriv_norms[-2])
+                        ) / np.sqrt(derivative_norm * deriv_norms[-2])
                         ]  # Index -1 is deriv_param
                     else:
                         convergence_vals += [np.inf]

@@ -10,7 +10,9 @@ from gw_signal_tools.matrix_with_units import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix
 )
-from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
+from gw_signal_tools.test_utils import (
+    assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
+)
 
 from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)
@@ -79,6 +81,37 @@ def test_criterion_consistency():
     
     assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
                                     atol=0.0, rtol=5e-5)
+
+def test_time_and_phase_shift_consistency():
+    # Idea: time and phase shift in the waveform should not have effect
+    # on Fisher matrix entries, cancel out in inner product
+    t_shift = 1e-3 * u.s
+    phase_shift = 1e-2 * u.rad
+
+    def shifted_wf_gen(wf_params):
+        wf = phenomx_generator(wf_params)
+        return wf * np.exp(-2.j*np.pi*wf.frequencies*t_shift + 1.j*phase_shift)
+    
+    calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
+
+    fisher_v1 = FisherMatrix(
+        wf_params,
+        calc_params,
+        phenomx_generator
+    )
+
+    fisher_v2 = FisherMatrix(
+        wf_params,
+        calc_params,
+        shifted_wf_gen
+    )
+
+    assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
+                                    atol=3e-50, rtol=0.)
+    # This is great accuracy. This deviation is for two uncorrelated
+    # parameters, where the value itself is ten (!) orders of magnitude
+    # below all diagonal values (which means it is of the order of
+    # 1e-50). This deviation can certainly be tolerated.
 
 
 #%% ----- Feature tests -----

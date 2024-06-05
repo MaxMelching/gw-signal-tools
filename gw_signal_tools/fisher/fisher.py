@@ -213,8 +213,7 @@ class FisherMatrix:
             # as quoted e.g. in gwbench paper
             logger.info(
                 f'This Fisher matrix has a condition number of {cond_numb}, '
-                'meaning it is ill-conditioned. Keep this in mind for any '
-                'results based on it.'
+                'meaning it is ill-conditioned.'
             )
         
         return self._fisher_inverse
@@ -399,6 +398,11 @@ class FisherMatrix:
         fisher_val = self.fisher.value
         index_grid = self.get_sub_matrix_indices(params)
         sub_matrix = fisher_val[index_grid]
+        if (cond_numb := np.linalg.cond(sub_matrix, p='fro')) > 1e15:
+            logger.info(
+                'Submatrix used for projection has a condition number of '
+                f'{cond_numb}, meaning it is ill-conditioned.'
+            )
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
         n = len(self.params_to_vary)  # Equal to self.fisher.shape[0]
@@ -621,19 +625,30 @@ class FisherMatrix:
             # TODO: decide if tc, psi should be included in here or not (I think it does make sense to do so)
 
             # Remove parameters that are not used in wf generation
-            tc = opt_wf_params.pop('tc', 0.*u.s) + opt_wf_params.pop('time', 0.*u.s)
-            phi = 2.*opt_wf_params.pop('phi', 0.*u.rad) + opt_wf_params.pop('phase', 0.*u.rad)  # 0.5 for separate interpretation of phase, psi
+            time_shift = opt_vals.pop('tc', 0.*u.s) + opt_vals.pop('time', 0.*u.s)
+            phase_shift = 2.*opt_vals.pop('psi', 0.*u.rad) + opt_vals.pop('phase', 0.*u.rad)  # 2 due to separate interpretation of phase, psi
             # Idea with addition: only one of them will be non-zero, giving
             # multiple would not make sense due to their equivalency
             
             # optimization_info['opt_params'] = opt_wf_params
 
-            opt_fisher = FisherMatrix(
-                opt_wf_params,
-                self.params_to_vary,
-                self.wf_generator,
-                **(self.metadata | {'return_info': True} | inner_prod_kwargs)
-            )
+            if len(opt_vals) == 0:
+                # Means that only time and/or phase were optimized over.
+                # These do not influence the Fisher values, so no need
+                # to recalculate (expensive)
+                opt_fisher = self
+            else:
+                opt_wf_params.pop('tc', None)
+                opt_wf_params.pop('time', None)
+                opt_wf_params.pop('psi', None)
+                opt_wf_params.pop('phase', None)
+
+                opt_fisher = FisherMatrix(
+                    opt_wf_params,
+                    self.params_to_vary,
+                    self.wf_generator,
+                    **(self.metadata | {'return_info': True} | inner_prod_kwargs)
+                )
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
@@ -657,7 +672,7 @@ class FisherMatrix:
             # For Fisher matrix, time and phase shift have no influence, but
             # for pure derivatives, they do!
             for i, deriv in enumerate(derivs):
-                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*tc + 1.j*phi)
+                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*time_shift + 1.j*phase_shift)
         elif isinstance(optimize, bool) and not optimize:
             delta_h = reference_wf_generator(self.wf_params_at_point) \
                 - self.wf_generator(self.wf_params_at_point)
@@ -721,21 +736,22 @@ class FisherMatrix:
         # Bias from Fisher calculation might not be the only one we have
         # to account for, some parameters might change in optimization
         # procedure (has to be taken into account as well).
-        if opt_params is not None and (
-            np.any(np.isin(opt_params, params, assume_unique=True))
-            or tc != 0.*u.s or phi != 0.*u.rad
-        ):
+        if opt_params is not None:
+        # if opt_params is not None and (
+        #     np.any(np.isin(opt_params, params, assume_unique=True))
+        #     or time_shift != 0.*u.s or phase_shift != 0.*u.rad
+        # ):
             opt_bias = MatrixWithUnits.from_numpy_array(np.zeros(fisher_bias.shape))
             
             for param in params:
                 i = opt_fisher.get_param_indices(param)
                 
                 if param in ['tc', 'time']:
-                    opt_bias[i] = tc
+                    opt_bias[i] = time_shift
                 elif param == 'psi':
-                    opt_bias[i] = 0.5*phi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = 0.5*phase_shift.value*u.rad.compose(units=self._preferred_unit_sys)[0]
                 elif param == 'phase':
-                    opt_bias[i] = phi.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = phase_shift.value*u.rad.compose(units=self._preferred_unit_sys)[0]
                 else:
                     wf_param_val = self.wf_params_at_point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val

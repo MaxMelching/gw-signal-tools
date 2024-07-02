@@ -595,6 +595,7 @@ class FisherMatrix:
         # e.g. optimized inner product is used for derivative overlap calculation,
         # which is not desirable behaviour
         # -> is this a robust argument?
+        # -> also, why should behaviour described here be a problem?
 
         optimization_info = {}
 
@@ -799,12 +800,8 @@ class FisherMatrix:
             if isinstance(params, str):
                 params = [params]
             param_indices = opt_fisher.get_param_indices(params)
-        else:
-            # Take all parameters
-            params = opt_fisher.params_to_vary
-            param_indices = len(params)*[True]
 
-        fisher_bias = fisher_bias[param_indices]
+            fisher_bias = fisher_bias[param_indices]
         
         if optimize is False or return_opt_info is False:
             return fisher_bias

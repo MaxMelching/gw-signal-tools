@@ -208,13 +208,15 @@ class FisherMatrix:
 
             # return self._fisher_inverse
         
-        if (cond_numb := self.cond()) > 1e15:
-            # Conservative threshold choice for double precision,
-            # as quoted e.g. in gwbench paper
-            logger.info(
-                f'This Fisher matrix has a condition number of {cond_numb}, '
-                'meaning it is ill-conditioned.'
-            )
+            if (cond_numb := self.cond()) > 1e15:
+                # Conservative threshold choice for double precision,
+                # as quoted e.g. in gwbench paper
+                logger.info(
+                    f'This Fisher matrix has a condition number of {cond_numb}, '
+                    'meaning it is ill-conditioned.'
+                )
+            # TODO: this indentation is better, right? Because otherwise,
+            # we have SVD for each access to inverse matrix
         
         return self._fisher_inverse
     
@@ -501,6 +503,10 @@ class FisherMatrix:
         calculates the displacement of :code:`self.wf_generators`'s best
         guess from best guess of :code:`reference_model`.
 
+        -> MIGHT CHANGE; if new understanding is True, then self.wf_params_at_point
+           can be both theta and theta_2 if optimize=False (should yield
+           pretty much the same results), but must actually be theta_2 if optimize=True
+
         Parameters
         ----------
         reference_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
@@ -619,6 +625,8 @@ class FisherMatrix:
                 **inner_prod_kwargs
             )
             delta_h = opt_wf_1 - opt_wf_2
+            # delta_h = reference_wf_generator(self.wf_params_at_point) \
+            #     - self.wf_generator(self.wf_params_at_point)
 
             opt_wf_params = self.wf_params_at_point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
@@ -631,6 +639,18 @@ class FisherMatrix:
             # multiple would not make sense due to their equivalency
             
             # optimization_info['opt_params'] = opt_wf_params
+
+            # Testing
+            # time_shift *= -1
+            # phase_shift *= -1
+            # delta_h = opt_wf_1 - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*2.*time_shift + 2.j*phase_shift)
+
+            # Testing 2
+            # delta_h = opt_wf_1 - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*(-2.*time_shift) + 1.j*(-2.*phase_shift))
+            # delta_h = (opt_wf_1*np.exp(-2.j*np.pi*opt_wf_1.frequencies*2.*time_shift + 1.j*2.*phase_shift)
+            #            - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*(-2.*time_shift) + 1.j*(-2.*phase_shift)))
+            # time_shift=0*u.s
+            # phase_shift=0*u.rad
 
             if len(opt_vals) == 0:
                 # Means that only time and/or phase were optimized over.
@@ -649,6 +669,20 @@ class FisherMatrix:
                     self.wf_generator,
                     **(self.metadata | {'return_info': True} | inner_prod_kwargs)
                 )
+            
+            # Testing
+            # opt_wf_params.pop('tc', None)
+            # opt_wf_params.pop('time', None)
+            # opt_wf_params.pop('psi', None)
+            # opt_wf_params.pop('phase', None)
+
+            # delta_h = reference_wf_generator(self.wf_params_at_point) \
+            #     - self.wf_generator(self.wf_params_at_point)
+
+            # delta_h_1 = reference_wf_generator(self.wf_params_at_point)
+            # delta_h_2 = self.wf_generator(self.wf_params_at_point)
+            # delta_h = delta_h_1 * np.exp(-2.j*np.pi*delta_h_1.frequencies*time_shift + 1.j*phase_shift) \
+            #           - delta_h_2 * np.exp(-2.j*np.pi*delta_h_2.frequencies*time_shift + 1.j*phase_shift) \
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
@@ -688,6 +722,8 @@ class FisherMatrix:
                 optimization_info['fisher_opt_params'] = optimize_fisher
             else:
                 opt_fisher = self
+                # TODO: maybe also check if inner_prod_kwargs != init_inner_prod_kwargs,
+                # can make difference in inner product calculation
 
                 optimization_info['general'] = 'No optimization was carried out.'
             
@@ -721,17 +757,10 @@ class FisherMatrix:
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         
-        # Check which params shall be returned
-        if params is not None:
-            if isinstance(params, str):
-                params = [params]
-            param_indices = opt_fisher.get_param_indices(params)
-        else:
-            # Take all parameters
-            params = opt_fisher.params_to_vary
-            param_indices = len(params)*[True]
+        fisher_bias = fisher_inverse @ vector
 
-        fisher_bias = (fisher_inverse @ vector)[param_indices]
+
+        # print(param_indices)
 
         # Bias from Fisher calculation might not be the only one we have
         # to account for, some parameters might change in optimization
@@ -742,8 +771,12 @@ class FisherMatrix:
         #     or time_shift != 0.*u.s or phase_shift != 0.*u.rad
         # ):
             opt_bias = MatrixWithUnits.from_numpy_array(np.zeros(fisher_bias.shape))
+
+            # print(params)
+            # print(opt_bias)
             
-            for param in params:
+            # for param in params:
+            for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
                 
                 if param in ['tc', 'time']:
@@ -755,8 +788,23 @@ class FisherMatrix:
                 else:
                     wf_param_val = self.wf_params_at_point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
+
+            # print(fisher_bias)
+            # print(opt_bias)
             
             fisher_bias += opt_bias
+
+        # Check which params shall be returned
+        if params is not None:
+            if isinstance(params, str):
+                params = [params]
+            param_indices = opt_fisher.get_param_indices(params)
+        else:
+            # Take all parameters
+            params = opt_fisher.params_to_vary
+            param_indices = len(params)*[True]
+
+        fisher_bias = fisher_bias[param_indices]
         
         if optimize is False or return_opt_info is False:
             return fisher_bias

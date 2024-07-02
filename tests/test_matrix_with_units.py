@@ -3,12 +3,8 @@ import unittest
 
 # ----- Third Party Imports -----
 import numpy as np
-from numpy.testing import assert_allclose
-
 import astropy.units as u
-
 import pytest
-
 import matplotlib.pyplot as plt
 
 # ----- Local Package Imports -----
@@ -637,6 +633,17 @@ def test_plot(given_ax):
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+    def test_wrong_unit_setting(self):
+        with self.assertRaises(AssertionError):
+            self.matrix.unit = example_units[:, 0]
+    
+    # Following does not work as intended
+    # def test_forcing_incompatible_matmul_unit(self):
+    #     with self.assertRaises(ValueError):
+    #         matrix = self.matrix.copy()
+    #         matrix._unit = 1.
+    #         matrix @ matrix
 
     def test_operations_with_wrong_type(self):
         # Setting

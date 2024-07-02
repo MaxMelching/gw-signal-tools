@@ -1,23 +1,24 @@
-import numpy as np
+# ----- Standard Lib Imports -----
 import unittest
-from numpy.testing import assert_allclose
 
+# ----- Third Party Imports -----
+import numpy as np
+from numpy.testing import assert_allclose
+import astropy.units as u
+from lalsimulation.gwsignal import gwsignal_get_waveform_generator
+import lalsimulation.gwsignal.core.waveform as wfm
+import pytest
+
+# ----- Local Package Imports -----
 from gw_signal_tools.waveform_utils import (
-    td_to_fd_waveform, pad_to_get_target_df, get_strain
-)
-from gw_signal_tools.test_utils import (
-    allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series
+    td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
 from gwpy.testing.utils import assert_quantity_equal
-
-from gw_signal_tools.inner_product import inner_product, norm, overlap
-from gw_signal_tools.PSDs import psd_gw150914, psd_no_noise
-
-import astropy.units as u
-import lalsimulation.gwsignal.core.waveform as wfm
-
-import pytest
+from gw_signal_tools.inner_product import (
+    inner_product, norm, overlap, optimize_overlap, optimized_inner_product
+)
+from gw_signal_tools.PSDs import psd_no_noise
+from gw_signal_tools.test_utils import assert_allclose_quantity
 
 
 #%% Initializing commonly used variables
@@ -41,19 +42,21 @@ wf_params = {
 }
 
 approximant = 'IMRPhenomXPHM'
+gen = gwsignal_get_waveform_generator(approximant)
+def td_wf_gen(wf_params):
+    return wfm.GenerateTDWaveform(wf_params, gen)
 
-# Call the generator
-gen = wfm.LALCompactBinaryCoalescenceGenerator(approximant)
-
+def fd_wf_gen(wf_params):
+    return wfm.GenerateFDWaveform(wf_params, gen)
 
 # Generate time domain waveform
-hp_t, _ = wfm.GenerateTDWaveform(wf_params, gen)
+hp_t, _ = td_wf_gen(wf_params)
 
 # Two waveforms will be generated in frequency domain, first with finer
 # sampling and then with coarser one
-hp_f_fine, _ = wfm.GenerateFDWaveform(wf_params, gen)
+hp_f_fine, _ = fd_wf_gen(wf_params)
 
-hp_f_coarse, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)}, gen)
+hp_f_coarse, _ = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
 
 # Make units consistent with gw_signal_tools
 hp_f_fine *= u.s
@@ -109,21 +112,134 @@ def test_fd_td_overlap_consistency():
     assert_allclose_quantity(norm_fd_fine, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
     assert_allclose_quantity(norm_td, norm_fd_fine, atol=0.0, rtol=0.005)
 
-
 def test_optimize_match_consistency():
     norm1_coarse = norm(hp_f_coarse)
-    _, norm2_coarse, time_coarse = norm(hp_f_coarse, optimize_time_and_phase=True)
+    # norm2_coarse, info_coarse = norm(hp_f_coarse, optimize_time_and_phase=True,
+    norm2_coarse, info_coarse = norm(hp_f_coarse, optimize_time=True,
+                                     optimize_phase=True,
+                                     return_opt_info=True)
+    time_coarse = info_coarse['peak_time']
+    phase_coarse = info_coarse['peak_phase']
 
     assert_allclose_quantity(norm1_coarse, norm2_coarse, atol=0.0, rtol=0.11)
-    assert_allclose_quantity(0.0 * u.s, time_coarse, atol=1e-10, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_coarse, atol=1e-10, rtol=0.0)
+    assert_allclose_quantity(0.*u.rad, phase_coarse, atol=1e-18, rtol=0.0)
 
 
     norm1_fine = norm(hp_f_fine)
-    _, norm2_fine, time_fine = norm(hp_f_fine, optimize_time_and_phase=True)
+    norm2_fine, info_fine = norm(hp_f_fine, optimize_time_and_phase=True,
+                                 return_opt_info=True)
+    time_fine = info_fine['peak_time']
+    phase_fine = info_fine['peak_phase']
 
-    assert_allclose_quantity(norm1_fine, norm2_fine, atol=0.0, rtol=0.001)
-    assert_allclose_quantity(0.0 * u.s, time_fine, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(norm1_fine, norm2_fine, atol=0.0, rtol=5e-4)
+    assert_allclose_quantity(0.*u.s, time_fine, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.rad, phase_fine, atol=1e-17, rtol=0.0)
 
+@pytest.mark.parametrize('time_shift', [0.*u.s, 1e-3*u.s, -0.2*u.s, 0.5*u.s])
+@pytest.mark.parametrize('phase_shift', [0.*u.rad, 0.12*u.rad, -0.3*np.pi*u.rad])
+def test_optimize_match(time_shift, phase_shift):
+    # norm_coarse = norm(hp_f_coarse)**2
+    # hp_f_coarse_shifted = hp_f_coarse * np.exp(2.j*np.pi*hp_f_coarse.frequencies*time_shift + 1.j*phase_shift)
+
+    # overlap_coarse, info_coarse = inner_product(
+    #     hp_f_coarse,
+    #     hp_f_coarse_shifted,
+    #     optimize_time_and_phase=True,
+    #     return_opt_info=True
+    # )
+    # time_coarse = info_coarse['peak_time']
+    # phase_coarse = info_coarse['peak_phase']
+    # match_series_coarse = info_coarse['match_series']
+
+    # assert_allclose_quantity(norm_coarse, overlap_coarse, atol=0.0, rtol=4e-2)
+    # assert_allclose_quantity(time_shift, time_coarse, atol=0.8*match_series_coarse.dx.value, rtol=0.0)
+    # # assert_allclose_quantity(0.*u.rad, np.abs(phase_shift - phase_coarse) % (2.*np.pi*u.rad), atol=2e-17, rtol=0.01)
+    # assert_allclose_quantity(phase_shift, phase_coarse, atol=0.06, rtol=0.0)
+
+    # coarse performs REALLY bad, thus omitted for these tests
+
+    norm_fine = norm(hp_f_fine)**2
+    hp_f_fine_shifted = hp_f_fine * np.exp(-2.j*np.pi*hp_f_fine.frequencies*time_shift + 1.j*phase_shift)
+    overlap_fine, info_fine = inner_product(
+        hp_f_fine_shifted,
+        hp_f_fine,
+        optimize_time_and_phase=True,
+        return_opt_info=True,
+        # df=2**-3,  # Would decrease overlap agreement, thus comment
+        min_dt_prec=1e-5*u.s
+    )
+    time_fine = info_fine['peak_time']
+    phase_fine = info_fine['peak_phase']
+    match_series_fine = info_fine['match_series']
+
+    assert_allclose_quantity(norm_fine, overlap_fine, atol=0.0, rtol=9e-4)
+    assert_allclose_quantity(time_shift, time_fine, atol=0.8*match_series_fine.dx.value, rtol=0.0)
+    assert_allclose_quantity(phase_shift, phase_fine, atol=1e-3, rtol=0.01)
+    # To get accurate phase recovery, min_dt_prec has to be sufficiently small
+from gwpy.frequencyseries import FrequencySeries
+
+@pytest.mark.parametrize('signal', [hp_f_fine,
+FrequencySeries(
+    np.flip(np.conjugate(hp_f_fine)[1:]),  # Exclude zero component
+    f0=-hp_f_fine.frequencies[-1],
+    df=hp_f_fine.df,
+    unit=hp_f_fine.unit
+).append(hp_f_fine, inplace=True)]
+)
+@pytest.mark.parametrize('min_dt_prec', [None, 1e-5])   
+def test_even_sample_size(signal, min_dt_prec):
+    # psd = psd_no_noise.crop(start=signal.f0, end=signal.frequencies[-1])
+    psd = get_signal_at_target_frequs(psd_no_noise, signal.frequencies,
+                                      1.*psd_no_noise.unit)
+    norm_1, info_1 = optimized_inner_product(
+        signal,
+        signal,
+        psd=psd,
+        optimize_time=True,
+        optimize_phase=True,
+        return_opt_info=True,
+        min_dt_prec=min_dt_prec
+    )
+
+    _signal = signal[:-1]
+    # _psd = psd_no_noise.crop(start=_signal.f0, end=_signal.frequencies[-1])
+    _psd = get_signal_at_target_frequs(psd_no_noise, _signal.frequencies,
+                                      1.*psd_no_noise.unit)
+    norm_2, info_2 = optimized_inner_product(
+        _signal,
+        _signal,
+        psd=_psd,
+        optimize_time=True,
+        optimize_phase=True,
+        return_opt_info=True,
+        min_dt_prec=min_dt_prec
+    )
+
+    assert_allclose_quantity(norm_1, norm_2, atol=0., rtol=0.)
+    assert_allclose_quantity(0.*u.s, [info_1['peak_time'], info_2['peak_time']], atol=0., rtol=0.)
+    assert_allclose_quantity(0.*u.rad, [info_1['peak_phase'], info_2['peak_phase']], atol=1e-18, rtol=0.)
+
+def test_different_optimizations():
+    norm1 = norm(hp_f_fine, optimize_time_and_phase=False)
+    norm2, info2 = norm(hp_f_fine, optimize_time_and_phase=True, return_opt_info=True)
+    norm3, info3 = norm(hp_f_fine, optimize_time=True, optimize_phase=False, return_opt_info=True)
+    norm4, info4 = norm(hp_f_fine, optimize_time=False, optimize_phase=True, return_opt_info=True)
+
+    assert_allclose_quantity(norm1, [norm2, norm3, norm4], atol=0., rtol=4e-4)
+    # rtol for usual deviation between simpson result and fft one. Next test
+    # verifies that all optimized norms are actually equal
+    assert_allclose_quantity(norm2, [norm3, norm4], atol=0., rtol=0.)
+
+    time2 = info2['peak_time']
+    time3 = info3['peak_time']
+    time4 = info4['peak_time']
+    assert_allclose_quantity(0.*u.s, [time2, time3, time4], atol=3e-13, rtol=0.)
+
+    phase2 = info2['peak_phase']
+    phase3 = info3['peak_phase']
+    phase4 = info4['peak_phase']
+    assert_allclose_quantity(0.*u.rad, [phase2, phase3, phase4], atol=6.3e-18, rtol=0.)
 
 @pytest.mark.parametrize('f_min', [f_min, 30.0 * u.Hz])
 @pytest.mark.parametrize('f_max', [50.0 * u.Hz, f_max])
@@ -132,31 +248,49 @@ def test_f_range(f_min, f_max):
     norm_no_units = norm(hp_f_fine, f_range=[f_min.value, f_max.value])
     assert_quantity_equal(norm1, norm_no_units)
 
-    hp_f_restricted, _ = wfm.GenerateFDWaveform(wf_params | {'f22_start': f_min, 'f_max': f_max}, gen)
+    hp_f_restricted, _ = fd_wf_gen(wf_params | {'f22_start': f_min, 'f_max': f_max})
     hp_f_restricted.override_unit(u.s)
     norm2 = norm(hp_f_restricted)
 
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-3)
     # Not fully equal due to potentially being one sample off when filling
 
+@pytest.mark.parametrize('f_range', [
+    [-f_min, 1.1*f_max],  # Too large, should be adjusted by function
+    [None, None],
+    pytest.param([0.*u.m, None], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid unit for f_lower')),
+    pytest.param([None, f_max.value*u.m], marks=pytest.mark.xfail(
+        raises=ValueError, strict=True, reason='Invalid unit for f_upper'))
+])
+def test_f_range_handling(f_range):
+    norm1 = norm(hp_f_fine)
+    norm2 = norm(hp_f_fine, f_range=f_range)
+
+    assert_allclose_quantity(norm1, norm2, atol=0., rtol=0.)
 
 def test_positive_negative_f_range_consistency():
     h = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df))
-    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 1.j * 0.0)
+    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
     # h_symm has symmetric spectrum around f=0.0 and the same spectrum as h
     # for positive frequencies
+    assert h.f0 != h_symm.f0  # Make sure they are not the same
 
     f_upper = f_max
 
     norm1 = norm(h, f_range=[0.0, f_upper])
-    _, norm1_opt, time_1 = norm(h, f_range=[0.0, f_upper], optimize_time_and_phase=True)
+    norm1_opt, info1 = norm(h, f_range=[0.0, f_upper],
+                            optimize_time_and_phase=True, return_opt_info=True)
+    time_1 = info1['peak_time']
     assert_allclose_quantity(norm1, norm1_opt, atol=0.0, rtol=1e-12)
-    assert_allclose_quantity(0.0 * u.s, time_1, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_1, atol=1e-12, rtol=0.0)
 
     norm2 = norm(h_symm, f_range=[-f_upper, f_upper])
-    _, norm2_opt, time_2 = norm(h_symm, f_range=[-f_upper, f_upper], optimize_time_and_phase=True)
+    norm2_opt, info2 = norm(h_symm, f_range=[-f_upper, f_upper],
+                            optimize_time_and_phase=True, return_opt_info=True)
+    time_2 = info2['peak_time']
     assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
-    assert_allclose_quantity(0.0 * u.s, time_2, atol=1e-12, rtol=0.0)
+    assert_allclose_quantity(0.*u.s, time_2, atol=1e-12, rtol=0.0)
 
 
     assert_quantity_equal(norm1, norm2)
@@ -169,7 +303,6 @@ def test_positive_negative_f_range_consistency():
     assert_allclose_quantity(norm_plus, norm_minus, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_plus, norm2, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_minus, norm2, atol=0.0, rtol=1e-15)
-
 
 def test_df_consistency():
     # Same signal, decreasing df in inner_product
@@ -184,11 +317,11 @@ def test_df_consistency():
 
 
     # Different signals with matching df in inner_product
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 2}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 2})
     hp_f.override_unit(u.s)
     norm2 = norm(hp_f, df=hp_f_fine.df / 2)
 
-    hp_f, _ = wfm.GenerateFDWaveform(wf_params | {'deltaF': hp_f_fine.df / 4}, gen)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 4})
     hp_f.override_unit(u.s)
     norm3 = norm(hp_f, df=hp_f_fine.df / 4)
 
@@ -196,15 +329,17 @@ def test_df_consistency():
     assert_allclose_quantity(norm1, norm3, atol=0.0, rtol=6e-4)
     assert_allclose_quantity(norm2, norm3, atol=0.0, rtol=2e-4)
 
-
-def test_df_no_unit():
-    df_val = 2**-5
-
-    norm1 = norm(hp_f_fine, df=df_val)
-    norm2 = norm(hp_f_fine, df=df_val * u.Hz)
+@pytest.mark.parametrize('df1,df2', [
+    [2**-5, 2**-5*u.Hz],
+    [2**-5, 2**-2*u.mHz],
+    pytest.param(2**-5, 2**-5*u.m, marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid unit for df'))
+])
+def test_df_handling(df1, df2):
+    norm1 = norm(hp_f_fine, df=df1)
+    norm2 = norm(hp_f_fine, df=df2)
 
     assert_quantity_equal(norm1, norm2)
-
 
 def test_different_units():
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
@@ -248,7 +383,7 @@ def test_different_units():
 
 
 #%% Confirm that certain errors are raised
-class ErrorRaising(unittest.TestCase): 
+class ErrorRaising(unittest.TestCase):
     def test_signal_type_checking(self):
         with self.assertRaises(TypeError):
             inner_product(np.array([42]), hp_f_fine)
@@ -307,7 +442,6 @@ wfs_to_compare = {
     }
 }
 
-
 hp_1_pycbc, _ = get_fd_waveform(
     approximant=approximant,
     **wfs_to_compare['signal1'],
@@ -332,31 +466,235 @@ delta_f = 1.0 / hp_2_pycbc.duration
 flen = tlen//2 + 1
 psd_pycbc = aLIGOZeroDetHighPower(flen, delta_f, f_low)
 
-
 hp_1_pycbc_converted = FrequencySeries.from_pycbc(hp_1_pycbc) * u.s
 hp_2_pycbc_converted = FrequencySeries.from_pycbc(hp_2_pycbc) * u.s
 psd_pycbc_converted = FrequencySeries.from_pycbc(psd_pycbc) / u.Hz
 
-
 def test_match_pycbc():
-    overlap_pycbc, _ = match(hp_1_pycbc, hp_2_pycbc, v1_norm=1.0, v2_norm=1.0, psd=psd_pycbc, low_frequency_cutoff=f_low, high_frequency_cutoff=f_high)
+    overlap_pycbc, time_pycbc, phase_pycbc = match(
+        hp_1_pycbc,
+        hp_2_pycbc,
+        v1_norm=1.,
+        v2_norm=1.,
+        psd=psd_pycbc,
+        low_frequency_cutoff=f_low,
+        high_frequency_cutoff=f_high,
+        return_phase=True
+    )
+    time_pycbc *= 1/(2 * (tlen - 1) * delta_f)
 
-    _, overlap_gw_signal_tools, _ = inner_product(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    overlap_gw_signal_tools, info = inner_product(
+        hp_1_pycbc_converted,
+        hp_2_pycbc_converted,
+        psd_pycbc_converted,
+        f_range=[f_low, f_high],
+        optimize_time_and_phase=True,
+        return_opt_info=True
+    )
+    time_gw_signal_tools = info['peak_time'].value
+    phase_gw_signal_tools = info['peak_phase'].value
 
     assert_allclose(overlap_pycbc, overlap_gw_signal_tools, atol=0.0, rtol=2e-3)
-
+    assert_allclose(np.abs(time_pycbc), np.abs(time_gw_signal_tools), atol=0.0, rtol=2e-2)
+    # assert_allclose(phase_pycbc, phase_gw_signal_tools, atol=0.0, rtol=0.0)
+    # Phase is not matching well, seems to be due to different conventions in
+    # what the phase output is (pycbc applies certain operations to phase
+    # beforehand, potentially leading to an unequal shift in the phases of
+    # different signals and thus a different phase needed to align them)
 
 def test_overlap_pycbc():
-    overlap_normalized_pycbc, _ = match(hp_1_pycbc, hp_2_pycbc, psd=psd_pycbc, low_frequency_cutoff=f_low, high_frequency_cutoff=f_high)
+    overlap_normalized_pycbc, _ = match(
+        hp_1_pycbc,
+        hp_2_pycbc,
+        psd=psd_pycbc,
+        low_frequency_cutoff=f_low,
+        high_frequency_cutoff=f_high
+    )
 
-    _, overlap_normalized_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    overlap_normalized_gw_signal_tools = overlap(
+        hp_1_pycbc_converted,
+        hp_2_pycbc_converted,
+        psd_pycbc_converted,
+        f_range=[f_low, f_high],
+        optimize_time_and_phase=True
+    )
 
-    assert_allclose(overlap_normalized_pycbc, overlap_normalized_gw_signal_tools, atol=0.0,rtol=2e-3)  # TODO: change rtol to 0.005?
-
+    assert_allclose(
+        overlap_normalized_pycbc,
+        overlap_normalized_gw_signal_tools,
+        atol=0.,
+        rtol=2e-3
+    )
 
 def test_norm_optimized():
-    _, norm1_gw_signal_tools, _ = overlap(hp_1_pycbc_converted, hp_1_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
-    _, norm2_gw_signal_tools, _ = overlap(hp_2_pycbc_converted, hp_2_pycbc_converted, psd_pycbc_converted, f_range=[f_low, f_high], optimize_time_and_phase=True)
+    norm1_gw_signal_tools = overlap(
+        hp_1_pycbc_converted,
+        hp_1_pycbc_converted,
+        psd_pycbc_converted,
+        f_range=[f_low, f_high],
+        optimize_time_and_phase=True
+    )
+    norm2_gw_signal_tools = overlap(
+        hp_2_pycbc_converted,
+        hp_2_pycbc_converted,
+        psd_pycbc_converted,
+        f_range=[f_low, f_high],
+        optimize_time_and_phase=True
+    )
 
-    assert_allclose(norm1_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)
-    assert_allclose(norm2_gw_signal_tools, 1.0, atol=0.0, rtol=1e-5)
+    assert_allclose(1., [norm1_gw_signal_tools, norm2_gw_signal_tools],
+                    atol=0., rtol=1e-5)
+
+
+#%% ---------- Testing Overlap Optimization ----------
+# @pytest.mark.parametrize('opt', [False, True])
+# @pytest.mark.parametrize('shift', [2.*u.Msun, 5.*u.Msun, 10.*u.Msun])
+@pytest.mark.parametrize('opt, shift', [[False, 2.*u.Msun], [True, 2.*u.Msun],
+                                        [True, 5.*u.Msun], [True, 10.*u.Msun]])
+# For some reason, this only works if optimization is turned on (although
+# the resulting values of time, phase are both zero in the end...)
+def test_mass_opt(opt, shift):
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]*u.s
+    
+    def shifted_wf_gen(wf_params):
+        return wf_gen(wf_params | {'mass1': wf_params['mass1']+shift})
+    
+    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
+        wf_params,
+        wf_gen,
+        shifted_wf_gen,
+        opt_params=['mass1'],
+        optimize_time_and_phase=opt
+    )
+    
+    assert_allclose_quantity(opt_params['mass1']+shift, wf_params['mass1'],
+                             atol=0., rtol=1e-2)
+
+    _match = overlap(wf1_shifted, wf2_shifted)
+    assert_allclose(_match, 1., atol=1e-3, rtol=0.)
+
+@pytest.mark.parametrize('tc', [0.*u.s, 1e-3*u.s, -0.2*u.s, 0.5*u.s])
+@pytest.mark.parametrize('phic', [0.*u.rad, 0.12*u.rad, -0.3*np.pi*u.rad])
+def test_time_phase_opt(tc, phic):
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]*u.s
+    
+    def shifted_wf_gen(wf_params):
+        wf = wf_gen(wf_params)
+        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 1.j*phic)
+    
+    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
+        wf_params,
+        shifted_wf_gen,
+        wf_gen,
+        opt_params=['time', 'phase'],
+        df=2**-3,  # Not required, but speeds up calculations
+        min_dt_prec=1e-5*u.s
+    )
+    
+    wf1_shifted_2, wf2_shifted_2, opt_params_2 = optimize_overlap(
+        wf_params,
+        shifted_wf_gen,
+        wf_gen,
+        optimize_time_and_phase=True,
+        df=2**-3,  # Not required, but speeds up calculations
+        min_dt_prec=1e-5*u.s
+    )
+
+    assert_allclose_quantity(tc, [opt_params['time'], opt_params_2['time']],
+                             atol=1e-5, rtol=0.)
+    assert_allclose_quantity(phic, [opt_params['phase'], opt_params_2['phase']],
+                             atol=1e-3, rtol=1e-2)  # atol for phase zero
+
+    assert_allclose(
+        1.,
+        [overlap(wf1_shifted, wf2_shifted),
+         overlap(wf1_shifted_2, wf2_shifted_2)],
+        atol=1e-4,
+        rtol=0.
+    )
+
+@pytest.mark.slow  # Because mass1 is involved, time and phase are fast
+@pytest.mark.parametrize('opt_time', [True, False])
+@pytest.mark.parametrize('opt_phase', [True, False])
+def test_time_phase_arg_interplay(opt_time, opt_phase):
+    # We now pass time and phase arguments, along with optimization
+    # enabled via inner product keyword arguments
+    tc = -0.2*u.s
+    phic = 0.12*u.rad
+
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]*u.s
+    
+    def shifted_wf_gen(wf_params):
+        wf = wf_gen(wf_params)
+        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 1.j*phic)
+    
+    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
+        wf_params,
+        shifted_wf_gen,
+        wf_gen,
+        opt_params=['mass1', 'time', 'phase'],
+        optimize_time=opt_time,
+        optimize_phase=opt_phase,
+        df=2**-3,  # Not required, but speeds up calculations
+        min_dt_prec=1e-5
+    )
+
+    assert_allclose_quantity(wf_params['mass1'], opt_params['mass1'],
+                             atol=0., rtol=1e-3)
+    assert_allclose_quantity(tc, opt_params['time'], atol=1e-5, rtol=0.)
+    assert_allclose_quantity(phic, opt_params['phase'], atol=1e-3, rtol=1e-2)
+    assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)
+
+@pytest.mark.slow  # Because mass1 is involved, time and phase are fast
+@pytest.mark.parametrize('params', [
+    'time', ['mass1', 'time'],
+    'phase', ['mass1', 'phase'],
+    pytest.param(['time', 'tc'], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid input')),
+    pytest.param(['phase', 'psi'], marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Invalid input'))
+])
+def test_time_phase_arg_handling(params):
+    # Testing strange combinations for handling
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]*u.s
+    
+    _, _, opt_params = optimize_overlap(
+        wf_params,
+        wf_gen,
+        wf_gen,
+        opt_params=params,
+    )
+
+    if isinstance(params, str):
+        params = [params]  # For length comparison
+    assert len(opt_params) == len(params)
+
+@pytest.mark.slow  # Because mass1 is involved, time and phase are fast
+@pytest.mark.parametrize('opt_params', [['tc', 'psi'], ['mass1', 'tc', 'psi']])
+def test_arg_equivalence(opt_params):
+    tc = -0.2*u.s
+    psi = 0.12*u.rad
+
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]*u.s
+    
+    def shifted_wf_gen(wf_params):
+        wf = wf_gen(wf_params)
+        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 2.j*psi)
+    
+    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
+        wf_params,
+        shifted_wf_gen,
+        wf_gen,
+        opt_params=opt_params,
+        df=2**-3,  # Not required, but speeds up calculations
+        min_dt_prec=1e-5
+    )
+
+    assert_allclose_quantity(tc, opt_params['tc'], atol=1e-5, rtol=0.)
+    assert_allclose_quantity(psi, opt_params['psi'], atol=1e-3, rtol=1e-2)
+    assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)

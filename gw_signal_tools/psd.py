@@ -1,7 +1,12 @@
+# ----- Third Party Imports -----
 import numpy as np
-
-from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+from gwpy.frequencyseries import FrequencySeries
+
+
+__doc__ = """
+Helper functions to read and write power spectral densities.
+"""
 
 
 def psd_to_file(
@@ -27,11 +32,10 @@ def psd_to_file(
     -------
     None
 
-    See also
+    See Also
     --------
     numpy.savetxt : Used to read the file.
     """
-
     if is_asd:
         psd = psd**2
 
@@ -60,11 +64,10 @@ def psd_from_file(
     freqs, psd : tuple[~numpy.array, ~numpy.array]
         Frequencies and PSD values as numpy arrays.
 
-    See also
+    See Also
     --------
     numpy.loadtxt : Used to read the file.
     """
-
     file_vals = np.loadtxt(fname)
     freqs, psd = file_vals[:, 0], file_vals[:, 1]
 
@@ -100,7 +103,6 @@ def psd_from_file_to_FreqSeries(
     ~gwpy.frequencyseries.FrequencySeries
         PSD as a ``FrequencySeries``.
     """
-
     file_vals = np.loadtxt(fname)
     freqs, psd = file_vals[:, 0], file_vals[:, 1]
 
@@ -146,7 +148,6 @@ def get_FreqSeries_from_dict(
     ~gwpy.frequencyseries.FrequencySeries
         Data from input dict in a ``FrequencySeries``.
     """
-
     return FrequencySeries(
         psd[psd_vals_key]**2 if is_asd else psd[psd_vals_key],
         frequencies=psd['frequencies'],

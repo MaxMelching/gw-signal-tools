@@ -15,6 +15,6 @@ build/*
 
 *_version.py
 
+docs/_build
 
-# Documentation (is preliminary, thus ignored for now)
-docs/*
+docs/no_psd.txt

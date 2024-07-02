@@ -47,3 +47,11 @@ by adding, for example, `@v0.0.1` at the end of the prompt.
 ## Project Status
 
 In progress.
+
+## Change Log
+
+Click [here](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/releases).
+
+## Documentation
+
+Has no domain yet, but is in progress.

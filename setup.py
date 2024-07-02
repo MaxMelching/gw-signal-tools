@@ -50,11 +50,13 @@ setuptools.setup(
     # ----- Dependencies for package -----
     python_requires='==3.11.5',  # Installation is verified to work with that
     install_requires=[
-        # Add gwpy as separate requirement? To make sure we have right version
-        'lalsuite[lalinference]',  # Do we need lalinference?
+        'lalsuite',
         'numpy',
         'scipy',
-        'matplotlib'
+        'matplotlib',
+        'gwpy>=3',
+        # 'pyseobnr',  # Not entirely sure if needed -> better as extra
+        # 'gwsurrogate'  # Not entirely sure if needed -> NOT NEEDED, we only call through lal
     ],
     # ----- Optional dependencies -----
     extras_require={
@@ -67,7 +69,8 @@ setuptools.setup(
             'pycbc',
             'numdifftools',
         ],
-        'jupyter': 'jupyter',
-        # 'pyseobnr': 'pyseobnr',  # Apparently causes error
+        'pyseobnr': 'pyseobnr',  # Do not install by default, loads for 5s each
+                                 # time a Python script is run
+        'jupyter': 'jupyter'
     }
 )

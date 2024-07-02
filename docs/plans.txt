@@ -1,0 +1,28 @@
+General:
+- provide links to useful gwisgnal doc pages, maybe on page about wf gen or so?
+
+Inner Product:
+- show that geometric units work
+- show how to use frequency range arguments etc
+- definitely mention that psd_no_noise has limited frequency range (but that
+  one can insist on certain range, whence error is printed if this cannot
+  be fulfilled with given input)
+- show how overlap can be optimized
+
+Fisher Matrix:
+- show how to do stuff of common interest, for example accessing Fisher
+- show example notebooks where we compute numerical Fisher and analytical
+- show that giving params in dictionaries in SI values will also give
+  derivatives in SI values (conversion in functions takes place anyway,
+  but derivative functions divide by these values)
+- mention that control over units in input dictionaries allows easy
+  testing (and thus manual optimization) of Fisher w.r.t. condition number
+
+Units:
+- mention that custom units can be added via
+  gw_signal_tools.units.def_unit('new_unit', ..., namespace=gw_signal_tools.units._ns)
+
+  -> at least I think this is how it works; maybe adding to astropy.units is
+     sufficient as well, test that when writing tutorial
+  
+  -> might also prevent errors in conversions

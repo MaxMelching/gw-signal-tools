@@ -2,9 +2,6 @@
 import unittest
 
 # ----- Third Party Imports -----
-import numpy as np
-from numpy.testing import assert_allclose
-
 import matplotlib.pyplot as plt
 
 import astropy.units as u
@@ -14,13 +11,12 @@ from gwpy.testing.utils import assert_quantity_equal
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.fisher import (
-    fisher_matrix, FisherMatrix, distance, linearized_distance
+    distance, linearized_distance
 )
 from gw_signal_tools.test_utils import (
-    allclose_quantity, assert_allclose_quantity,
-    assert_allclose_series
+    assert_allclose_quantity, assert_allclose_series
 )
 from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)
@@ -48,7 +44,7 @@ wf_params = {
 
 approximant = 'IMRPhenomXPHM'
 
-wf_gen = FisherMatrix.get_wf_generator(approximant)
+wf_gen = get_wf_generator(approximant)
 
 @pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 @pytest.mark.parametrize('optimize', [False, True])
@@ -136,30 +132,6 @@ def test_projected_linearized_distance(param_to_vary):
 
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
 
-@pytest.mark.parametrize('dist_func', [distance, linearized_distance])
-def test_default_wf_gen(dist_func):
-    param_to_vary = 'total_mass'
-    center_val = wf_params[param_to_vary]
-    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
-    step_size = 5e-2*center_val
-
-    dist1 = dist_func(
-        param_to_vary=param_to_vary,
-        param_vals=param_range,
-        wf_params=wf_params,
-        param_step_size=step_size,
-        wf_generator=wf_gen
-    )
-
-    dist2 = dist_func(
-        param_to_vary=param_to_vary,
-        param_vals=param_range,
-        wf_params=wf_params,
-        param_step_size=step_size
-    )
-
-    assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
-
 class ErrorRaising(unittest.TestCase):
     param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]
@@ -219,7 +191,8 @@ class ErrorRaising(unittest.TestCase):
                 wf_params=wf_params,
                 param_step_size=self.step_size,
                 distance_kind='diff_norm',
-                params_to_project=['time', 'phase']
+                params_to_project=['time', 'phase'],
+                wf_generator=wf_gen
             )
     
     def test_invalid_input_unit(self):

@@ -16,8 +16,18 @@ from .fisher import FisherMatrix
 
 
 class Detector:
-    # Very basic, should have psd and name
+    """
+    Basic representation of a gravitational wave (GW) detector.
+
+    Parameters
+    ----------
+    name : str
+        Name of the detector.
+    psd : ~gwpy.frequencyseries.FrequencySeries
+        Power spectral density of the detector.
+    """
     def __init__(self, name: str, psd: FrequencySeries) -> None:
+        """Initializa a ``Detector``."""
         self._name = name
         self._psd = psd
 
@@ -25,14 +35,25 @@ class Detector:
     
     @property
     def name(self):
+        """Name of the detector."""
         return self._name
+    
+    @name.setter
+    def name(self, name: str) -> None:
+        assert isinstance(name, str), 'New `name` must be a string.'
+        self._name = name
     
     @property
     def psd(self):
+        """Power spectral density (PSD) of the detector."""
         return self._psd
     
-    # TODO: think about whether or not this has to be immutable. Maybe
-    # we can also work with self.name and self.psd directly in __init__
+    @name.setter
+    def psd(self, psd: FrequencySeries) -> None:
+        assert isinstance(psd, FrequencySeries), (
+            'New `psd` must be a GWpy ``FrequencySeries``.')
+        self._psd = psd
+
 
 class FisherMatrixNetwork(FisherMatrix):
     def __init__(self,

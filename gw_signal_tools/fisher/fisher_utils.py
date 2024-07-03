@@ -666,12 +666,28 @@ def get_waveform_derivative_1D(
     
     # Choose relative or absolute step size, based on param value
     if np.log10(param_center_val.value) < 1:
-        step_size = u.Quantity(step_size, unit=param_center_val.unit)
+        step_size = np.abs(u.Quantity(step_size, unit=param_center_val.unit))
     else:
-        step_size = u.Quantity(step_size * param_center_val, unit=param_center_val.unit)
+        step_size = np.abs(u.Quantity(step_size * param_center_val, unit=param_center_val.unit))
     
-    if not (param_to_vary == 'mass_ratio'
-            and (param_center_val + 2*step_size) > 1.):
+    # Note: we need to pay attention to the mass ratio q because there
+    # are two conventions, which are both accepted by LAL. This becomes
+    # a problem for values close to 1, where this convention switches.
+    if (param_to_vary == 'mass_ratio'
+        and (param_center_val + 2*step_size) > 1.
+        and (param_center_val - 2*step_size) < 1.):
+        if param_center_val <= 1.:
+            param_vals = param_center_val + np.array([0., -1.])*step_size
+        else:
+            param_vals = param_center_val + np.array([1., 0.])*step_size
+
+        waveforms = [
+            wf_generator(wf_params_at_point | {param_to_vary: param_val}
+                        ) for param_val in param_vals
+        ]
+
+        deriv_series = (waveforms[0] - waveforms[1]) / step_size
+    else:
         param_vals = param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
         waveforms = [
@@ -682,15 +698,6 @@ def get_waveform_derivative_1D(
         deriv_series = (waveforms[0] - 8.*waveforms[1]
                         + 8.*waveforms[2] - waveforms[3])
         deriv_series /= 12.*step_size
-    else:
-        param_vals = param_center_val + np.array([0., -1.])*step_size
-
-        waveforms = [
-            wf_generator(wf_params_at_point | {param_to_vary: param_val}
-                        ) for param_val in param_vals
-        ]
-
-        deriv_series = (waveforms[0] - waveforms[1]) / step_size
 
     # Central Difference -> make this option in function?
     # deriv_series = waveforms[1] - waveforms[0]

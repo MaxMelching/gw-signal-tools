@@ -56,16 +56,15 @@ class FisherMatrixNetwork(FisherMatrix):
         for i, det in enumerate(self.detectors):
             self._detector_indices[det.name] = i
 
-            # psd = det.psd
-            # self._fisher_for_dets += [fisher_matrix(psd=psd)]
             self._fisher_for_dets += [
                 FisherMatrix(
-                    wf_params_at_point=wf_params_at_point | {'det': det.name} | det.wf_args,
+                    wf_params_at_point=wf_params_at_point | det.wf_args,
                     params_to_vary=params_to_vary,
                     wf_generator=wf_generator,
                     direct_computation=direct_computation,
                     psd=det.psd,
-                    **metadata)
+                    **metadata
+                )
             ]
     
         if direct_computation:

@@ -73,7 +73,7 @@ class Detector:
     
     @wf_args.setter
     def wf_args(self, wf_args) -> None:
-        self._wf_args = dict(wf_args)
+        self._wf_args = dict(wf_args) | {'det': self.name}
 
     @wf_args.deleter
     def wf_args(self) -> None:

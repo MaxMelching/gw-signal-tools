@@ -479,7 +479,7 @@ class FisherMatrix:
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
-        return_opt_info: bool = True,
+        return_opt_info: bool = False,
         **inner_prod_kwargs
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
@@ -550,7 +550,7 @@ class FisherMatrix:
             Note that they will not appear in the returned error anymore
             because they do not appear in the Fisher matrix used for the
             calculation that determines the output.
-        return_opt_info : bool, optional, default = True
+        return_opt_info : bool, optional, default = False
             Whether to return information on the calculations along with
             result.
         inner_prod_kwargs : 
@@ -721,6 +721,7 @@ class FisherMatrix:
                 )
 
                 optimization_info['fisher_opt_params'] = optimize_fisher
+                optimization_info['opt_fisher'] = opt_fisher
             else:
                 opt_fisher = self
                 # TODO: maybe also check if inner_prod_kwargs != init_inner_prod_kwargs,
@@ -794,6 +795,7 @@ class FisherMatrix:
             # print(opt_bias)
             
             fisher_bias += opt_bias
+            optimization_info['opt_bias'] = opt_bias
 
         # Check which params shall be returned
         if params is not None:
@@ -803,7 +805,7 @@ class FisherMatrix:
 
             fisher_bias = fisher_bias[param_indices]
         
-        if optimize is False or return_opt_info is False:
+        if return_opt_info is False:
             return fisher_bias
         else:
             return fisher_bias, optimization_info

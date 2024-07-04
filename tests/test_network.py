@@ -3,7 +3,7 @@ import astropy.units as u
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.fisher import FisherMatrixNetwork
+from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
 from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.types import Detector
 from gw_signal_tools.PSDs import psd_no_noise
@@ -34,8 +34,8 @@ wf_params = {
     'condition': 0
 }
 
-approximant = 'IMRPhenomXPHM'
-phenomx_generator = get_wf_generator(approximant)
+phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
 import lalsimulation.gwsignal.core.parameter_conventions as pc
@@ -80,3 +80,58 @@ def test_detector():
             phenomx_generator,
             [invalid_det]
         )
+
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass', 'time', 'phase']])
+def test_sys_error(params):
+    fisher = FisherMatrixNetwork(
+        wf_params,
+        ['total_mass', 'mass_ratio', 'time', 'phase'],
+        phenomx_generator,
+        [hanford, livingston]
+    )
+
+    fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False)
+
+    fisher.systematic_error(phenomd_generator, params)
+    
+    fisher.systematic_error(phenomd_generator, optimize=True)
+    
+    fisher.systematic_error(phenomd_generator, optimize=['time', 'phase'])
+    
+    fisher.systematic_error(phenomd_generator,
+                            optimize_fisher=['time', 'phase'])
+    
+    fisher.systematic_error(phenomd_generator, optimize=True,
+                            optimize_fisher=['time', 'phase'])
+
+def test_single_det_consistency():
+    fisher_v1 = FisherMatrixNetwork(
+        wf_params,
+        'total_mass',
+        phenomx_generator,
+        [hanford]
+    )
+
+    fisher_v2 = FisherMatrix(
+        wf_params | {'det': 'H1'},
+        'total_mass',
+        phenomx_generator,
+        psd=psd_no_noise
+    )
+
+    assert fisher_v1.fisher == fisher_v2.fisher
+
+    for opt in [False, True]:
+        sys_error_1 = fisher_v1.systematic_error(
+            phenomd_generator,
+            optimize=opt,
+            return_opt_info=False
+        )
+
+        sys_error_2 = fisher_v2.systematic_error(
+            phenomd_generator,
+            optimize=opt,
+            return_opt_info=False
+        )
+
+        assert sys_error_1 == sys_error_2

@@ -84,4 +84,4 @@ class Detector:
     
     def __repr__(self) -> str:
         # TODO: make better
-        return 'Detector: ' + self.name + ' with PSD ' + self.psd.name
+        return 'Detector name: ' + self.name + '\nPSD description: ' + self.psd.name

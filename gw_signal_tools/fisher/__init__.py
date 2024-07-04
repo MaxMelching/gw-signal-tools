@@ -6,6 +6,7 @@ from .fisher_utils import (  # noqa: F401
 )
 from .fisher import FisherMatrix  # noqa: F401
 # from .matrix_with_units import MatrixWithUnits  # Do this? 
+from .fisher_network import FisherMatrixNetwork  # noqa: F401
 
 from .distances import distance, linearized_distance  # noqa: F401
 

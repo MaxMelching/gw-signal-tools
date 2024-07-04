@@ -13,49 +13,19 @@ import astropy.units as u
 from ..inner_product import inner_product
 from ..matrix_with_units import MatrixWithUnits
 from .fisher import FisherMatrix
-
-
-class Detector:
-    """
-    Basic representation of a gravitational wave (GW) detector.
-
-    Parameters
-    ----------
-    name : str
-        Name of the detector.
-    psd : ~gwpy.frequencyseries.FrequencySeries
-        Power spectral density of the detector.
-    """
-    def __init__(self, name: str, psd: FrequencySeries) -> None:
-        """Initializa a ``Detector``."""
-        self._name = name
-        self._psd = psd
-
-        # TODO: make default psd? No noise one?
-    
-    @property
-    def name(self):
-        """Name of the detector."""
-        return self._name
-    
-    @name.setter
-    def name(self, name: str) -> None:
-        assert isinstance(name, str), 'New `name` must be a string.'
-        self._name = name
-    
-    @property
-    def psd(self):
-        """Power spectral density (PSD) of the detector."""
-        return self._psd
-    
-    @name.setter
-    def psd(self, psd: FrequencySeries) -> None:
-        assert isinstance(psd, FrequencySeries), (
-            'New `psd` must be a GWpy ``FrequencySeries``.')
-        self._psd = psd
+from ..types import Detector
 
 
 class FisherMatrixNetwork(FisherMatrix):
+    """
+    _summary_
+
+    Parameters
+    ----------
+    wf_generator :
+        Must accept extrinsic parameters now, otherwise notion of
+        multiple detectors does not make sense.
+    """
     def __init__(self,
         wf_params_at_point: dict[str, u.Quantity],
         params_to_vary: str | list[str],
@@ -81,7 +51,7 @@ class FisherMatrixNetwork(FisherMatrix):
         
         self._detector_indices = {}
         self._fisher_for_dets = []  # TODO: make dict too?
-        self._fisher = MatrixWithUnits.from_numpy_array(np.zeros(2*(len(params_to_vary),)))
+        # self._fisher = MatrixWithUnits.from_numpy_array(np.zeros(2*(len(params_to_vary),)))
         
         for i, det in enumerate(self.detectors):
             self._detector_indices[det.name] = i
@@ -90,11 +60,11 @@ class FisherMatrixNetwork(FisherMatrix):
             # self._fisher_for_dets += [fisher_matrix(psd=psd)]
             self._fisher_for_dets += [
                 FisherMatrix(
-                    wf_params_at_point=wf_params_at_point,
+                    wf_params_at_point=wf_params_at_point | {'det': det.name} | det.wf_args,
                     params_to_vary=params_to_vary,
                     wf_generator=wf_generator,
                     direct_computation=direct_computation,
-                    psd=det.psd
+                    psd=det.psd,
                     **metadata)
             ]
     
@@ -112,7 +82,6 @@ class FisherMatrixNetwork(FisherMatrix):
     #     ...
     # TODO: check if needed. This job is taken by detector_fisher, right?
     
-    @property
     def _index_from_det(self, det: Detector | str):
         """Get index for detector name."""
         if isinstance(det, Detector):
@@ -137,9 +106,11 @@ class FisherMatrixNetwork(FisherMatrix):
         # by caching or maybe by realizing that derivatives will not
         # differ much in different detectors (only difference is PSD
         # used to check convergence)
-        for i, det in enumerate(self.detectors):
+        self._fisher = self.detector_fisher(self.detectors[0]).fisher
+        # Needed to have correct units. Setting just with zeros does not work
+        for i, det in enumerate(self.detectors[1:]):
             # self._fisher += self._fisher_for_dets[i].fisher
-            self._fisher += self.detector_fisher[det].fisher
+            self._fisher += self.detector_fisher(det).fisher
 
             # TODO: decide which one is better
     

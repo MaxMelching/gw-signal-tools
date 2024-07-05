@@ -8,7 +8,7 @@ import pytest
 import matplotlib.pyplot as plt
 
 # ----- Local Package Imports -----
-from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
 )

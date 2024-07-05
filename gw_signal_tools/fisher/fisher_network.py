@@ -11,9 +11,8 @@ import astropy.units as u
 
 # ----- Local Package Imports -----
 from ..inner_product import inner_product
-from ..matrix_with_units import MatrixWithUnits
 from .fisher import FisherMatrix
-from ..types import Detector
+from ..types import MatrixWithUnits, Detector
 
 
 class FisherMatrixNetwork(FisherMatrix):

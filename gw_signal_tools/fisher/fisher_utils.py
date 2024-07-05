@@ -16,7 +16,7 @@ import astropy.units as u
 # ----- Local Package Imports -----
 from gw_signal_tools import logger
 from ..inner_product import inner_product, norm
-from ..matrix_with_units import MatrixWithUnits
+from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
 
 

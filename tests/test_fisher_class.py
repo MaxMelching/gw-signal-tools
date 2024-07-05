@@ -6,7 +6,7 @@ import pytest
 
 # ----- Local Package Imports -----
 from gw_signal_tools.waveform_utils import get_wf_generator
-from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.fisher import (
     fisher_matrix, FisherMatrix
 )

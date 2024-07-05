@@ -13,7 +13,7 @@ import astropy.units as u
 from gw_signal_tools import preferred_unit_system, logger
 from ..inner_product import inner_product, optimize_overlap, get_default_opt_params
 from ..waveform_utils import get_wf_generator
-from ..matrix_with_units import MatrixWithUnits
+from ..types import MatrixWithUnits
 from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
 
 

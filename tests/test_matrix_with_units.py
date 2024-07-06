@@ -606,6 +606,31 @@ def test_to():
         rtol=1e-15  # Numerical errors, I think in initialization
     )
 
+def test_decompose():
+    matrix = MatrixWithUnits(example_values, [[u.Msun, u.pc], [u.km, u.h]])
+    
+    matrix_dec = matrix.decompose(bases=preferred_unit_system.bases)
+    assert_allclose_MatrixWithUnits(
+        matrix_dec,
+        MatrixWithUnits(example_values*np.array([[1., 1.], [(u.km/u.pc).si.scale, (u.h/u.s).si.scale]]), [[u.Msun, u.pc], [u.pc, u.s]]),
+        atol=1e-12, rtol=0.
+    )
+
+    matrix_dec_2 = matrix.decompose(bases=[u.Unit(1e-6*u.Msun), u.km, u.h])
+    assert_allclose_MatrixWithUnits(
+        matrix_dec_2,
+        MatrixWithUnits(example_values*np.array([[1e6, (u.pc/u.km).si.scale], [1., 1.]]), [[u.Unit(1e-6*u.Msun), u.km], [u.km, u.h]]),
+        atol=0., rtol=1e-15
+    )
+
+    matrix_dec_3 = matrix.copy()
+    matrix_dec_3[0, :] = matrix_dec_3[0, :].decompose(bases=[u.Unit(1e-6*u.Msun), u.km])
+    assert_allclose_MatrixWithUnits(
+        matrix_dec_3,
+        MatrixWithUnits(example_values*np.array([[1e6, (u.pc/u.km).si.scale], [1., 1.]]), [[u.Unit(1e-6*u.Msun), u.km], [u.km, u.h]]),
+        atol=0., rtol=1e-15
+    )
+
 
 # ----- Test custom additions -----
 @pytest.mark.parametrize('given_ax', [True, False])

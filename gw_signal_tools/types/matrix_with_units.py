@@ -680,6 +680,14 @@ class MatrixWithUnits:
             new_matrix[index] = new_matrix[index].to(new_unit)
         
         return new_matrix
+    
+    def decompose(self, bases: Any) -> MatrixWithUnits:
+        new_matrix = self.copy()
+
+        for index in np.ndindex(new_matrix.shape):
+            new_matrix[index] = new_matrix[index].decompose(bases=bases)
+        
+        return new_matrix
 
 
     # ---------- Some custom additions -----

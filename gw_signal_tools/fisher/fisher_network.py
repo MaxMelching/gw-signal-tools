@@ -10,8 +10,8 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
-from ..inner_product import inner_product
-from .fisher import FisherMatrix
+from ..inner_product import norm
+from .fisher import FisherMatrix, fisher_matrix
 from ..types import MatrixWithUnits, Detector
 
 
@@ -22,7 +22,7 @@ class FisherMatrixNetwork(FisherMatrix):
     Parameters
     ----------
     wf_generator :
-        Must accept extrinsic parameters now, otherwise notion of
+        Must accept extrinsic parameters now, otherwise having
         multiple detectors does not make sense.
     """
     def __init__(self,
@@ -65,6 +65,20 @@ class FisherMatrixNetwork(FisherMatrix):
                     **metadata
                 )
             ]
+
+        if len(self.metadata) > len(self.default_metadata):
+            # Arguments for inner product may have been given
+            from inspect import signature
+            fisher_args = list(signature(fisher_matrix).parameters)
+            fisher_args.remove('inner_prod_kwargs')
+
+            # Start with metadata, then remove all potential arguments
+            # for Fisher. Leaves keywords for inner product
+            self._inner_prod_kwargs = self.metadata.copy()
+            for key in fisher_args:
+                self._inner_prod_kwargs.pop(key, None)
+        else:
+            self._inner_prod_kwargs = {}
     
         if direct_computation:
             self._calc_fisher()
@@ -206,3 +220,31 @@ class FisherMatrixNetwork(FisherMatrix):
             return fisher_bias
         else:
             return fisher_bias, optimization_info
+    
+    def snr(self, **inner_prod_kwargs):
+        """
+        Calculate the signal-to-noise ratio (SNR) of the signal that
+        `self.wf_generator` produces at `self.wf_params_at_point`.
+
+        Parameters
+        ----------
+        inner_prod_kwargs :
+            Any keyword argument given here will be passed to the inner
+            product calculation. Enables e.g. testing SNR with different
+            PSD while leaving all other arguments the same.
+
+        Returns
+        -------
+        ~astropy.units.Quantity :
+            SNR, i.e. norm of signal, in the given detector network.
+        """
+        _inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
+        _inner_prod_kwargs.pop('psd', None)  # Make sure no PSD given
+
+        snr = 0.
+        for det in self.detectors:
+            signal = self.wf_generator(self.wf_params_at_point | det.wf_args)
+            snr += norm(signal, psd=det.psd, **_inner_prod_kwargs)**2
+        
+        return snr**.5
+        # TODO: check if normalization factor like 1/len(self.detectors) is needed

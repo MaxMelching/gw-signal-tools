@@ -11,7 +11,9 @@ import astropy.units as u
 
 # ----- Local Package Imports -----
 from gw_signal_tools import preferred_unit_system, logger
-from ..inner_product import inner_product, optimize_overlap, get_default_opt_params
+from ..inner_product import (
+    inner_product, norm, optimize_overlap, get_default_opt_params
+)
 from ..waveform_utils import get_wf_generator
 from ..types import MatrixWithUnits
 from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
@@ -126,6 +128,20 @@ class FisherMatrix:
             self.params_to_vary = params_to_vary.copy()
         self.wf_generator = wf_generator
         self.metadata = self.default_metadata | metadata
+
+        if len(self.metadata) > len(self.default_metadata):
+            # Arguments for inner product may have been given
+            from inspect import signature
+            fisher_args = list(signature(fisher_matrix).parameters)
+            fisher_args.remove('inner_prod_kwargs')
+
+            # Start with metadata, then remove all potential arguments
+            # for Fisher. Leaves keywords for inner product
+            self._inner_prod_kwargs = self.metadata.copy()
+            for key in fisher_args:
+                self._inner_prod_kwargs.pop(key, None)
+        else:
+            self._inner_prod_kwargs = {}
     
         if direct_computation:
             self._calc_fisher()
@@ -572,32 +588,11 @@ class FisherMatrix:
         
         if isinstance(optimize_fisher, str):
             optimize_fisher = [optimize_fisher]
-        
-        # Note: we want to use same kwargs for inner product as for
-        # calculation of Fisher matrix here, have to be extracted from
-        # metadata property
-        # -> changed this now, we might want to optimize over some stuff here
-        from inspect import signature
-        fisher_args = list(signature(fisher_matrix).parameters)
-        fisher_args.remove('inner_prod_kwargs')
-        init_inner_prod_kwargs = self.metadata.copy()
-
-        # Remove all potential arguments for Fisher, leaves inner_prod_kwargs
-        for key in fisher_args:
-            init_inner_prod_kwargs.pop(key, None)
-            
-        if len(inner_prod_kwargs) > 0:
-            # Update keywords from initial input to the instance
-            inner_prod_kwargs = init_inner_prod_kwargs | inner_prod_kwargs
-        else:
-            inner_prod_kwargs = init_inner_prod_kwargs
-        # Not a good idea I think now. This will lead to optimization in case
-        # e.g. optimized inner product is used for derivative overlap calculation,
-        # which is not desirable behaviour
-        # -> is this a robust argument?
-        # -> also, why should behaviour described here be a problem?
 
         optimization_info = {}
+        
+        # Update keywords from initial input to the instance
+        inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
 
         # ----- Get Fisher matrix and delta h to use. This -----
         # ----- depends on whether or not optimization of them  -----
@@ -809,6 +804,26 @@ class FisherMatrix:
             return fisher_bias
         else:
             return fisher_bias, optimization_info
+    
+    def snr(self, **inner_prod_kwargs):
+        """
+        Calculate the signal-to-noise ratio (SNR) of the signal that
+        `self.wf_generator` produces at `self.wf_params_at_point`.
+
+        Parameters
+        ----------
+        inner_prod_kwargs :
+            Any keyword argument given here will be passed to the inner
+            product calculation. Enables e.g. testing SNR with different
+            PSD while leaving all other arguments the same.
+
+        Returns
+        -------
+        ~astropy.units.Quantity :
+            SNR, i.e. norm of signal.
+        """
+        signal = self.wf_generator(self.wf_params_at_point)
+        return norm(signal, **(self._inner_prod_kwargs | inner_prod_kwargs))
 
     def plot_matrix(self, matrix: MatrixWithUnits, xticks: bool = True,
                     yticks: bool = True, *args, **kwargs) -> mpl.axes.Axes:

@@ -104,6 +104,19 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, optimize=True,
                             optimize_fisher=['time', 'phase'])
 
+@pytest.mark.parametrize('inner_prod_kwargs', [
+    {},
+    dict(f_range=[20.*u.Hz, 42.*u.Hz]),
+    dict(df=2**-2, min_dt_prec=1e-5*u.s)
+])
+def test_snr(inner_prod_kwargs):
+    from gw_signal_tools.inner_product import norm
+    snr = 0.
+    for det in [hanford, livingston]:
+        snr += norm(phenomx_generator(wf_params | {'det': det.name}),
+                    psd=det.psd, **inner_prod_kwargs)**2
+    assert snr**.5 == fisher_tot_mass.snr(**inner_prod_kwargs)
+
 def test_single_det_consistency():
     fisher_v1 = FisherMatrixNetwork(
         wf_params,
@@ -120,6 +133,7 @@ def test_single_det_consistency():
     )
 
     assert fisher_v1.fisher == fisher_v2.fisher
+    assert fisher_v1.snr() == fisher_v2.snr()
 
     for opt in [False, True]:
         sys_error_1 = fisher_v1.systematic_error(

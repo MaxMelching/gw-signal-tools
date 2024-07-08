@@ -232,6 +232,16 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, optimize=True,
                             optimize_fisher=['time', 'phase'])
 
+@pytest.mark.parametrize('inner_prod_kwargs', [
+    {},
+    dict(f_range=[20.*u.Hz, 42.*u.Hz]),
+    dict(df=2**-2, min_dt_prec=1e-5*u.s)
+])
+def test_snr(inner_prod_kwargs):
+    from gw_signal_tools.inner_product import norm
+    snr = norm(phenomx_generator(wf_params), **inner_prod_kwargs)
+    assert snr == fisher_tot_mass.snr(**inner_prod_kwargs)
+
 def test_plot():
     fisher = FisherMatrix(
         wf_params,

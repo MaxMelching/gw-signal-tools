@@ -149,21 +149,18 @@ class FisherMatrix:
             # not allow new computation if this param is False
     
     def _calc_fisher(self):
+        result = fisher_matrix(
+            self.wf_params_at_point,
+            self.params_to_vary,
+            self.wf_generator,
+            **self.metadata
+        )
+
         if self.metadata['return_info']:
-            self._fisher, self._deriv_info = fisher_matrix(
-                self.wf_params_at_point,
-                self.params_to_vary,
-                self.wf_generator,
-                **self.metadata
-            )
+            self._fisher, self._deriv_info = result
             plt.close('all')  # Avoid too many open axes
         else:
-            self._fisher = fisher_matrix(
-                self.wf_params_at_point,
-                self.params_to_vary,
-                self.wf_generator,
-                **self.metadata
-            )
+            self._fisher = result
 
             # self._deriv_info = {'general_info': 'There is no info available.'}
             self._deriv_info = {}
@@ -250,6 +247,11 @@ class FisherMatrix:
     @property
     def deriv_info(self) -> dict:
         # TODO: self._deriv_info is available... Soooo, shall we something with it?
+        try:
+            self._deriv_info
+        except AttributeError:
+            self._deriv_info = {}
+        
         return self._deriv_info
     
     def get_param_indices(self, params: str | list[str]) -> list[int]:

@@ -33,56 +33,35 @@ class FisherMatrixNetwork(FisherMatrix):
         direct_computation: bool = True,
         **metadata
     ) -> None:
-        # Standard setup, same as in FisherMatrix
-        self.wf_params_at_point = wf_params_at_point
-        if isinstance(params_to_vary, str):
-            self.params_to_vary = [params_to_vary]
-        else:
-            self.params_to_vary = params_to_vary.copy()
-        self.wf_generator = wf_generator
-        self.metadata = self.default_metadata | metadata
-
+        """Initialize a ``FisherMatrixNetwork``."""
         # Setup for Network specifically
         if isinstance(detectors, Detector):
             self._detectors = [detectors]
         else:
             self._detectors = detectors
-        
+
         self._detector_indices = {}
-        self._fisher_for_dets = []  # TODO: make dict too?
-        # self._fisher = MatrixWithUnits.from_numpy_array(np.zeros(2*(len(params_to_vary),)))
-        
         for i, det in enumerate(self.detectors):
             self._detector_indices[det.name] = i
+        
+        # Now we can proceed with standard Fisher setup
+        # Note that handling of detectors prior to this call is
+        # detrimental because self._calc_fisher needs it, which is
+        # potentially called in the following.
+        _metadata = metadata.copy()
+        _metadata.pop('psd', None)
+        # Make sure no psd keyword is present, this is always taken from
+        # detectors. Would not make sense to pass single PSD for a
+        # network of multiple detectors anyway.
 
-            self._fisher_for_dets += [
-                FisherMatrix(
-                    wf_params_at_point=wf_params_at_point | det.wf_args,
-                    params_to_vary=params_to_vary,
-                    wf_generator=wf_generator,
-                    direct_computation=direct_computation,
-                    psd=det.psd,
-                    **metadata
-                )
-            ]
+        super().__init__(
+            wf_params_at_point=wf_params_at_point,
+            params_to_vary=params_to_vary,
+            wf_generator=wf_generator,
+            direct_computation=direct_computation,
+            **_metadata
+        )
 
-        if len(self.metadata) > len(self.default_metadata):
-            # Arguments for inner product may have been given
-            from inspect import signature
-            fisher_args = list(signature(fisher_matrix).parameters)
-            fisher_args.remove('inner_prod_kwargs')
-
-            # Start with metadata, then remove all potential arguments
-            # for Fisher. Leaves keywords for inner product
-            self._inner_prod_kwargs = self.metadata.copy()
-            for key in fisher_args:
-                self._inner_prod_kwargs.pop(key, None)
-        else:
-            self._inner_prod_kwargs = {}
-    
-        if direct_computation:
-            self._calc_fisher()
-    
     # ----- Adding Network specific properties -----
     @property
     def detectors(self):
@@ -97,14 +76,19 @@ class FisherMatrixNetwork(FisherMatrix):
         else:
             raise ValueError('`det` must be an instance of the ``Detector`` class or a string.')
     
-    def detector_fisher(self, det: Detector | str | int):
-        """Get Fisher matrix for detector name or index."""
+    def detector_fisher(self, det: Detector | str | int) -> FisherMatrix:
+        """Get Fisher matrix for detector, detector name or index."""
         if isinstance(det, (Detector, str)):
             return self._fisher_for_dets[self._index_from_det(det)]
         elif isinstance(det, int):
             return self._fisher_for_dets[det]
         else:
-            raise ValueError('`det` must be an instance of the ``Detector`` class, and index to pick from the list of detectors or a string.')
+            raise ValueError(
+                '`det` must be an instance of the ``Detector`` class, a'
+                ' string representing a detector name from `self.'
+                'detectors` or an index to pick from the list of '
+                'detectors.'
+            )
     
     # ----- Overwriting certain FisherMatrix properties -----
     def _calc_fisher(self):
@@ -112,14 +96,34 @@ class FisherMatrixNetwork(FisherMatrix):
         # by caching or maybe by realizing that derivatives will not
         # differ much in different detectors (only difference is PSD
         # used to check convergence)
-        self._fisher = self.detector_fisher(self.detectors[0]).fisher
-        # Needed to have correct units. Setting just with zeros does not work
-        for i, det in enumerate(self.detectors[1:]):
-            # self._fisher += self._fisher_for_dets[i].fisher
-            self._fisher += self.detector_fisher(det).fisher
 
-            # TODO: decide which one is better
+        self._fisher_for_dets = []
+        self._fisher = 0.
+        # for i, det in enumerate(self.detectors):
+        for det in self.detectors:
+            det_fisher = FisherMatrix(
+                wf_params_at_point=self.wf_params_at_point | det.wf_args,
+                params_to_vary=self.params_to_vary,
+                wf_generator=self.wf_generator,
+                direct_computation=True,
+                psd=det.psd,
+                **self.metadata
+            )
+
+            self._fisher_for_dets += [det_fisher]
+            self._fisher += det_fisher.fisher
+            
+            if self.metadata['return_info']:
+                self.deriv_info[det.name] = det_fisher.deriv_info
+                # Note: this works even if self.deriv_info is not
+                # initialized and despite it having no setter. The
+                # reason is that only elements are set, so the property
+                # is accessed first, which then initializes an instance.
+                # Commands like self.deriv_info = 0 do throw an error.
     
+    # TODO: make fisher_for_dets property? Because problem is that we sometimes
+    # try to access it
+        
     def systematic_error(self,
         reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         params: str | list[str] | None = None,
@@ -148,7 +152,10 @@ class FisherMatrixNetwork(FisherMatrix):
         # vector = MatrixWithUnits(np.zeros((len(self.params_to_vary), 1)),
         #     (fisher @ opt_bias).unit)
         sys_error = 0.
-        fisher = 0.
+        fisher = 0.*self.fisher
+        # Instead of just initializing with zeros, this makes sure
+        # fisher was calculated (important for certain attributes to be
+        # accessible)
         opt_bias = 0.
         vector = 0.
         # 0. is most convenient way to initialize here, adding a
@@ -170,8 +177,8 @@ class FisherMatrixNetwork(FisherMatrix):
             # ]
             # NOTE: every element is now tuple, so pay attention to indices
 
-            # optimization_info[det] = sys_error_list[-1][1]
-            optimization_info[det] = sys_error[1]
+            # optimization_info[det.name] = sys_error_list[-1][1]
+            optimization_info[det.name] = sys_error[1]
 
             if isinstance(optimize, bool) and not optimize:
                 # used_fisher = self.detector_fisher(det)

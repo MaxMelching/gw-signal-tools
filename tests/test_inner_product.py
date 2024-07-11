@@ -100,7 +100,6 @@ def test_fd_td_match_consistency():
 
     assert_allclose_quantity(norm_td_fine, norm_fd_fine, atol=0.0, rtol=0.005)
 
-
 def test_fd_td_overlap_consistency():
     norm_td = overlap(hp_t, hp_t, df=2**-4, f_range=[f_min, None])
     norm_fd_coarse = overlap(hp_f_coarse, hp_f_coarse, df=2**-2, f_range=[f_min, None])
@@ -111,6 +110,18 @@ def test_fd_td_overlap_consistency():
     assert_allclose_quantity(norm_fd_coarse, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
     assert_allclose_quantity(norm_fd_fine, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=0.005)
     assert_allclose_quantity(norm_td, norm_fd_fine, atol=0.0, rtol=0.005)
+
+@pytest.mark.parametrize('hp_f', [hp_f_fine, hp_f_coarse])
+def test_frequ_sampling_consistency(hp_f):
+    # Sample on shifted frequencies
+    delta_f = hp_f.df
+    hp_f_2, _ = fd_wf_gen(wf_params | {
+        'f22_start': wf_params['f22_start'] + delta_f/3.,
+        'f_max': wf_params['f_max'] + delta_f/3.,
+        'deltaF': delta_f
+    })
+    norm_mixed = overlap(hp_f, hp_f_2, df=2**-4, f_range=[f_min, None])
+    assert_allclose_quantity(norm_mixed, 1.0 * u.dimensionless_unscaled, atol=0.0, rtol=1e-15)
 
 def test_optimize_match_consistency():
     norm1_coarse = norm(hp_f_coarse)

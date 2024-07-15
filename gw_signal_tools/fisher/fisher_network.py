@@ -10,6 +10,7 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
+from gw_signal_tools import logger
 from ..inner_product import norm
 from .fisher import FisherMatrix, fisher_matrix
 from ..types import MatrixWithUnits, Detector
@@ -58,9 +59,14 @@ class FisherMatrixNetwork(FisherMatrix):
             wf_params_at_point=wf_params_at_point,
             params_to_vary=params_to_vary,
             wf_generator=wf_generator,
-            direct_computation=direct_computation,
+            direct_computation=False,  # Avoid call of self._calc_fisher
             **_metadata
         )
+
+        self._prepare_fisher_without_calc()
+
+        if direct_computation:
+            self._calc_fisher()
 
     # ----- Adding Network specific properties -----
     @property
@@ -73,7 +79,7 @@ class FisherMatrixNetwork(FisherMatrix):
             return self._detector_indices[det.name]
         elif isinstance(det, str):
             return self._detector_indices[det]
-        else:
+        else:  # pragma: no cover
             raise ValueError('`det` must be an instance of the ``Detector`` class or a string.')
     
     def detector_fisher(self, det: Detector | str | int) -> FisherMatrix:
@@ -82,7 +88,7 @@ class FisherMatrixNetwork(FisherMatrix):
             return self._fisher_for_dets[self._index_from_det(det)]
         elif isinstance(det, int):
             return self._fisher_for_dets[det]
-        else:
+        else:  # pragma: no cover
             raise ValueError(
                 '`det` must be an instance of the ``Detector`` class, a'
                 ' string representing a detector name from `self.'
@@ -91,26 +97,62 @@ class FisherMatrixNetwork(FisherMatrix):
             )
     
     # ----- Overwriting certain FisherMatrix properties -----
+    def __getattr__(self, name: str) -> Any:
+        return super().__getattr__(name)
+
+    def update_attrs(self,
+        new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
+        new_params_to_vary: Optional[str | list[str]] = None,
+        new_wf_generator: Optional[Callable[[dict[str, u.Quantity]],
+                                            FrequencySeries]] = None,
+        new_detectors: Optional[Detector | list[Detector]] = None,
+        **new_metadata
+    ) -> FisherMatrixNetwork:
+        if new_wf_params_at_point is None:
+            new_wf_params_at_point = self.wf_params_at_point
+
+        if new_params_to_vary is None:
+            new_params_to_vary = self.params_to_vary
+
+        if new_wf_generator is None:
+            new_wf_generator = self.wf_generator
+        
+        if new_detectors is None:
+            new_detectors = self.detectors
+        
+        if len(new_metadata) > 0:
+            _new_metadata = self.metadata | new_metadata
+        else:
+            _new_metadata = self.metadata
+
+        return FisherMatrixNetwork(new_wf_params_at_point, new_params_to_vary,
+                                   new_wf_generator, new_detectors, **_new_metadata)
+    
+    def _prepare_fisher_without_calc(self):
+        self._fisher_for_dets = []
+
+        for det in self.detectors:
+            self._fisher_for_dets += [
+                FisherMatrix(
+                    wf_params_at_point=self.wf_params_at_point | det.wf_args,
+                    params_to_vary=self.params_to_vary,
+                    wf_generator=self.wf_generator,
+                    direct_computation=False,
+                    psd=det.psd,
+                    **self.metadata
+                )
+            ]
+    
     def _calc_fisher(self):
         # TODO: check if we can make calculations more efficient. Maybe
         # by caching or maybe by realizing that derivatives will not
         # differ much in different detectors (only difference is PSD
         # used to check convergence)
 
-        self._fisher_for_dets = []
         self._fisher = 0.
-        # for i, det in enumerate(self.detectors):
-        for det in self.detectors:
-            det_fisher = FisherMatrix(
-                wf_params_at_point=self.wf_params_at_point | det.wf_args,
-                params_to_vary=self.params_to_vary,
-                wf_generator=self.wf_generator,
-                direct_computation=True,
-                psd=det.psd,
-                **self.metadata
-            )
+        for i, det in enumerate(self.detectors):
+            det_fisher = self._fisher_for_dets[i]
 
-            self._fisher_for_dets += [det_fisher]
             self._fisher += det_fisher.fisher
             
             if self.metadata['return_info']:
@@ -121,6 +163,13 @@ class FisherMatrixNetwork(FisherMatrix):
                 # is accessed first, which then initializes an instance.
                 # Commands like self.deriv_info = 0 do throw an error.
     
+        if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
+            # Conservative threshold choice for double precision,
+            # as quoted e.g. in gwbench paper
+            logger.info(
+                f'This Fisher matrix has a condition number of {cond_numb}, '
+                'meaning it is ill-conditioned.'
+            )
     # TODO: make fisher_for_dets property? Because problem is that we sometimes
     # try to access it
         
@@ -152,10 +201,7 @@ class FisherMatrixNetwork(FisherMatrix):
         # vector = MatrixWithUnits(np.zeros((len(self.params_to_vary), 1)),
         #     (fisher @ opt_bias).unit)
         sys_error = 0.
-        fisher = 0.*self.fisher
-        # Instead of just initializing with zeros, this makes sure
-        # fisher was calculated (important for certain attributes to be
-        # accessible)
+        fisher = 0.
         opt_bias = 0.
         vector = 0.
         # 0. is most convenient way to initialize here, adding a
@@ -201,9 +247,15 @@ class FisherMatrixNetwork(FisherMatrix):
                 used_opt_bias = sys_error[1]['opt_bias']
             
             # vector += used_fisher @ (sys_error_list[-1][0] - used_opt_bias)
-            vector += used_fisher @ (sys_error[0] - used_opt_bias)
+            # vector += used_fisher @ (sys_error[0] - used_opt_bias)
+            vector += sys_error[1]['deriv_vector']
             opt_bias += used_opt_bias
             fisher += used_fisher
+
+            # TODO: check how large impact of condition number on this is
+            # -> alternative: split up sys-error function into many more
+            #    or just return the vector as well
+            # -> this might be best. Similar to opt_bias return
 
         fisher_bias = MatrixWithUnits.inv(fisher) @ vector + opt_bias
         
@@ -219,7 +271,13 @@ class FisherMatrixNetwork(FisherMatrix):
                 # Take difference of parameters
                 _params = params.copy()
                 for param in optimize_fisher:
-                    _params.remove(param)
+                    try:
+                        _params.remove(param)
+                    except ValueError:
+                        # Is not supposed to be returned, continue
+                        pass
+                
+                param_indices = self.get_param_indices(_params)
         
             fisher_bias = fisher_bias[param_indices]
         
@@ -254,4 +312,20 @@ class FisherMatrixNetwork(FisherMatrix):
             snr += norm(signal, psd=det.psd, **_inner_prod_kwargs)**2
         
         return snr**.5
-        # TODO: check if normalization factor like 1/len(self.detectors) is needed
+
+    def __copy__(self) -> FisherMatrix:
+        new_network = FisherMatrixNetwork(
+            wf_params_at_point=self.wf_params_at_point,
+            params_to_vary=self.params_to_vary,
+            wf_generator=self.wf_generator,
+            detectors=self.detectors,
+            direct_computation=False,
+            **self.metadata
+        )
+        
+        new_network._fisher = self.fisher.copy()
+        new_network._fisher_inverse = self.fisher_inverse.copy()
+        new_network._deriv_info = self.deriv_info.copy()
+        new_network._is_projected = self.is_projected
+
+        return new_network

@@ -636,7 +636,10 @@ class FisherMatrix:
             else:
                 opt_wf_params.pop('tc', None)
                 opt_wf_params.pop('time', None)
-                opt_wf_params.pop('psi', None)
+                if 'psi' not in self.wf_params_at_point:
+                    # Otherwise we would remove external parameter
+                    # needed for waveform generation
+                    opt_wf_params.pop('psi', None)
                 opt_wf_params.pop('phase', None)
 
                 opt_fisher = FisherMatrix(
@@ -904,9 +907,9 @@ class FisherMatrix:
     
     def __copy__(self) -> FisherMatrix:
         new_matrix = FisherMatrix(
-            self.wf_params_at_point,
-            self.params_to_vary,
-            self.wf_generator,
+            wf_params_at_point=self.wf_params_at_point,
+            params_to_vary=self.params_to_vary,
+            wf_generator=self.wf_generator,
             direct_computation=False,
             **self.metadata
         )

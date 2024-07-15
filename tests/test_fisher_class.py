@@ -247,9 +247,9 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(return_info=False,
-                                 new_params_to_vary=['total_mass', 'tc', 'psi'])
+                                 new_params_to_vary=['total_mass', 'mass_ratio', 'tc', 'psi'])
     
-    fisher.systematic_error(phenomd_generator, optimize='tc',
+    fisher.systematic_error(phenomd_generator, params='mass_ratio', optimize='tc',
                             optimize_fisher='total_mass')
 
     fisher.systematic_error(phenomd_generator, optimize=False,
@@ -319,8 +319,8 @@ def test_copy():
     fisher_copy._deriv_info = None
     fisher_copy._is_projected = True
 
-    for attr in ['_fisher', '_fisher_inverse', 'wf_params_at_point',
-                 'wf_generator', 'metadata', '_deriv_info']:
+    for attr in ['fisher', 'fisher_inverse', 'wf_params_at_point',
+                 'wf_generator', 'metadata', 'deriv_info']:
         assert fisher_tot_mass.__getattribute__(attr) is not None
     
     assert fisher_tot_mass.is_projected == False

@@ -165,11 +165,13 @@ class FisherMatrix:
             # self._deriv_info = {'general_info': 'There is no info available.'}
             self._deriv_info = {}
 
-        # NOTE: although it may not be good practice to set private
-        # attributes like self._fisher, this is our workaround to make
-        # self.fisher immutable (has no setter). If we were to set
-        # self.fisher here, a setter would be required
-        # -> _fisher being set inevitable, some property has to be settable
+        if (cond_numb := self.cond()) > 1e15:
+            # Conservative threshold choice for double precision,
+            # as quoted e.g. in gwbench paper
+            logger.info(
+                f'This Fisher matrix has a condition number of {cond_numb}, '
+                'meaning it is ill-conditioned.'
+            )
 
     @property
     def fisher(self) -> MatrixWithUnits:
@@ -378,12 +380,12 @@ class FisherMatrix:
             new_wf_generator = self.wf_generator
         
         if len(new_metadata) > 0:
-            new_metadata = self.metadata | new_metadata
+            _new_metadata = self.metadata | new_metadata
         else:
-            new_metadata = self.metadata
+            _new_metadata = self.metadata
 
         return FisherMatrix(new_wf_params_at_point, new_params_to_vary,
-                            new_wf_generator, **new_metadata)
+                            new_wf_generator, **_new_metadata)
     
     def project_fisher(self, params: str | list[str]) -> FisherMatrix:
         """
@@ -636,19 +638,6 @@ class FisherMatrix:
             # Idea with addition: only one of them will be non-zero, giving
             # multiple would not make sense due to their equivalency
             
-            # optimization_info['opt_params'] = opt_wf_params
-
-            # Testing
-            # time_shift *= -1
-            # phase_shift *= -1
-            # delta_h = opt_wf_1 - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*2.*time_shift + 2.j*phase_shift)
-
-            # Testing 2
-            # delta_h = opt_wf_1 - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*(-2.*time_shift) + 1.j*(-2.*phase_shift))
-            # delta_h = (opt_wf_1*np.exp(-2.j*np.pi*opt_wf_1.frequencies*2.*time_shift + 1.j*2.*phase_shift)
-            #            - opt_wf_2*np.exp(-2.j*np.pi*opt_wf_2.frequencies*(-2.*time_shift) + 1.j*(-2.*phase_shift)))
-            # time_shift=0*u.s
-            # phase_shift=0*u.rad
 
             if len(opt_vals) == 0:
                 # Means that only time and/or phase were optimized over.
@@ -668,19 +657,6 @@ class FisherMatrix:
                     **(self.metadata | {'return_info': True} | inner_prod_kwargs)
                 )
             
-            # Testing
-            # opt_wf_params.pop('tc', None)
-            # opt_wf_params.pop('time', None)
-            # opt_wf_params.pop('psi', None)
-            # opt_wf_params.pop('phase', None)
-
-            # delta_h = reference_wf_generator(self.wf_params_at_point) \
-            #     - self.wf_generator(self.wf_params_at_point)
-
-            # delta_h_1 = reference_wf_generator(self.wf_params_at_point)
-            # delta_h_2 = self.wf_generator(self.wf_params_at_point)
-            # delta_h = delta_h_1 * np.exp(-2.j*np.pi*delta_h_1.frequencies*time_shift + 1.j*phase_shift) \
-            #           - delta_h_2 * np.exp(-2.j*np.pi*delta_h_2.frequencies*time_shift + 1.j*phase_shift) \
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
@@ -742,7 +718,6 @@ class FisherMatrix:
                         opt_fisher.wf_params_at_point,
                         param_to_vary,
                         opt_fisher.wf_generator,
-                        # TODO: pass inner_prod_kwargs or even opt_fisher.metadata as a whole
                         **opt_fisher.metadata
                     ) for param_to_vary in opt_fisher.params_to_vary
                 ]
@@ -755,27 +730,22 @@ class FisherMatrix:
         vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
+        optimization_info['deriv_vector'] = vector
         
         fisher_bias = fisher_inverse @ vector
 
-
-        # print(param_indices)
 
         # Bias from Fisher calculation might not be the only one we have
         # to account for, some parameters might change in optimization
         # procedure (has to be taken into account as well).
         if opt_params is not None:
-        # if opt_params is not None and (
-        #     np.any(np.isin(opt_params, params, assume_unique=True))
-        #     or time_shift != 0.*u.s or phase_shift != 0.*u.rad
-        # ):
-            opt_bias = MatrixWithUnits.from_numpy_array(np.zeros(fisher_bias.shape))
-
-            # print(params)
-            # print(opt_bias)
+            # opt_bias = MatrixWithUnits.from_numpy_array(np.zeros(fisher_bias.shape))
+            opt_bias = 0.*fisher_bias  # Get correct shape+units with value of zero
             
-            # for param in params:
+            # Do not loop over params, some of them might have been
+            # projected out of opt_fisher
             for param in opt_fisher.params_to_vary:
+                # TODO: check if enumerate works too
                 i = opt_fisher.get_param_indices(param)
                 
                 if param in ['tc', 'time']:
@@ -788,9 +758,6 @@ class FisherMatrix:
                     wf_param_val = self.wf_params_at_point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
 
-            # print(fisher_bias)
-            # print(opt_bias)
-            
             fisher_bias += opt_bias
             optimization_info['opt_bias'] = opt_bias
 

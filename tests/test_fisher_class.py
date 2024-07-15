@@ -275,7 +275,6 @@ def test_cond():
 def test_array():
     assert np.all(np.array(fisher_tot_mass) == np.array(fisher_tot_mass.fisher))
 
-# @pytest.mark.skip  # Note finished yet
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
@@ -283,7 +282,7 @@ def test_array():
 def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
                       new_wf_generator, new_metadata):
     if new_metadata is None:
-        new_metadata = {}
+        new_metadata = {}  # Because ** is used below
 
     fisher_tot_mass_v2 = fisher_tot_mass.update_attrs(
         new_wf_params_at_point,
@@ -292,9 +291,31 @@ def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
         **new_metadata
     )
 
-@pytest.mark.skip  # Note finished yet
+    if new_wf_params_at_point is not None:
+        assert fisher_tot_mass_v2.wf_params_at_point == new_wf_params_at_point
+    if new_params_to_vary is not None:
+        assert fisher_tot_mass_v2.params_to_vary == new_params_to_vary
+    if new_wf_generator is not None:
+        assert fisher_tot_mass_v2.wf_generator == new_wf_generator
+    assert fisher_tot_mass_v2.metadata == (fisher_tot_mass.metadata | new_metadata)
+
 def test_copy():
-    ...
+    fisher_copy = fisher_tot_mass.copy()
+    
+    fisher_copy._fisher = None
+    fisher_copy._fisher_inverse = None
+    fisher_copy.wf_params_at_point = None
+    fisher_copy.wf_generator = None
+    fisher_copy.metadata = None
+    fisher_copy._deriv_info = None
+    fisher_copy._is_projected = True
+
+    for attr in ['_fisher', '_fisher_inverse', 'wf_params_at_point',
+                 'wf_generator', 'metadata', '_deriv_info']:
+        assert fisher_tot_mass.__getattribute__(attr) is not None
+    
+    assert fisher_tot_mass.is_projected == False
+
 
 #%% Confirm that certain errors are raised
 def test_immutable():

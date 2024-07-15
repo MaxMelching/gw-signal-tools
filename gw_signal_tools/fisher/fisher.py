@@ -98,7 +98,6 @@ class FisherMatrix:
     conversion, for example, returns the array representation of
     ``FisherMatrix.fisher``.
     """
-
     default_metadata = {
         # First three are chosen to match default of derivative function
         'convergence_check': 'diff_norm',
@@ -165,7 +164,7 @@ class FisherMatrix:
             # self._deriv_info = {'general_info': 'There is no info available.'}
             self._deriv_info = {}
 
-        if (cond_numb := self.cond()) > 1e15:
+        if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
             # Conservative threshold choice for double precision,
             # as quoted e.g. in gwbench paper
             logger.info(
@@ -182,29 +181,14 @@ class FisherMatrix:
         """
         try:
             return self._fisher
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
+            # Should not be called because __getattr__ catches this.
+            # We still leave this exception in case function is removed
+            # at some point
             self._calc_fisher()
 
             return self._fisher
     
-    @property
-    def value(self) -> np.ndarray:
-        """
-        Value of Fisher matrix associated with this class.
-
-        :type: `~numpy.ndarray`
-        """
-        return self.fisher.value
-    
-    @property
-    def unit(self) -> np.ndarray:
-        """
-        Unit of Fisher matrix associated with this class.
-
-        :type: `~numpy.ndarray`
-        """
-        return self.fisher.unit
-
     @property
     def fisher_inverse(self) -> MatrixWithUnits:
         """
@@ -223,7 +207,7 @@ class FisherMatrix:
 
             # return self._fisher_inverse
         
-            if (cond_numb := self.cond()) > 1e15:
+            if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
                 # Conservative threshold choice for double precision,
                 # as quoted e.g. in gwbench paper
                 logger.info(
@@ -232,26 +216,31 @@ class FisherMatrix:
                 )
             # TODO: this indentation is better, right? Because otherwise,
             # we have SVD for each access to inverse matrix
+            # -> ah, SVD is not even performed. Still, I agree, printing
+            #    only once is preferred solution    
         
         return self._fisher_inverse
     
-    def __getattr__(self, attr):
-        if attr == 'fisher' or attr == '_fisher':
-            # If call goes here, that means the fisher and _fisher property
-            # have not been set yet (perhaps because direct_computation=False).
-            # Thus we have to calculate them first and then return
+    def __getattr__(self, name: str) -> Any:
+        # To enable calls like self.value, self.unit, self.cond()
+        if name == '_fisher':
+            # If call goes here, that means the _fisher property has not
+            # been set yet (perhaps because direct_computation=False).
+            # Thus we have to calculate them first and return afterwards
             self._calc_fisher()
-
-            return self.__getattribute__(attr)
-        else:
-            return MatrixWithUnits.__getattribute__(self.fisher, attr)
+            return self.__getattribute__(name)
+        elif name == '_deriv_info':
+            # Same argument as for _fisher
+            return {}
+    
+        return self.fisher.__getattribute__(name)
 
     @property
     def deriv_info(self) -> dict:
         # TODO: self._deriv_info is available... Soooo, shall we something with it?
         try:
             self._deriv_info
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             self._deriv_info = {}
         
         return self._deriv_info
@@ -417,10 +406,10 @@ class FisherMatrix:
             out._deriv_info.pop(param, None)
         
         # ----- Perform projection -----
-        fisher_val = self.fisher.value
+        fisher_val = self.value
         index_grid = self.get_sub_matrix_indices(params)
         sub_matrix = fisher_val[index_grid]
-        if (cond_numb := np.linalg.cond(sub_matrix, p='fro')) > 1e15:
+        if (cond_numb := np.linalg.cond(sub_matrix, p='fro')) > 1e15:  # pragma: no cover
             logger.info(
                 'Submatrix used for projection has a condition number of '
                 f'{cond_numb}, meaning it is ill-conditioned.'
@@ -670,17 +659,7 @@ class FisherMatrix:
             fisher_inverse = opt_fisher.fisher_inverse
 
             # logger.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
-            optimization_info['opt_fisher'] = opt_fisher            
-
-            # Get stored derivatives from Fisher calculation
-            derivs = [
-                opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
-            ]
-
-            # For Fisher matrix, time and phase shift have no influence, but
-            # for pure derivatives, they do!
-            for i, deriv in enumerate(derivs):
-                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*time_shift + 1.j*phase_shift)
+            optimization_info['opt_fisher'] = opt_fisher
         elif isinstance(optimize, bool) and not optimize:
             delta_h = reference_wf_generator(self.wf_params_at_point) \
                 - self.wf_generator(self.wf_params_at_point)
@@ -704,29 +683,36 @@ class FisherMatrix:
             
             fisher_inverse = opt_fisher.fisher_inverse
 
-            if opt_fisher.metadata['return_info']:
-                derivs = [
-                    opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
-                ]
-            else:
-                # NOTE: it does make sense to calculate derivs for the
-                # parameters in params only because this argument is meant
-                # to determine return. For error, parameters that are not in
-                # in params still play a role and have to be accounted for.
-                derivs = [
-                    get_waveform_derivative_1D_with_convergence(
-                        opt_fisher.wf_params_at_point,
-                        param_to_vary,
-                        opt_fisher.wf_generator,
-                        **opt_fisher.metadata
-                    ) for param_to_vary in opt_fisher.params_to_vary
-                ]
 
             opt_params = None
-        else:
+        else:  # pragma: no cover
             raise ValueError('Given `optimize` input not accepted.')
         
         # ----- Now calculation of systematic error -----
+        if opt_fisher.metadata['return_info']:
+            derivs = [
+                opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
+            ]
+        else:
+            # NOTE: it does make sense to calculate derivs for the
+            # parameters in params only because this argument is meant
+            # to determine return. For error, parameters that are not in
+            # in params still play a role and have to be accounted for.
+            derivs = [
+                get_waveform_derivative_1D_with_convergence(
+                    opt_fisher.wf_params_at_point,
+                    param_to_vary,
+                    opt_fisher.wf_generator,
+                    **opt_fisher.metadata
+                ) for param_to_vary in opt_fisher.params_to_vary
+            ]
+        
+        if (opt_is_bool and optimize) or isinstance(optimize, list):
+            # For Fisher matrix, time and phase shift have no influence,
+            # but for pure derivatives, they do!
+            for i, deriv in enumerate(derivs):
+                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*time_shift + 1.j*phase_shift)
+        
         vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)

@@ -147,19 +147,22 @@ def test_get_indices():
         assert fisher.fisher[grid_1][i, j] == sub_matr_1[i][j]
         assert fisher.fisher[grid_2][i, j] == sub_matr_2[i][j]
 
-# Fancy version does not work, unfortunately
-# @pytest.mark.parametrize('attr', ['project_fisher(\'total_mass\')', 'cond()',
-#                                   'inv(fisher_tot_mass.fisher)'])
-# def test_getattr(attr):
-#     fisher = FisherMatrix(
-#         wf_params,
-#         'total_mass',
-#         wf_generator=phenomx_generator,
-#         return_info=True,
-#         direct_computation=False
-#     )
-#     fisher.__getattribute__(attr)
-def test_getattr():
+@pytest.mark.parametrize('inner_prod_kwargs', [
+    dict(f_range=[f_min, f_max]),
+    dict(df=2**-2, min_dt_prec=1e-5)
+])
+def test_inner_prod_kwargs(inner_prod_kwargs):
+    fisher = FisherMatrix(
+        wf_params,
+        'total_mass',
+        wf_generator=phenomx_generator,
+        return_info=True,
+        direct_computation=False,
+        **inner_prod_kwargs
+    )
+    assert fisher._inner_prod_kwargs == inner_prod_kwargs
+
+def test_attribute_getting():
     fisher = FisherMatrix(
         wf_params,
         'total_mass',
@@ -186,6 +189,18 @@ def test_getattr():
         direct_computation=False
     )
     fisher.inv(fisher_tot_mass.fisher)
+
+    fisher = FisherMatrix(
+        wf_params,
+        'total_mass',
+        wf_generator=phenomx_generator,
+        return_info=False,  # Provoke call in __getattr__
+        direct_computation=False
+    )
+    fisher._deriv_info
+
+def test_repr():
+    print(fisher_tot_mass)
 
 def test_project():
     test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
@@ -222,15 +237,23 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, params)
     
     fisher.systematic_error(phenomd_generator, optimize=True)
-    
+        
     fisher.systematic_error(phenomd_generator,
                             optimize=['time', 'phase'])
     
     fisher.systematic_error(phenomd_generator,
                             optimize_fisher=['time', 'phase'])
     
-    fisher.systematic_error(phenomd_generator, optimize=True,
-                            optimize_fisher=['time', 'phase'])
+    fisher.systematic_error(phenomd_generator, optimize='total_mass')
+
+    fisher = fisher.update_attrs(return_info=False,
+                                 new_params_to_vary=['total_mass', 'tc', 'psi'])
+    
+    fisher.systematic_error(phenomd_generator, optimize='tc',
+                            optimize_fisher='total_mass')
+
+    fisher.systematic_error(phenomd_generator, optimize=False,
+                            optimize_fisher='psi', return_opt_info=True)
 
 @pytest.mark.parametrize('inner_prod_kwargs', [
     {},
@@ -243,37 +266,23 @@ def test_snr(inner_prod_kwargs):
     assert snr == fisher_tot_mass.snr(**inner_prod_kwargs)
 
 def test_plot():
-    fisher = FisherMatrix(
-        wf_params,
-        ['total_mass', 'mass_ratio', 'distance'],
-        wf_generator=phenomx_generator,
-        return_info=False
-    )
+    MatrixWithUnits.plot(fisher_tot_mass.fisher)
     plt.close()
 
-    print(fisher)  # For verification
-
-    MatrixWithUnits.plot(fisher.fisher)
-    # plt.show()
+    fisher_tot_mass.plot_matrix(fisher_tot_mass.fisher)
     plt.close()
 
-    fisher.plot()
-    # plt.show()
+    fisher_tot_mass.plot_matrix(fisher_tot_mass.fisher, xticks=False, yticks=False)
     plt.close()
 
-    fisher.plot(only_fisher=True)
-    # plt.show()
+    fisher_tot_mass.plot()
     plt.close()
 
-    fisher.plot(only_fisher_inverse=True)
-    # plt.show()
+    fisher_tot_mass.plot(only_fisher=True)
     plt.close()
 
-def test_cond():
-    assert fisher_tot_mass.cond() == fisher_tot_mass.fisher.cond()
-
-def test_array():
-    assert np.all(np.array(fisher_tot_mass) == np.array(fisher_tot_mass.fisher))
+    fisher_tot_mass.plot(only_fisher_inverse=True)
+    plt.close()
 
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])

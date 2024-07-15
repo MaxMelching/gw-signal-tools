@@ -43,7 +43,7 @@ class Detector:
     def name(self) -> None:
         try:
             del self._name
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             pass
     
     @property
@@ -61,7 +61,7 @@ class Detector:
     def psd(self) -> None:
         try:
             del self._psd
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             pass
 
     @property
@@ -79,7 +79,7 @@ class Detector:
     def wf_args(self) -> None:
         try:
             del self._wf_args
-        except AttributeError:
+        except AttributeError:  # pragma: no cover
             pass
     
     def __repr__(self) -> str:

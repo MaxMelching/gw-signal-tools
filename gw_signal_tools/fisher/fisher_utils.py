@@ -5,6 +5,7 @@ from typing import Optional, Any, Literal, Callable
 # TODO: check if this degrades performance too much. Otherwise use lru_cache,
 # where number of calls to be saved can be given as parameter
 # -> does not work, unfortunately. "Unhashable type dict"
+from inspect import signature
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -88,10 +89,55 @@ def num_diff(
     return signal_deriv
 
 
+def fisher_matrix(
+    wf_params_at_point: dict[str, u.Quantity],
+    params_to_vary: str | list[str],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    deriv_routine: Literal['gw_signal_tools', 'numdifftools'] = 'gw_signal_tools',
+    step_sizes: Optional[list[float] | np.ndarray] = None,
+    start_step_size: Optional[float] = 1e-2,
+    convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
+    convergence_threshold: Optional[float] = None,
+    break_upon_convergence: bool = True,
+    return_info: bool = False,
+    **deriv_and_inner_prod_kwargs
+) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
+    """
+    Wrapper that allows to select between the two available routines for
+    Fisher matrix calculation. They differ in how derivatives are
+    calculated.
+    """
+    match deriv_routine:
+        case 'gw_signal_tools':
+            return fisher_matrix_gw_signal_tools(
+                wf_params_at_point=wf_params_at_point,
+                params_to_vary=params_to_vary,
+                wf_generator=wf_generator,
+                step_sizes=step_sizes,
+                start_step_size=start_step_size,
+                convergence_check=convergence_check,
+                convergence_threshold=convergence_threshold,
+                break_upon_convergence=break_upon_convergence,
+                return_info=return_info,
+                **deriv_and_inner_prod_kwargs  # Assumed to only contain
+                                               # inner_product kwargs
+            )
+        case 'numdifftools':
+            return fisher_matrix_numdifftools(
+                wf_params_at_point=wf_params_at_point,
+                params_to_vary=params_to_vary,
+                wf_generator=wf_generator,
+                return_info=return_info,
+                **deriv_and_inner_prod_kwargs
+            )
+        case _:  # pragma: no cover
+            raise ValueError('Invalid `calculator`.')
+
+
 # NOTE: removing some of the arguments to pass all kwargs to derivative does
 # not work because we want to be able to pass kwargs to inner_product function
 # in fisher_matrix itself
-def fisher_matrix(
+def fisher_matrix_gw_signal_tools(
     wf_params_at_point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
@@ -467,7 +513,7 @@ def get_waveform_derivative_1D_with_convergence(
                 if 'Input domain error' in err_msg:
                     logger.info(
                         f'{step_size} is not a valid step size for a parameter'
-                        f'value of {wf_params_at_point[param_to_vary]}. '
+                        f' value of {wf_params_at_point[param_to_vary]}. '
                         'Skipping this step size.'
                     )
 
@@ -521,6 +567,8 @@ def get_waveform_derivative_1D_with_convergence(
                 if break_upon_convergence:
                     min_dev_index = i  # Then it can also be used to access step_sizes
                     break
+        
+        last_step_sizes = step_sizes
         
         # Check if step sizes shall be refined. This is be done if no breaking
         # upon convergence is wanted or if no convergence was reached yet
@@ -582,7 +630,7 @@ def get_waveform_derivative_1D_with_convergence(
 
         for i in range(len(derivative_vals)):
             ax[0].plot(derivative_vals[i].real, '--',
-                       label=f'{step_sizes[i]:.3e}')
+                       label=f'{last_step_sizes[i]:.3e}')
             ax[1].plot(derivative_vals[i].imag, '--')
             # No label for second because otherwise, everything shows up twice
             # in figure legend
@@ -687,6 +735,7 @@ def get_waveform_derivative_1D(
         ]
 
         deriv_series = (waveforms[0] - waveforms[1]) / step_size
+    # TODO: need same thing for other end of q range
     else:
         param_vals = param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
@@ -699,8 +748,244 @@ def get_waveform_derivative_1D(
                         + 8.*waveforms[2] - waveforms[3])
         deriv_series /= 12.*step_size
 
+        # abs_deriv = (
+        #     np.abs(waveforms[0])
+        #     - 8.*np.abs(waveforms[1])
+        #     + 8.*np.abs(waveforms[2])
+        #     - np.abs(waveforms[3])
+        # )
+        # abs_deriv /= 12.*step_size
+
+        # phase_deriv = (
+        #     np.unwrap(np.angle(waveforms[0]))
+        #     - 8.*np.unwrap(np.angle(waveforms[1]))
+        #     + 8.*np.unwrap(np.angle(waveforms[2]))
+        #     - np.unwrap(np.angle(waveforms[3]))
+        # )
+        # phase_deriv /= 12.*step_size
+
+
+        # wf_at_point = wf_generator(wf_params_at_point)
+        # amp = np.abs(wf_at_point).value
+        # pha = np.unwrap(np.angle(wf_at_point)).value
+        # deriv_series = FrequencySeries(
+        #     abs_deriv.value * np.exp(1j*pha)
+        #     + amp * np.exp(1j*pha) * 1j * phase_deriv.value,
+        #     frequencies=wf_at_point.frequencies,
+        #     unit=wf_at_point.unit/param_center_val.unit  # TODO: compose this?
+        # )
+
+        # Should probably check convergence separately. Would make more sense
+
     # Central Difference -> make this option in function?
     # deriv_series = waveforms[1] - waveforms[0]
     # deriv_series /= 2.0 * step_size
 
+    deriv_series[-3:] *= 0.
+
     return deriv_series
+
+
+# TODO: only make use optional? I.e. it need not be installed, but can?
+import numdifftools as nd
+
+def fisher_matrix_numdifftools(
+    wf_params_at_point: dict[str, u.Quantity],
+    params_to_vary: str | list[str],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    return_info: bool = False,
+    **deriv_and_inner_prod_kwargs
+) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
+    r"""
+    Compute Fisher matrix at a fixed point. To assess the stability of
+    the result, this function calculates the involved derivatives for
+    several step sizes and compares the results using what we call a
+    convergence checker.
+
+    Parameters
+    ----------
+    wf_params_at_point : dict[str, u.Quantity]
+        Point in parameter space at which the Fisher matrix is
+        evaluated, encoded as key-value-pairs. Given as input to
+        :code:`wf_generator`.
+    params_to_vary : str or list[str]
+        Parameter(s) with respect to which the derivatives will be
+        computed, the norms of which constitute the Fisher matrix.
+        Must be compatible with :code:`param_to_vary` input to the
+        function :code:`~gw_signal_tools.fisher.fisher_utils.
+        get_waveform_derivative_1D_with_convergence`, i.e. either
+        :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
+        (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a key
+        in :code:`wf_params_at_point`.
+        
+        For time and phase shifts, analytical derivatives are applied.
+        This is possible because they contribute only to a factor
+        :math:`\exp(i \cdot 2 \psi - i \cdot 2 \pi \cdot f \cdot t_c)`
+        in the waveform generated by :code:`wf_generator`. They
+        correspond to the parameters typically called coalescence time
+        :math:`t_c` and polarization angle :math:`\psi`.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        frequencyseries.FrequencySeries`` (the standard output of
+        LAL gwsignal generators) because it carries information about
+        value, frequencies and units, which are all required for the
+        calculations that are carried out.
+
+        A convenient option is to use the method
+        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        generates a suitable function from a few arguments.
+
+    Returns
+    -------
+    ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+        A ``MatrixWithUnits`` instance. Entries are Fisher values, where
+        index :math:`(i, j)` corresponds to the inner product of
+        derivatives with respect to the parameters
+        :code:`params_to_vary[i]`, :code:`params_to_vary[j]`.
+    
+    Notes
+    -----
+    The main reason behind choosing ``MatrixWithUnits`` as the data
+    type was that information about units is available from our
+    calculations, so simply discarding it would not make sense.
+    Moreover, "regular" calculations using e.g. numpy arrays can also
+    be carried out fairly easily using this type, namely by extracting
+    this value using by applying `.value` to the class instance.
+
+    See Also
+    --------
+    gw_signal_tools.fisher.fisher_utils.get_waveform_derivative_1D_with_convergence :
+        Method used for numerical differentiation. Almost all arguments
+        are passed straight to this function.
+    """
+    # ----- Separate deriv and inner_prod kwargs, check defaults -----
+    _deriv_kw_args = {}
+    _inner_prod_kwargs = {}
+    inner_prod_args = list(signature(inner_product).parameters)
+    for key, value in deriv_and_inner_prod_kwargs.items():
+        if key in inner_prod_args:
+            _inner_prod_kwargs[key] = value
+        else:
+            _deriv_kw_args[key] = value
+    _inner_prod_kwargs['return_opt_info'] = False
+    # Ensure float output of inner_product, even if optimization on
+
+    if isinstance(params_to_vary, str):
+        params_to_vary = [params_to_vary]
+
+    param_numb = len(params_to_vary)
+
+    # ----- Initialize Fisher Matrix as MatrixWithUnits instance -----
+    fisher_matrix = MatrixWithUnits(
+        np.zeros((param_numb, param_numb), dtype=float),
+        np.full((param_numb, param_numb), u.dimensionless_unscaled, dtype=object)
+    )
+
+    # ----- Compute relevant derivatives in frequency domain -----
+    deriv_series_storage = {}
+    deriv_info = {}
+
+    for i, param in enumerate(params_to_vary):
+        deriv = get_waveform_derivative_1D_numdifftools(
+            wf_params_at_point=wf_params_at_point,
+            param_to_vary=param,
+            wf_generator=wf_generator,
+            **_deriv_kw_args
+        )
+
+        deriv_series_storage[param] = deriv
+        fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
+
+        if return_info:
+            # Useful as storage for derivatives
+            deriv_info[param] = {'deriv': deriv}
+
+    # ----- Populate Fisher matrix -----
+    for i, param_i in enumerate(params_to_vary):
+        for j, param_j in enumerate(params_to_vary):
+
+            if i == j:
+                # Was already set in previous loop
+                continue
+            else:
+                fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
+                    deriv_series_storage[param_i],
+                    deriv_series_storage[param_j],
+                    **_inner_prod_kwargs
+                )
+
+    if return_info:
+        return fisher_matrix, deriv_info
+    else:
+        return fisher_matrix
+
+
+def get_waveform_derivative_1D_numdifftools(
+    wf_params_at_point: dict[str, u.Quantity],
+    param_to_vary: str,
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    **deriv_kwargs
+) -> FrequencySeries | tuple[FrequencySeries, dict[str, Any]]:
+    # Check if analytical derivative can be used
+    if (param_to_vary == 'time' or param_to_vary == 'tc'):
+        wf = wf_generator(wf_params_at_point)
+        return wf * (-1.j * 2. * np.pi * wf.frequencies)
+    elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
+        wf = wf_generator(wf_params_at_point)
+
+        if param_to_vary == 'phase':
+            return wf * 1.j
+        else:
+            return wf * 2.j
+    else:
+        assert param_to_vary in wf_params_at_point, \
+            ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'
+             '`\'phase`\' or a key in `wf_params_at_point`.')
+
+    # Need numerical derivative
+    _wf_at_point = wf_generator(wf_params_at_point)
+    param_center_val = wf_params_at_point[param_to_vary].value
+    param_center_unit = wf_params_at_point[param_to_vary].unit
+
+    # Set automatic step size, if given
+    _deriv_kwargs = deriv_kwargs.copy()
+    if 'base_step' not in deriv_kwargs:
+        if 'start_step_size' in deriv_kwargs:
+            # Allowed as alias
+            print('HUUHUHUU')
+            _deriv_kwargs['base_step'] = _deriv_kwargs.pop('start_step_size')
+        else:
+            print('HIHIIII')
+            _deriv_kwargs['base_step'] = 1e-2*param_center_val
+
+    def abs_wrapper(param_val):
+        _wf_params_at_point = wf_params_at_point |{
+            param_to_vary: param_val * param_center_unit
+        }
+        return np.abs(wf_generator(_wf_params_at_point).value)
+
+    def phase_wrapper(param_val):
+        _wf_params_at_point = wf_params_at_point |{
+            param_to_vary: param_val * param_center_unit
+        }
+        return np.unwrap(np.angle(wf_generator(_wf_params_at_point).value))
+    
+
+    deriv_abs = nd.Derivative(abs_wrapper, **_deriv_kwargs)
+
+    deriv_phase = nd.Derivative(phase_wrapper, **_deriv_kwargs)
+
+    amp = np.abs(_wf_at_point).value
+    pha = np.unwrap(np.angle(_wf_at_point)).value
+
+
+    return FrequencySeries(
+        deriv_abs(param_center_val) * np.exp(1j*pha)
+        + amp * np.exp(1j*pha) * 1j * deriv_phase(param_center_val),
+        frequencies=_wf_at_point.frequencies,
+        unit=_wf_at_point.unit/param_center_unit  # TODO: compose this?
+    )
+

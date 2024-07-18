@@ -172,7 +172,7 @@ def test_sys_error(params):
 
     fisher.systematic_error(phenomd_generator, optimize=False,
                             optimize_fisher='psi', return_opt_info=True)
-test_sys_error(None)
+
 @pytest.mark.parametrize('inner_prod_kwargs', [
     {},
     dict(f_range=[20.*u.Hz, 42.*u.Hz]),

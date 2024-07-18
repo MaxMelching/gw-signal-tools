@@ -1,6 +1,7 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any, Literal, Callable
+from inspect import signature
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -16,7 +17,10 @@ from ..inner_product import (
 )
 from ..waveform_utils import get_wf_generator
 from ..types import MatrixWithUnits
-from .fisher_utils import fisher_matrix, get_waveform_derivative_1D_with_convergence
+from .fisher_utils import (
+    fisher_matrix, get_waveform_derivative_1D_with_convergence,
+    get_waveform_derivative_1D_numdifftools
+)
 
 
 __doc__ = """
@@ -99,11 +103,8 @@ class FisherMatrix:
     ``FisherMatrix.fisher``.
     """
     default_metadata = {
-        # First three are chosen to match default of derivative function
-        'convergence_check': 'diff_norm',
-        'break_upon_convergence': True,
-        'convergence_threshold': 0.001,
-        'return_info': True
+        'deriv_routine': 'gw_signal_tools',
+        'return_info': True,
     }
 
     _preferred_unit_sys = preferred_unit_system
@@ -130,9 +131,7 @@ class FisherMatrix:
 
         if len(self.metadata) > len(self.default_metadata):
             # Arguments for inner product may have been given
-            from inspect import signature
             fisher_args = list(signature(fisher_matrix).parameters)
-            fisher_args.remove('inner_prod_kwargs')
 
             # Start with metadata, then remove all potential arguments
             # for Fisher. Leaves keywords for inner product
@@ -144,14 +143,12 @@ class FisherMatrix:
     
         if direct_computation:
             self._calc_fisher()
-            # TODO: decide if this is really needed. Could also just
-            # not allow new computation if this param is False
     
     def _calc_fisher(self):
         result = fisher_matrix(
-            self.wf_params_at_point,
-            self.params_to_vary,
-            self.wf_generator,
+            wf_params_at_point=self.wf_params_at_point,
+            params_to_vary=self.params_to_vary,
+            wf_generator=self.wf_generator,
             **self.metadata
         )
 
@@ -220,6 +217,36 @@ class FisherMatrix:
             #    only once is preferred solution    
         
         return self._fisher_inverse
+    
+    # def covariance_matrix(self, params: Optional[str | list[str]] = None
+    #                       ) -> MatrixWithUnits:
+    #     """
+    #     Basically an alias for `self.fisher_inverse`, with a more
+    #     intuitive name. Also allows to return just a submatrix with
+    #     correlations for subset of parameters that constitute the
+    #     Fisher matrix.
+
+    #     Parameters
+    #     ----------
+    #     params : str or list[str], optional, default = None
+    #         Parameter or list of parameters to project out. Must have
+    #         been given in :code:`params_to_vary` upon initialization of
+    #         the ``FisherMatrix`` instance.
+    #         If None, the whole covariance matrix is returned.
+
+    #     Returns
+    #     -------
+    #     ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+    #         Covariance matrix for the specified parameters.
+    #     """
+    #     if params is None:
+    #         return self.fisher_inverse
+    #     else:
+    #         return self.fisher_inverse[self.get_sub_matrix_indices(params)]
+    @property
+    def covariance_matrix(self) -> MatrixWithUnits:
+        """Alias for `self.fisher_inverse`, with a more intuitive name."""
+        return self.fisher_inverse
     
     def __getattr__(self, name: str) -> Any:
         # To enable calls like self.value, self.unit, self.cond()
@@ -701,14 +728,28 @@ class FisherMatrix:
             # parameters in params only because this argument is meant
             # to determine return. For error, parameters that are not in
             # in params still play a role and have to be accounted for.
-            derivs = [
-                get_waveform_derivative_1D_with_convergence(
-                    opt_fisher.wf_params_at_point,
-                    param_to_vary,
-                    opt_fisher.wf_generator,
-                    **opt_fisher.metadata
-                ) for param_to_vary in opt_fisher.params_to_vary
-            ]
+            _metadata = opt_fisher.metadata.copy()
+
+            if _metadata.pop('deriv_routine') == 'gw_signal_tools':
+                derivs = [
+                    get_waveform_derivative_1D_with_convergence(
+                        opt_fisher.wf_params_at_point,
+                        param_to_vary,
+                        opt_fisher.wf_generator,
+                        **_metadata
+                    ) for param_to_vary in opt_fisher.params_to_vary
+                ]
+            else:
+                _metadata.pop('return_info', None)
+                # Now all arguments not accepted are removed
+                derivs = [
+                    get_waveform_derivative_1D_numdifftools(
+                        opt_fisher.wf_params_at_point,
+                        param_to_vary,
+                        opt_fisher.wf_generator,
+                        **_metadata
+                    ) for param_to_vary in opt_fisher.params_to_vary
+                ]
         
         if (opt_is_bool and optimize) or isinstance(optimize, list):
             # For Fisher matrix, time and phase shift have no influence,

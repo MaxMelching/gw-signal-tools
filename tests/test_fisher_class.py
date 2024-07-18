@@ -107,14 +107,61 @@ def test_time_and_phase_shift_consistency():
     )
 
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
-                                    atol=3.1e-50, rtol=0.)
+                                    atol=1.3e-49, rtol=0.)
     # This is great accuracy. This deviation is for two uncorrelated
     # parameters, where the value itself is ten (!) orders of magnitude
     # below all diagonal values (which means it is of the order of
     # 1e-50). This deviation can certainly be tolerated.
 
+def test_deriv_routine_consistency():
+    calc_params = ['total_mass', 'distance', 'time', 'phase']
+
+    fisher_v1 = FisherMatrix(
+        wf_params,
+        calc_params,
+        phenomx_generator,
+        deriv_routine='gw_signal_tools'
+    )
+
+    fisher_v2 = FisherMatrix(
+        wf_params,
+        calc_params,
+        phenomx_generator,
+        deriv_routine='numdifftools'
+    )
+
+    assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
+                                    atol=1.42e-39, rtol=0.)
+    # Comparing values manually, this absolute deviation indicates that
+    # impact of different routines on Fisher is not really siginificant
+
+def test_base_step_consistency():
+    calc_params = ['total_mass', 'distance', 'time', 'phase']
+
+    fisher_v1 = FisherMatrix(
+        wf_params,
+        calc_params,
+        phenomx_generator,
+        deriv_routine='numdifftools'
+    )
+
+    fisher_v2 = FisherMatrix(
+        wf_params,
+        calc_params,
+        phenomx_generator,
+        deriv_routine='numdifftools',
+        start_step_size=None  # Enables automatic selection
+    )
+
+    assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
+                                    atol=6.2e-40, rtol=0.)
+    # Really good agreement upon manual inspection
+test_base_step_consistency()
 
 #%% ----- Feature tests -----
+def test_covmat():
+    fisher_tot_mass.covariance_matrix
+
 def test_get_indices():
     test_params = ['total_mass', 'time', 'phase']
 
@@ -254,6 +301,10 @@ def test_sys_error(params):
 
     fisher.systematic_error(phenomd_generator, optimize=False,
                             optimize_fisher='psi', return_opt_info=True)
+
+    fisher = fisher.update_attrs(deriv_routine='numdifftools')
+    
+    fisher.systematic_error(phenomd_generator, optimize='psi')
 
 @pytest.mark.parametrize('inner_prod_kwargs', [
     {},

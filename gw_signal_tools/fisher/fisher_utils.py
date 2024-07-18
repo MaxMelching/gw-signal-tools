@@ -557,18 +557,21 @@ def get_waveform_derivative_1D_with_convergence(
                         convergence_vals += [np.inf]
                         continue
 
-            if (len(convergence_vals) >= 2
-                and (convergence_vals[-2] <= convergence_threshold)
-                and (convergence_vals[-1] <= convergence_threshold)):
-                # Double checking does not seem to lead to serious loss
-                # in performance for most points, thus we keep
+            if (convergence_vals[-1] <= convergence_threshold):
+                # We use five-point stencil, which converges fast, so
+                # that it is justified to interpret two consecutive
+                # results being very similar as convergence
+            # if (len(convergence_vals) >= 2
+            #     and (convergence_vals[-1] <= convergence_threshold)
+            #     and (convergence_vals[-2] <= convergence_threshold)):
+                # Double checking is more robust
                 is_converged = True  # Remains true, is never set to False again
 
                 if break_upon_convergence:
                     min_dev_index = i  # Then it can also be used to access step_sizes
                     break
         
-        last_step_sizes = step_sizes
+        last_used_step_sizes = step_sizes  # Save for plots
         
         # Check if step sizes shall be refined. This is be done if no breaking
         # upon convergence is wanted or if no convergence was reached yet
@@ -576,7 +579,12 @@ def get_waveform_derivative_1D_with_convergence(
             # TODO: remove break_upon_convergence and just handle that via convergence_threshold?
             # I.e. set to 0.0 if no breaking wanted
             
-            min_dev_index = np.nanargmin(convergence_vals)  # type: ignore
+            if np.all(np.equal(convergence_vals, np.inf)):
+                # Only invalid step sizes for this parameter, we have to
+                # decrease further
+                min_dev_index = len(step_sizes) - 1
+            else:
+                min_dev_index = np.nanargmin(convergence_vals)  # type: ignore
             # Explanation of ignore: it seems like a signedinteger is returned
             # by nanargmin, violates static checking for int. Note that we do
             # use nan-version here just in case something goes wrong in norm or
@@ -630,7 +638,7 @@ def get_waveform_derivative_1D_with_convergence(
 
         for i in range(len(derivative_vals)):
             ax[0].plot(derivative_vals[i].real, '--',
-                       label=f'{last_step_sizes[i]:.3e}')
+                       label=f'{last_used_step_sizes[i]:.3e}')
             ax[1].plot(derivative_vals[i].imag, '--')
             # No label for second because otherwise, everything shows up twice
             # in figure legend
@@ -710,7 +718,20 @@ def get_waveform_derivative_1D(
     frequency spacing so that the waveforms are guaranteed to have the
     same frequency range.
     """
-    param_center_val = wf_params_at_point[param_to_vary]
+    _wf_params_at_point = wf_params_at_point
+    # if 'f_max' in wf_params_at_point and 'deltaF' in wf_params_at_point:
+    #     old_f_max = wf_params_at_point['f_max']
+    #     _df = wf_params_at_point['deltaF']
+    # else:
+    #     _wf = wf_generator(wf_params_at_point)
+    #     old_f_max = _wf.frequencies[-1]
+    #     _df = _wf.df
+    
+    # _wf_params_at_point['f_max'] = old_f_max + 3.*_df
+    # print(old_f_max, _df, _wf_params_at_point['f_max'])
+    # 3.1 instead of 3. to prevent numerical errors from entering
+
+    param_center_val = _wf_params_at_point[param_to_vary]
     
     # Choose relative or absolute step size, based on param value
     if np.log10(param_center_val.value) < 1:
@@ -730,7 +751,7 @@ def get_waveform_derivative_1D(
             param_vals = param_center_val + np.array([1., 0.])*step_size
 
         waveforms = [
-            wf_generator(wf_params_at_point | {param_to_vary: param_val}
+            wf_generator(_wf_params_at_point | {param_to_vary: param_val}
                         ) for param_val in param_vals
         ]
 
@@ -740,7 +761,7 @@ def get_waveform_derivative_1D(
         param_vals = param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
         waveforms = [
-            wf_generator(wf_params_at_point | {param_to_vary: param_val}
+            wf_generator(_wf_params_at_point | {param_to_vary: param_val}
                         ) for param_val in param_vals
         ]
 
@@ -781,8 +802,12 @@ def get_waveform_derivative_1D(
     # deriv_series = waveforms[1] - waveforms[0]
     # deriv_series /= 2.0 * step_size
 
-    deriv_series[-3:] *= 0.
+    # deriv_series.value[-3:] = 0.  # Solution for now
+    # Following perhaps more robust, in principle value has no setter
+    deriv_series[-3:] *= 0.  # Solution for now
 
+    # print(deriv_series.frequencies[-1])
+    # print(deriv_series[:-3].frequencies[-1])
     return deriv_series
 
 
@@ -988,4 +1013,3 @@ def get_waveform_derivative_1D_numdifftools(
         frequencies=_wf_at_point.frequencies,
         unit=_wf_at_point.unit/param_center_unit  # TODO: compose this?
     )
-

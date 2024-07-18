@@ -57,6 +57,7 @@ setuptools.setup(
         'gwpy>=3',
         # 'pyseobnr',  # Not entirely sure if needed -> better as extra
         # 'gwsurrogate'  # Not entirely sure if needed -> NOT NEEDED, we only call through lal
+        'numdifftools',  # Lightweight, adds no dependencies, thus not included optionally
     ],
     # ----- Optional dependencies -----
     extras_require={
@@ -67,7 +68,6 @@ setuptools.setup(
             'pytest',
             'coverage',
             'pycbc',
-            'numdifftools',
         ],
         'pyseobnr': 'pyseobnr',  # Do not install by default, loads for 5s each
                                  # time a Python script is run

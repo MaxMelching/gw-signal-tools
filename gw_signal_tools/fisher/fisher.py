@@ -1,6 +1,6 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Callable
+from typing import Optional, Any, Literal, Callable, Final
 from inspect import signature
 
 # ----- Third Party Imports -----
@@ -18,8 +18,9 @@ from ..inner_product import (
 from ..waveform_utils import get_wf_generator
 from ..types import MatrixWithUnits
 from .fisher_utils import (
-    fisher_matrix, get_waveform_derivative_1D_with_convergence,
-    get_waveform_derivative_1D_numdifftools
+    get_waveform_derivative_1D_with_convergence,
+    get_waveform_derivative_1D_numdifftools, fisher_matrix,
+    fisher_matrix_gw_signal_tools, fisher_matrix_numdifftools
 )
 
 
@@ -28,17 +29,31 @@ Module for the ``FisherMatrix`` class.
 """
 
 
+# The following would be called in every class instantiation and to
+# avoid these operations, we pre-compute outside of the class
+_FISHER_ARGS: Final[list[str]] = (
+    set(signature(fisher_matrix).parameters) |
+    set(signature(fisher_matrix_gw_signal_tools).parameters) |
+    set(signature(fisher_matrix_numdifftools).parameters)
+)
+
+# Avoid import of _FISHER_ARGS with star imports
+__all__: list[str] = ['FisherMatrix']
+
+
 class FisherMatrix:
     r"""
     A data type tailored to Fisher matrices. It stores the Fisher matrix
-    itself, along with its inverse.
+    itself, along with its inverse. Allows for matrix projection and
+    calculation of SNR,  statistical + systematic biases (with and
+    without alignment) via simple calls of class attributes.
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, u.Quantity]
+    wf_params_at_point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
-        evaluated, encoded as key-value-pairs. Given as input to
-        :code:`wf_generator`.
+        evaluated, encoded as key-value pairs representing
+        parameter-value pairs. Given as input to :code:`wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
@@ -85,33 +100,36 @@ class FisherMatrix:
 
     See Also
     --------
-    gwsignal.fisher_utils.fisher_matrix :
+    gwsignal.fisher.fisher_matrix :
         Routine used for calculation of the Fisher matrix.
-    gwsignal.fisher_utils.get_waveform_derivative_1D_with_convergence :
+    gwsignal.fisher.get_waveform_derivative_1D_with_convergence, gw_signal_tools.fisher.get_waveform_derivative_1D_numdifftools:
         Routine used for calculation of involved derivatives. Used by
-        ~gwsignal.fisher_utils.fisher_matrix.
-    numpy.linalg.inv : Routine used for inversion of the Fisher matrix.
+        `~gwsignal.fisher_utils.fisher_matrix`.
+    numpy.linalg.inv :
+        Routine used for inversion of the Fisher matrix.
 
     Notes
     -----
     In principle, instances of this class constain much more information
     than "just" the Fisher matrix ``FisherMatrix.fisher``, for example
     its inverse ``FisherMatrix.fisher_inverse``. However, to provide an
-    intuitive behaviour, remembering the class name, certain operations
-    return attributes related only to the Fisher matrix. Array-
-    conversion, for example, returns the array representation of
-    ``FisherMatrix.fisher``.
+    intuitive behaviour and remembering the class name, certain
+    operations/calls return attributes related only to the actual matrix
+    stored in ``FisherMatrix.fisher`` (for example array-conversion).
     """
     default_metadata = {
         'deriv_routine': 'gw_signal_tools',
         'return_info': True,
     }
 
-    _preferred_unit_sys = preferred_unit_system
+    _preferred_units = preferred_unit_system
     # Idea: display stuff in these units, i.e. apply .to_system to each matrix before saving them
     # -> even better idea: one could apply .to_system to every input
     # parameter for conversion, the functions will just keep units
     # TODO: make setter etc. for it
+    # -> the thing is that one can just pay attention to input units in
+    #    wf_params_at_point, right? So the overhead of implementing all
+    #    this stuff would not be worth it I think
 
     def __init__(self,
         wf_params_at_point: dict[str, u.Quantity],
@@ -130,13 +148,11 @@ class FisherMatrix:
         self.metadata = self.default_metadata | metadata
 
         if len(self.metadata) > len(self.default_metadata):
-            # Arguments for inner product may have been given
-            fisher_args = list(signature(fisher_matrix).parameters)
-
+            # Arguments for inner product may have been given, extract
+            self._inner_prod_kwargs = self.metadata.copy()
             # Start with metadata, then remove all potential arguments
             # for Fisher. Leaves keywords for inner product
-            self._inner_prod_kwargs = self.metadata.copy()
-            for key in fisher_args:
+            for key in _FISHER_ARGS:
                 self._inner_prod_kwargs.pop(key, None)
         else:
             self._inner_prod_kwargs = {}
@@ -145,6 +161,7 @@ class FisherMatrix:
             self._calc_fisher()
     
     def _calc_fisher(self):
+        """Calculate the Fisher matrix for this instance."""
         result = fisher_matrix(
             wf_params_at_point=self.wf_params_at_point,
             params_to_vary=self.params_to_vary,
@@ -174,7 +191,7 @@ class FisherMatrix:
         """
         Actual Fisher matrix associated with this class.
 
-        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        :type: `~gw_signal_tools.types.MatrixWithUnits`
         """
         try:
             return self._fisher
@@ -191,7 +208,7 @@ class FisherMatrix:
         """
         Inverse of Fisher matrix associated with this class.
 
-        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        :type: `~gw_signal_tools.types.MatrixWithUnits`
         """
         # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
@@ -218,31 +235,6 @@ class FisherMatrix:
         
         return self._fisher_inverse
     
-    # def covariance_matrix(self, params: Optional[str | list[str]] = None
-    #                       ) -> MatrixWithUnits:
-    #     """
-    #     Basically an alias for `self.fisher_inverse`, with a more
-    #     intuitive name. Also allows to return just a submatrix with
-    #     correlations for subset of parameters that constitute the
-    #     Fisher matrix.
-
-    #     Parameters
-    #     ----------
-    #     params : str or list[str], optional, default = None
-    #         Parameter or list of parameters to project out. Must have
-    #         been given in :code:`params_to_vary` upon initialization of
-    #         the ``FisherMatrix`` instance.
-    #         If None, the whole covariance matrix is returned.
-
-    #     Returns
-    #     -------
-    #     ~gw_signal_tools.matrix_with_units.MatrixWithUnits
-    #         Covariance matrix for the specified parameters.
-    #     """
-    #     if params is None:
-    #         return self.fisher_inverse
-    #     else:
-    #         return self.fisher_inverse[self.get_sub_matrix_indices(params)]
     @property
     def covariance_matrix(self) -> MatrixWithUnits:
         """Alias for `self.fisher_inverse`, with a more intuitive name."""
@@ -349,10 +341,11 @@ class FisherMatrix:
 
         Parameters
         ----------
-        new_wf_params_at_point : dict[str, u.Quantity]
-        Point in parameter space at which the Fisher matrix is
-        evaluated, encoded as key-value-pairs. Given as input to
-        :code:`wf_generator`.
+        new_wf_params_at_point : dict[str, ~astropy.units.Quantity]
+            Point in parameter space at which the Fisher matrix is
+            evaluated, encoded as key-value pairs representing
+            parameter-value pairs. Given as input to
+            :code:`wf_generator`.
         new_params_to_vary : str or list[str]
             Parameter(s) with respect to which the derivatives will be
             computed, the norms of which constitute the Fisher matrix.
@@ -418,7 +411,7 @@ class FisherMatrix:
 
         Returns
         -------
-        ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+        ~gw_signal_tools.types.MatrixWithUnits
             Matrix with same shape as initial Fisher matrix, but
             potentially different component values.
         """
@@ -492,7 +485,7 @@ class FisherMatrix:
 
         Returns
         -------
-        ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+        ~gw_signal_tools.types.MatrixWithUnits
             Vector of statistical errors. Indices match indices of
             :code:`params_to_vary` variable that has been used to
             initialize the class.
@@ -509,6 +502,7 @@ class FisherMatrix:
             param_indices = len(self.params_to_vary)*[True]
         
         return MatrixWithUnits.sqrt(self.fisher_inverse.diagonal()[param_indices])
+        # TODO: make it return column vector, is more natural, right?
 
     def systematic_error(self,
         reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
@@ -519,29 +513,8 @@ class FisherMatrix:
         **inner_prod_kwargs
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
-        Calculates the systematic error
-
-        .. math::
-            \Delta \theta^\mu = \sum_{\nu} \Gamma^{-1}_{\mu \nu} \langle
-            \frac{\partial h}{\partial \theta^\nu}, \delta h \rangle
-
-        where :math:`\delta h = h_2 - h`. Here, :math:`h` is the
-        waveform model used to calculate the current Fisher matrix
-        instance and :math:`h_2` is a second model, with respect to
-        which the systematic error
-        :math:`\Delta \theta = \theta -\theta_2` is computed/estimated.
-        
-        Here :math:`\theta_2` are the parameters that correspond to the
-        "real"/injected signal :math:`h_2(\theta_2)`, whose recovery
-        using the second model :math:`h` yielded "best-fitting" signal
-        parameters :math:`\theta` (which correspond to
-        :code:`self.wf_params_at_point`). In other words, this function
-        calculates the displacement of :code:`self.wf_generators`'s best
-        guess from best guess of :code:`reference_model`.
-
-        -> MIGHT CHANGE; if new understanding is True, then self.wf_params_at_point
-           can be both theta and theta_2 if optimize=False (should yield
-           pretty much the same results), but must actually be theta_2 if optimize=True
+        Calculates the systematic error between two waveform models.
+        The recovery model is taken to be :code:`self.wf_generator`.
 
         Parameters
         ----------
@@ -599,9 +572,39 @@ class FisherMatrix:
 
         Returns
         -------
-        ~gw_signal_tools.matrix_with_units.MatrixWithUnits | tuple[~gw_signal_tools.matrix_with_units.MatrixWithUnits, dict[str, Any]]
+        ~gw_signal_tools.types.MatrixWithUnits | tuple[~gw_signal_tools.types.MatrixWithUnits, dict[str, Any]]
             Column vector containing the systematic errors and
             dictionary with information about the calculation.
+        
+        Notes
+        -----
+        The formula evaluated by this function is basically
+
+        .. math::
+            \Delta \theta^\mu = \sum_{\nu} \Gamma^{-1}_{\mu \nu} \langle
+            \frac{\partial h}{\partial \theta^\nu}, \delta h \rangle
+
+        where :math:`\delta h = h_2 - h`. Here, :math:`h` is the
+        waveform model used to calculate the current Fisher matrix
+        instance and :math:`h_2` is a second model, with respect to
+        which the systematic error
+        :math:`\Delta \theta = \theta - \theta_2` is computed/estimated.
+        
+        Here :math:`\theta_2` are the parameters that correspond to the
+        "real"/injected signal :math:`h_2(\theta_2)`, whose recovery
+        using the second model :math:`h` yielded "best-fitting" signal
+        parameters :math:`\theta`. In other words, this function
+        calculates the displacement of :code:`self.wf_generators`'s best
+        guess from best guess of :code:`reference_model`.
+
+        The point represented by :code:`self.wf_params_at_point` can be
+        both :math:`\theta` and :math:`\theta_2`. The more common way
+        of defining it would be :math:`\theta`, which is where the bias
+        formula above is typically evaluated in the literature. However,
+        changing the evaluation point of this formula to
+        :math:`\theta_2` is equally valid and will yield almost the same
+        estimates (if the LSA is valid; but this is needed anyway for
+        the formula to produce faithful estimates).
         """
         if isinstance(optimize, str):
             optimize = [optimize]
@@ -781,9 +784,9 @@ class FisherMatrix:
                 if param in ['tc', 'time']:
                     opt_bias[i] = time_shift
                 elif param == 'psi':
-                    opt_bias[i] = 0.5*phase_shift.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = 0.5*phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
                 elif param == 'phase':
-                    opt_bias[i] = phase_shift.value*u.rad.compose(units=self._preferred_unit_sys)[0]
+                    opt_bias[i] = phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
                 else:
                     wf_param_val = self.wf_params_at_point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val

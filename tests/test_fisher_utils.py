@@ -20,7 +20,8 @@ from gw_signal_tools.inner_product import norm
 from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.fisher import (
     num_diff, get_waveform_derivative_1D,
-    get_waveform_derivative_1D_with_convergence, fisher_matrix
+    get_waveform_derivative_1D_with_convergence, fisher_matrix,
+    fisher_matrix_gw_signal_tools, fisher_matrix_numdifftools
 )
 
 
@@ -52,14 +53,14 @@ def test_num_diff():
 
 @pytest.mark.parametrize('h', [None, 1e-2, 1e-2*u.s])
 def test_num_diff_input(h):
-    step_size = 1e-2  # Make equal to input h to avoid warning
+    step_size = 1e-2
     x_vals = np.arange(0.0, 2.0, step=step_size)
     func_vals = 0.5 * x_vals**2
-
-    deriv_vals1 = num_diff(func_vals, h)
+    num_diff(func_vals, h)
 
     func_vals = Series(func_vals, xindex=x_vals*u.s)
-    deriv_vals2 = num_diff(func_vals, h)
+    num_diff(func_vals, h)
+    # No need to compare something, is just to test that h is accepted
 
 
 #%% ----- Initializing commonly used variables for Fisher tests -----
@@ -283,7 +284,7 @@ def test_invalid_step_size():
 #%% ----- Fisher consistency checks -----
 @pytest.mark.parametrize('break_conv', [True, False])
 def test_convergence_check(break_conv):
-    fisher_diff_norm = fisher_matrix(
+    fisher_diff_norm = fisher_matrix_gw_signal_tools(
         wf_params,
         test_params,
         wf_generator,
@@ -292,7 +293,7 @@ def test_convergence_check(break_conv):
     )
     plt.close()
     
-    fisher_mismatch = fisher_matrix(
+    fisher_mismatch = fisher_matrix_gw_signal_tools(
         wf_params,
         test_params,
         wf_generator,
@@ -310,7 +311,7 @@ def test_convergence_check(break_conv):
 
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
 def test_break_upon_convergence(crit):
-    fisher_without_convergence = fisher_matrix(
+    fisher_without_convergence = fisher_matrix_gw_signal_tools(
         wf_params,
         test_params,
         wf_generator,
@@ -318,7 +319,7 @@ def test_break_upon_convergence(crit):
         break_upon_convergence=True
     )
 
-    fisher_with_convergence = fisher_matrix(
+    fisher_with_convergence = fisher_matrix_gw_signal_tools(
         wf_params,
         test_params,
         wf_generator,
@@ -338,11 +339,19 @@ def test_optimize(conv_crit):
 
     # For diagonal values, optimization must yield same result (up to
     # differences in the routines)
-    fisher_non_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
-                                   convergence_check=conv_crit)
-    fisher_opt = fisher_matrix(wf_params, params_to_vary, wf_generator,
-                               optimize_time_and_phase=True,
-                               convergence_check=conv_crit)
+    fisher_non_opt = fisher_matrix_gw_signal_tools(
+        wf_params,
+        params_to_vary,
+        wf_generator,
+        convergence_check=conv_crit
+    )
+    fisher_opt = fisher_matrix_gw_signal_tools(
+        wf_params,
+        params_to_vary,
+        wf_generator,
+        optimize_time_and_phase=True,
+        convergence_check=conv_crit
+    )
     
     assert_allclose_MatrixWithUnits(
         fisher_non_opt.diagonal(),
@@ -351,11 +360,19 @@ def test_optimize(conv_crit):
     )
 
 def test_start_step_size():
-    fisher_1 = fisher_matrix(wf_params, test_params, wf_generator,
-                             start_step_size=1e-1)
+    fisher_1 = fisher_matrix_gw_signal_tools(
+        wf_params,
+        test_params,
+        wf_generator,
+        start_step_size=1e-1
+    )
     
-    fisher_2 = fisher_matrix(wf_params, test_params, wf_generator,
-                             start_step_size=1e-2)
+    fisher_2 = fisher_matrix_gw_signal_tools(
+        wf_params,
+        test_params,
+        wf_generator,
+        start_step_size=1e-2
+    )
 
     assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=1e-7)
     # Idea: they should converge at similar step size because 1e-1 is very

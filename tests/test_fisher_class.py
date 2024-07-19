@@ -8,7 +8,8 @@ import pytest
 from gw_signal_tools.waveform_utils import get_wf_generator
 from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.fisher import (
-    fisher_matrix, FisherMatrix
+    FisherMatrix, fisher_matrix, fisher_matrix_gw_signal_tools,
+    fisher_matrix_numdifftools
 )
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
@@ -70,14 +71,20 @@ def test_inverse():
                            fisher_tot_mass.fisher_inverse.unit))
     
 def test_fisher_calc():
-    fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
-                                      phenomx_generator)
+    fisher_tot_mass_2 = fisher_matrix_gw_signal_tools(
+        wf_params,
+        'total_mass',
+        phenomx_generator
+    )
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
 
 def test_criterion_consistency():
-    fisher_tot_mass_2 = fisher_matrix(wf_params, 'total_mass',
-                                      phenomx_generator,
-                                      convergence_check='mismatch')
+    fisher_tot_mass_2 = fisher_matrix_gw_signal_tools(
+        wf_params,
+        'total_mass',
+        phenomx_generator,
+        convergence_check='mismatch'
+    )
     
     assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
                                     atol=0.0, rtol=5e-5)
@@ -156,7 +163,7 @@ def test_base_step_consistency():
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
                                     atol=6.2e-40, rtol=0.)
     # Really good agreement upon manual inspection
-test_base_step_consistency()
+
 
 #%% ----- Feature tests -----
 def test_covmat():

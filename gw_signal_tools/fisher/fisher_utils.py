@@ -1,10 +1,6 @@
 # ----- Standard Lib Imports -----
 import warnings
-from typing import Optional, Any, Literal, Callable
-# from functools import cache, lru_cache
-# TODO: check if this degrades performance too much. Otherwise use lru_cache,
-# where number of calls to be saved can be given as parameter
-# -> does not work, unfortunately. "Unhashable type dict"
+from typing import Optional, Any, Literal, Callable, Final
 from inspect import signature
 
 # ----- Third Party Imports -----
@@ -13,6 +9,7 @@ import matplotlib.pyplot as plt
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+import numdifftools as nd
 
 # ----- Local Package Imports -----
 from gw_signal_tools import logger
@@ -25,6 +22,18 @@ __doc__ = """
 Module that contains functions to calculate numerical derivatives of
 gravitational waveforms and also a wrapper to calculate a Fisher matrix.
 """
+
+
+# In the following functions, we will frequently access the following
+# list, which is the reason that it is stored outside of the functions
+_INNER_PROD_ARGS: Final[list[str]] = list(signature(inner_product).parameters)
+
+# Avoid import of _INNER_PROD_ARGS with star imports
+__all__: list[str] = [
+    'num_diff', 'fisher_matrix', 'fisher_matrix_gw_signal_tools',
+    'get_waveform_derivative_1D_with_convergence', 'get_waveform_derivative_1D',
+    'fisher_matrix_numdifftools', 'get_waveform_derivative_1D_numdifftools'
+]
 
 
 def num_diff(
@@ -51,7 +60,7 @@ def num_diff(
 
     Returns
     -------
-    gwpy.types.series.Series or numpy.ndarray
+    ~gwpy.types.series.Series or ~numpy.ndarray
         Derivative of `signal`.
     """    
     if isinstance(signal, Series):
@@ -61,7 +70,7 @@ def num_diff(
             h = u.Quantity(h, signal.xindex.unit)
 
         if not allclose_quantity(h.value, signal.dx.value,
-                                 atol=0.0, rtol=0.001):
+                                 atol=0., rtol=1e-3):  # pragma: no cover
             warnings.warn(
                 'Given `h` does not coincide with `signal.dx`.'
             )
@@ -71,96 +80,95 @@ def num_diff(
 
         # Check if h is set
         if h is None:
-            h = 1.0
+            h = 1.
         else:
             if isinstance(h, u.Quantity):
                 signal = u.Quantity(signal, u.dimensionless_unscaled)
 
     signal_deriv = (np.roll(signal, 2) - 8.*np.roll(signal, 1)
                     + 8.*np.roll(signal, -1) - np.roll(signal, -2))
-    signal_deriv /= 12.0 * h
+    signal_deriv /= 12.*h
 
     signal_deriv[0] = (signal[1] - signal[0]) / h  # Forward difference
-    signal_deriv[1] = (signal[2] - signal[0]) / (2.0 * h)  # Central difference
+    signal_deriv[1] = (signal[2] - signal[0]) / (2.*h)  # Central difference
 
-    signal_deriv[-2] = (signal[-1] - signal[-3]) / (2.0 * h)  # Central difference
+    signal_deriv[-2] = (signal[-1] - signal[-3]) / (2.*h)  # Central difference
     signal_deriv[-1] = (signal[-1] - signal[-2]) / h  # Backward difference
 
     return signal_deriv
 
 
 def fisher_matrix(
-    wf_params_at_point: dict[str, u.Quantity],
-    params_to_vary: str | list[str],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
-    deriv_routine: Literal['gw_signal_tools', 'numdifftools'] = 'gw_signal_tools',
-    step_sizes: Optional[list[float] | np.ndarray] = None,
-    start_step_size: Optional[float] = 1e-2,
-    convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: Optional[float] = None,
-    break_upon_convergence: bool = True,
-    return_info: bool = False,
+    deriv_routine: Literal['gw_signal_tools', 'numdifftools'],
     **deriv_and_inner_prod_kwargs
 ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
     """
     Wrapper that allows to select between the two available routines for
-    Fisher matrix calculation. They differ in how derivatives are
-    calculated.
+    Fisher matrix calculation by passing the argument `deriv_routine`.
+    All other arguments are passed to the selected routine and described
+    in more detail in the corresponding functions
+    `fisher_matrix_gw_signal_tools`, `fisher_matrix_numdifftools`.
+    
+    Notes
+    -----
+    The two routines differ in the way they calculate derivatives, as
+    the argument name already indicates. The `'gw_signal_tools'` option
+    uses a custom routine that applies the five-point stencil method to
+    the output of `wf_generator` and assesses convergence based on a
+    criteria whose origin lies in GW data analysis (utilizing the
+    noise-weighted inner product defined in this context).
+
+    The `'numdifftools'` option, on the other hand, calculates the
+    derivative of amplitude and phase of the waveform separately, which
+    are recombined using the product rule to give the waveform
+    derivative. These derivatives are calculated the `numdifftools`
+    package.
+
+    Both routines have advantages and disadvantages: since two
+    derivatives have to be estimated for the latter case,
+    `'gw_signal_tools'` is typically faster than `'numdifftools'`.
+    However, `'numdifftools'` typically yields more stable results for
+    highly oscillatory derivatives, where `'gw_signal_tools'` can
+    struggle to find results with comparable accuracy (which means that
+    it does find results that do look similar, but the convergence when
+    decreasing step sizes is sometimes not as stable; reason is use of
+    direct waveform differences, combined with five-point stencil that
+    can encounter numerical issues in some cases).
     """
     match deriv_routine:
         case 'gw_signal_tools':
             return fisher_matrix_gw_signal_tools(
-                wf_params_at_point=wf_params_at_point,
-                params_to_vary=params_to_vary,
-                wf_generator=wf_generator,
-                step_sizes=step_sizes,
-                start_step_size=start_step_size,
-                convergence_check=convergence_check,
-                convergence_threshold=convergence_threshold,
-                break_upon_convergence=break_upon_convergence,
-                return_info=return_info,
-                **deriv_and_inner_prod_kwargs  # Assumed to only contain
-                                               # inner_product kwargs
+                **deriv_and_inner_prod_kwargs
             )
         case 'numdifftools':
             return fisher_matrix_numdifftools(
-                wf_params_at_point=wf_params_at_point,
-                params_to_vary=params_to_vary,
-                wf_generator=wf_generator,
-                return_info=return_info,
                 **deriv_and_inner_prod_kwargs
             )
         case _:  # pragma: no cover
-            raise ValueError('Invalid `calculator`.')
+            raise ValueError('Invalid `deriv_routine`.')
 
 
-# NOTE: removing some of the arguments to pass all kwargs to derivative does
-# not work because we want to be able to pass kwargs to inner_product function
-# in fisher_matrix itself
+# NOTE: removing some of the arguments to pass all kwargs to derivative
+# does not work because we want to be able to pass kwargs to
+# inner_product function in fisher_matrix itself
 def fisher_matrix_gw_signal_tools(
     wf_params_at_point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
-    step_sizes: Optional[list[float] | np.ndarray] = None,
-    start_step_size: Optional[float] = 1e-2,
-    convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
-    convergence_threshold: Optional[float] = None,
-    break_upon_convergence: bool = True,
     return_info: bool = False,
-    **inner_prod_kwargs
-) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
+    **deriv_and_inner_prod_kwargs
+) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
     r"""
-    Compute Fisher matrix at a fixed point. To assess the stability of
-    the result, this function calculates the involved derivatives for
-    several step sizes and compares the results using what we call a
-    convergence checker.
+    Compute Fisher matrix at a fixed point, with the derivative
+    calculation being carried out by the custom derivative calculator
+    implemented in :code:`gw_signal_tools`.
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, u.Quantity]
+    wf_params_at_point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
-        evaluated, encoded as key-value-pairs. Given as input to
-        :code:`wf_generator`.
+        evaluated, encoded as key-value pairs representing
+        parameter-value pairs. Given as input to :code:`wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
@@ -190,46 +198,14 @@ def fisher_matrix_gw_signal_tools(
         A convenient option is to use the method
         :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
         generates a suitable function from a few arguments.
-    step_sizes : list[float], optional, default = None
-        Step sizes used in the numerical differention. Based on the
-        evaluation point, these are used as relative or absolute steps.
-    start_step_size: float, optional, default = 1e-2
-        Alternative way to control the relative step sizes. Determines
-        the largest relative step size that is tried.
-    convergence_check : Literal['diff_norm', 'mismatch'], optional, default = None
-        Criterion used to asses stability of the result. Currently, two
-        are available:
-
-            * diff_norm: calculates the norm of the difference of two
-              consecutive derivatives (using the function
-              :code:`~gw_signal_tools.inner_product.norm`). This is
-              compared to the norm of the most recent derivative and if
-              their fraction is smaller than some threshold (specified
-              in :code:`convergence_threshold`), the result is taken to
-              be converged because the differences become negligible on
-              the relevant scales (provided by the norm of the
-              derivative).
-            * mismatch: calculates the mismatch between consecutive
-              derivatives (also using the function
-              :code:`~gw_signal_tools.inner_product.norm`), which is
-              defined as :math:`1-overlap`. Again, the result is taken
-              to be converged if this mismatch falls under a certain
-              threshold, provided by :code:`convergence_threshold`.
-
-        For larger differences, they might produce different results,
-        but their behaviour for small distances should be very similar
-        because they coincide in the infinitesimal limit (they induce
-        the same metric).
-    convergence_threshold : float, optional, default = None
-        Threshold that is used to decide if result is converged. This
-        will be the case once the value of the criterion specified in
-        :code:`convergence_check` is smaller than
-        :code:`convergence_threshold` two iterations in a row.
-    break_upon_convergence : bool, optional, default = True
-        Whether to break upon the convergence described previously
-        (difference smaller than given threshold two times in a row) or
-        not. If not, results for all step sizes are calculated and the
-        one with minimal convergence criterion value is selected.
+    return_info : boolean, optional, default = True
+        Whether to return information collected during the derivative
+        calculations. Can be used as a sort of custom cache to also
+        return derivatives.
+    deriv_and_inner_prod_kwargs :
+        All other keyword arguments are passed to the derivative
+        and inner product routines involved in the Fisher matrix
+        calculations.
 
     Returns
     -------
@@ -250,12 +226,19 @@ def fisher_matrix_gw_signal_tools(
 
     See Also
     --------
-    gw_signal_tools.fisher.fisher_utils.get_waveform_derivative_1D_with_convergence :
+    gw_signal_tools.fisher.get_waveform_derivative_1D_with_convergence :
         Method used for numerical differentiation. Almost all arguments
         are passed straight to this function.
     """
-    # ----- Check defaults -----
-    inner_prod_kwargs['return_opt_info'] = False
+    # ----- Separate deriv and inner_prod kwargs, check defaults -----
+    _deriv_kw_args = {}
+    _inner_prod_kwargs = {}
+    for key, value in deriv_and_inner_prod_kwargs.items():
+        if key in _INNER_PROD_ARGS:
+            _inner_prod_kwargs[key] = value
+        else:
+            _deriv_kw_args[key] = value
+    _inner_prod_kwargs['return_opt_info'] = False
     # Ensure float output of inner_product, even if optimization on
 
     if isinstance(params_to_vary, str):
@@ -265,8 +248,8 @@ def fisher_matrix_gw_signal_tools(
 
     # ----- Initialize Fisher Matrix as MatrixWithUnits instance -----
     fisher_matrix = MatrixWithUnits(
-        np.zeros((param_numb, param_numb), dtype=float),
-        np.full((param_numb, param_numb), u.dimensionless_unscaled, dtype=object)
+        np.zeros(2*(param_numb, ), dtype=float),
+        np.full(2*(param_numb, ), u.dimensionless_unscaled, dtype=object)
     )
 
     # ----- Compute relevant derivatives in frequency domain -----
@@ -278,13 +261,8 @@ def fisher_matrix_gw_signal_tools(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,
-            step_sizes=step_sizes,
-            start_step_size=start_step_size,
-            convergence_check=convergence_check,
-            break_upon_convergence=break_upon_convergence,
-            convergence_threshold=convergence_threshold,
             return_info=True,
-            **inner_prod_kwargs
+            **deriv_and_inner_prod_kwargs
         )
 
         deriv_series_storage[param] = deriv
@@ -308,7 +286,7 @@ def fisher_matrix_gw_signal_tools(
                 fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
                     deriv_series_storage[param_i],
                     deriv_series_storage[param_j],
-                    **inner_prod_kwargs
+                    **_inner_prod_kwargs
                 )
 
     if return_info:
@@ -338,13 +316,15 @@ def get_waveform_derivative_1D_with_convergence(
     Parameters
     ----------
     wf_params_at_point : dict[str, ~astropy.units.Quantity]
-        Dictionary with parameters that determine point at which
-        derivative is calculated.
+        Point in parameter space at which the derivative is evaluated,
+        encoded as key-value pairs representing parameter-value pairs.
 
-        Can in principle also be any, but param_to_vary has to be
-        accessible as a key and value has to be value of point that we
-        want to compute derivative around. Given as input to
-        :code:`wf_generator`.
+        In principle, the keys can be arbitrary, only two requirements
+        have to be fulfilled: (i) the dictionary must be accepted by
+        :code:`wf_generator` since it is given as input to this functoin
+        and (ii) :code:`param_to_vary` has to be accessible as a key
+        (except one of the special cases mentioned in the description of
+        :code:`params_to_vary` is true).
     param_to_vary : str
         Parameter with respect to which the derivative is taken. Must be
         :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
@@ -410,6 +390,9 @@ def get_waveform_derivative_1D_with_convergence(
         (difference smaller than given threshold two times in a row) or
         not. If not, results for all step sizes are calculated and the
         one with minimal convergence criterion value is selected.
+    inner_prod_kwargs :
+        All additional keyword arguments are passed to the inner product
+        function during the corresponding calculations.
 
     Returns
     -------
@@ -427,6 +410,8 @@ def get_waveform_derivative_1D_with_convergence(
     ------
     ValueError
         If an invalid value for convergence_check is provided.
+    AssertionError
+        If an invalid :code:`params_to_vary` is provided.
     """
     # ----- Check defaults -----
     inner_prod_kwargs['return_opt_info'] = False
@@ -557,13 +542,15 @@ def get_waveform_derivative_1D_with_convergence(
                         convergence_vals += [np.inf]
                         continue
 
-            if (convergence_vals[-1] <= convergence_threshold):
+            # if (convergence_vals[-1] <= convergence_threshold):
                 # We use five-point stencil, which converges fast, so
                 # that it is justified to interpret two consecutive
                 # results being very similar as convergence
-            # if (len(convergence_vals) >= 2
-            #     and (convergence_vals[-1] <= convergence_threshold)
-            #     and (convergence_vals[-2] <= convergence_threshold)):
+                # -> testing revealed that criterion below leads to more
+                #    consistent results, thus we leave for now
+            if (len(convergence_vals) >= 2
+                and (convergence_vals[-1] <= convergence_threshold)
+                and (convergence_vals[-2] <= convergence_threshold)):
                 # Double checking is more robust
                 is_converged = True  # Remains true, is never set to False again
 
@@ -674,7 +661,9 @@ def get_waveform_derivative_1D(
 ) -> FrequencySeries:
     """
     Use five-point stencil method to calculate numerical derivatives
-    with respect to a waveform parameter.
+    with respect to a waveform parameter (in very special cases,
+    other finite difference methods might be used, for example in case
+    of extreme mass ratio values).
 
     Parameters
     ----------
@@ -743,8 +732,8 @@ def get_waveform_derivative_1D(
     # are two conventions, which are both accepted by LAL. This becomes
     # a problem for values close to 1, where this convention switches.
     if (param_to_vary == 'mass_ratio'
-        and (param_center_val + 2*step_size) > 1.
-        and (param_center_val - 2*step_size) < 1.):
+        and (param_center_val + 2.*step_size) > 1.
+        and (param_center_val - 2.*step_size) < 1.):
         if param_center_val <= 1.:
             param_vals = param_center_val + np.array([0., -1.])*step_size
         else:
@@ -756,8 +745,19 @@ def get_waveform_derivative_1D(
         ]
 
         deriv_series = (waveforms[0] - waveforms[1]) / step_size
-    # TODO: need same thing for other end of q range
+    elif (param_to_vary == 'mass_ratio'
+          and (param_center_val - 2.*step_size) < 0.):
+        # mass ratio is very close to 0, use forward difference
+        param_vals = param_center_val + np.array([1., 0.])*step_size
+
+        waveforms = [
+            wf_generator(_wf_params_at_point | {param_to_vary: param_val}
+                        ) for param_val in param_vals
+        ]
+
+        deriv_series = (waveforms[0] - waveforms[1]) / step_size
     else:
+        # Five-point stencil method can be used
         param_vals = param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
         waveforms = [
@@ -769,50 +769,12 @@ def get_waveform_derivative_1D(
                         + 8.*waveforms[2] - waveforms[3])
         deriv_series /= 12.*step_size
 
-        # abs_deriv = (
-        #     np.abs(waveforms[0])
-        #     - 8.*np.abs(waveforms[1])
-        #     + 8.*np.abs(waveforms[2])
-        #     - np.abs(waveforms[3])
-        # )
-        # abs_deriv /= 12.*step_size
-
-        # phase_deriv = (
-        #     np.unwrap(np.angle(waveforms[0]))
-        #     - 8.*np.unwrap(np.angle(waveforms[1]))
-        #     + 8.*np.unwrap(np.angle(waveforms[2]))
-        #     - np.unwrap(np.angle(waveforms[3]))
-        # )
-        # phase_deriv /= 12.*step_size
-
-
-        # wf_at_point = wf_generator(wf_params_at_point)
-        # amp = np.abs(wf_at_point).value
-        # pha = np.unwrap(np.angle(wf_at_point)).value
-        # deriv_series = FrequencySeries(
-        #     abs_deriv.value * np.exp(1j*pha)
-        #     + amp * np.exp(1j*pha) * 1j * phase_deriv.value,
-        #     frequencies=wf_at_point.frequencies,
-        #     unit=wf_at_point.unit/param_center_val.unit  # TODO: compose this?
-        # )
-
-        # Should probably check convergence separately. Would make more sense
-
-    # Central Difference -> make this option in function?
-    # deriv_series = waveforms[1] - waveforms[0]
-    # deriv_series /= 2.0 * step_size
-
     # deriv_series.value[-3:] = 0.  # Solution for now
     # Following perhaps more robust, in principle value has no setter
-    deriv_series[-3:] *= 0.  # Solution for now
+    # deriv_series[-3:] *= 0.  # Solution for now
 
-    # print(deriv_series.frequencies[-1])
-    # print(deriv_series[:-3].frequencies[-1])
     return deriv_series
 
-
-# TODO: only make use optional? I.e. it need not be installed, but can?
-import numdifftools as nd
 
 def fisher_matrix_numdifftools(
     wf_params_at_point: dict[str, u.Quantity],
@@ -820,19 +782,18 @@ def fisher_matrix_numdifftools(
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     return_info: bool = False,
     **deriv_and_inner_prod_kwargs
-) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
+) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
     r"""
-    Compute Fisher matrix at a fixed point. To assess the stability of
-    the result, this function calculates the involved derivatives for
-    several step sizes and compares the results using what we call a
-    convergence checker.
+    Compute Fisher matrix at a fixed point, with the derivative
+    calculation being carried out by routines implemented in the
+    external package :code:`numdifftools`.
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, u.Quantity]
+    wf_params_at_point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
-        evaluated, encoded as key-value-pairs. Given as input to
-        :code:`wf_generator`.
+        evaluated, encoded as key-value pairs representing
+        parameter-value pairs. Given as input to :code:`wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
@@ -862,6 +823,10 @@ def fisher_matrix_numdifftools(
         A convenient option is to use the method
         :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
         generates a suitable function from a few arguments.
+    deriv_and_inner_prod_kwargs :
+        All other keyword arguments are passed to the derivative
+        and inner product routines involved in the Fisher matrix
+        calculations.
 
     Returns
     -------
@@ -882,16 +847,15 @@ def fisher_matrix_numdifftools(
 
     See Also
     --------
-    gw_signal_tools.fisher.fisher_utils.get_waveform_derivative_1D_with_convergence :
+    gw_signal_tools.fisher.get_waveform_derivative_1D_numdifftools :
         Method used for numerical differentiation. Almost all arguments
         are passed straight to this function.
     """
     # ----- Separate deriv and inner_prod kwargs, check defaults -----
     _deriv_kw_args = {}
     _inner_prod_kwargs = {}
-    inner_prod_args = list(signature(inner_product).parameters)
     for key, value in deriv_and_inner_prod_kwargs.items():
-        if key in inner_prod_args:
+        if key in _INNER_PROD_ARGS:
             _inner_prod_kwargs[key] = value
         else:
             _deriv_kw_args[key] = value
@@ -905,8 +869,8 @@ def fisher_matrix_numdifftools(
 
     # ----- Initialize Fisher Matrix as MatrixWithUnits instance -----
     fisher_matrix = MatrixWithUnits(
-        np.zeros((param_numb, param_numb), dtype=float),
-        np.full((param_numb, param_numb), u.dimensionless_unscaled, dtype=object)
+        np.zeros(2*(param_numb, ), dtype=float),
+        np.full(2*(param_numb, ), u.dimensionless_unscaled, dtype=object)
     )
 
     # ----- Compute relevant derivatives in frequency domain -----
@@ -954,24 +918,75 @@ def get_waveform_derivative_1D_numdifftools(
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     **deriv_kwargs
 ) -> FrequencySeries | tuple[FrequencySeries, dict[str, Any]]:
-    # Check if analytical derivative can be used
-    if (param_to_vary == 'time' or param_to_vary == 'tc'):
-        wf = wf_generator(wf_params_at_point)
-        return wf * (-1.j * 2. * np.pi * wf.frequencies)
-    elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
-        wf = wf_generator(wf_params_at_point)
+    """
+    Calculate numerical derivative of gravitational wave (GW) waveforms
+    with respect to a waveform parameter in frequency domain, using the
+    `numdifftools` package.
 
-        if param_to_vary == 'phase':
-            return wf * 1.j
-        else:
-            return wf * 2.j
+    Parameters
+    ----------
+    wf_params_at_point : dict[str, ~astropy.units.Quantity]
+        Point in parameter space at which the derivative is evaluated,
+        encoded as key-value pairs representing parameter-value pairs.
+
+        In principle, the keys can be arbitrary, only two requirements
+        have to be fulfilled: (i) the dictionary must be accepted by
+        :code:`wf_generator` since it is given as input to this functoin
+        and (ii) :code:`param_to_vary` has to be accessible as a key
+        (except one of the special cases mentioned in the description of
+        :code:`params_to_vary` is true).
+    param_to_vary : str
+        Parameter with respect to which the derivative is taken. Must be
+        :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
+        (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a key
+        in :code:`wf_params_at_point`.
+        
+        For time and phase shifts, analytical derivatives are applied.
+        This is possible because they contribute only to a factor
+        :math:`\exp(i \cdot 2 \psi - i \cdot 2 \pi \cdot f \cdot t_c)`
+        in the waveform generated by `wf_generator`. They correspond
+        to the parameters that are typically called coalescence
+        time :math:`t_c` and polarization angle :math:`\psi`.
+    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        Arbitrary function that is used for waveform generation. The
+        required signature means that it has one non-optional argument,
+        which is expected to accept the input provided in
+        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        frequencyseries.FrequencySeries`` (the standard output of
+        LAL gwsignal generators) because it carries information about
+        value, frequencies and units, which are all required for the
+        calculations that are carried out.
+
+        A convenient option is to use the method
+        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        generates a suitable function from a few arguments.
+
+    Returns
+    -------
+    ~gwpy.frequencyseries.FrequencySeries | tuple[~gwpy.frequencyseries.FrequencySeries, dict[str, Any]]
+        Derivative in frequency space with respect to
+        :code:`param_to_vary`.
+
+    Raises
+    ------
+    AssertionError
+        If an invalid :code:`params_to_vary` is provided.
+    """
+    _wf_at_point = wf_generator(wf_params_at_point)
+
+    # ----- Check if analytical derivative can be used -----
+    if (param_to_vary == 'time' or param_to_vary == 'tc'):
+        return _wf_at_point * (-1.j * 2. * np.pi * _wf_at_point.frequencies)
+    elif param_to_vary == 'phase':
+        return _wf_at_point * 1.j
+    elif param_to_vary == 'psi':
+        return _wf_at_point * 2.j
     else:
         assert param_to_vary in wf_params_at_point, \
             ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'
              '`\'phase`\' or a key in `wf_params_at_point`.')
 
-    # Need numerical derivative
-    _wf_at_point = wf_generator(wf_params_at_point)
+    # ----- Need numerical derivative -----
     param_center_val = wf_params_at_point[param_to_vary].value
     param_center_unit = wf_params_at_point[param_to_vary].unit
 
@@ -980,10 +995,8 @@ def get_waveform_derivative_1D_numdifftools(
     if 'base_step' not in deriv_kwargs:
         if 'start_step_size' in deriv_kwargs:
             # Allowed as alias
-            print('HUUHUHUU')
             _deriv_kwargs['base_step'] = _deriv_kwargs.pop('start_step_size')
         else:
-            print('HIHIIII')
             _deriv_kwargs['base_step'] = 1e-2*param_center_val
 
     def abs_wrapper(param_val):
@@ -998,18 +1011,15 @@ def get_waveform_derivative_1D_numdifftools(
         }
         return np.unwrap(np.angle(wf_generator(_wf_params_at_point).value))
     
-
     deriv_abs = nd.Derivative(abs_wrapper, **_deriv_kwargs)
-
     deriv_phase = nd.Derivative(phase_wrapper, **_deriv_kwargs)
 
     amp = np.abs(_wf_at_point).value
     pha = np.unwrap(np.angle(_wf_at_point)).value
 
-
     return FrequencySeries(
-        deriv_abs(param_center_val) * np.exp(1j*pha)
-        + amp * np.exp(1j*pha) * 1j * deriv_phase(param_center_val),
+        (deriv_abs(param_center_val)
+         + 1.j*amp*deriv_phase(param_center_val)) * np.exp(1j*pha),
         frequencies=_wf_at_point.frequencies,
         unit=_wf_at_point.unit/param_center_unit  # TODO: compose this?
     )

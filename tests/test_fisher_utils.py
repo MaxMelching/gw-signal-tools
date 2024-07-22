@@ -84,8 +84,7 @@ wf_params = {
     'condition': 0
 }
 
-# test_params = ['total_mass', 'distance']
-test_params = ['total_mass', 'distance', 'mass_ratio']
+test_params = ['total_mass', 'mass_ratio']
 
 
 approximant = 'IMRPhenomXPHM'

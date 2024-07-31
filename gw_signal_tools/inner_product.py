@@ -1035,7 +1035,7 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
             _match_val, opt_info = overlap(wf1, wf2, **inner_prod_kwargs)
 
             logger.info('Optimization was conducted successfully. Remaining '
-                        f' waveform mismatch is {1.-_match_val:.5f}.')
+                        f'waveform mismatch is {1.-_match_val:.5f}.')
             
             opt_params_results = {}
             tc = opt_info['peak_time']

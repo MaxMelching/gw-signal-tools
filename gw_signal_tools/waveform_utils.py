@@ -106,6 +106,7 @@ def fd_to_td_waveform(signal: FrequencySeries) -> TimeSeries:
     # Avoid wrap-around of signal by manually setting starting time and making
     # sure signal starts at zero using time shift with negative epoch
     signal = signal * np.exp(1.j*2*np.pi*signal.frequencies.value*signal.epoch.value)
+    # TODO: call _signal?
     # NOTE: taking value of epoch here is important, otherwise no conversion
     # to number is performed from Time class
 

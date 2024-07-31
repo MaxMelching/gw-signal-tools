@@ -28,11 +28,6 @@ setuptools.setup(
     long_description=read('README.md'),
     long_description_content_type='text/markdown',
     url='https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
-    project_urls={
-        'Source Code': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
-        # 'Documentation': '',
-        'Bug Tracker': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
-    },
     packages=setuptools.find_packages(),
     package_data={
         'gw_signal_tools': [
@@ -41,6 +36,19 @@ setuptools.setup(
         ]
     },
     include_package_data=True,
+    # ----- PyPI Stuff -----
+    platforms=['Linux', 'Mac'],  # Because of lalsuite dependency
+    classifiers=[
+        'Operating System :: POSIX',
+        'Topic :: Scientific/Engineering :: Physics',
+        'Intended Audience :: Science/Research',
+        'Programming Language :: Python'
+    ],
+    project_urls={
+        'Source Code': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools',
+        # 'Documentation': '',
+        'Bug Tracker': 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
+    },
     # ----- Dependencies for installation -----
     setup_requires=[
         'setuptools>=64',
@@ -70,7 +78,7 @@ setuptools.setup(
             'pycbc',
         ],
         'pyseobnr': 'pyseobnr',  # Do not install by default, loads for 5s each
-                                 # time a Python script is run
+                                 # time a Python script is run -> might be fixed by now, did not experience that anymore
         'jupyter': 'jupyter'
     }
 )

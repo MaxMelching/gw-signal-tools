@@ -47,7 +47,7 @@ pc.default_dict.pop('mass2', None);
 hanford = Detector('H1', psd_no_noise)
 livingston = Detector('L1', psd_no_noise)
 
-print(FisherMatrixNetwork.systematic_error.__doc__)
+
 fisher_tot_mass = FisherMatrixNetwork(
     wf_params,
     'total_mass',

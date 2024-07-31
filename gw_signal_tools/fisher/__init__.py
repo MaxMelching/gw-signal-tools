@@ -49,7 +49,10 @@ latexparams = {
     'inclination': r'$\theta_{jn}$',
     'iota': r'$\iota$',
     'time': '$t_0$',
+    'tc': r'$t_c$',  # Basically alias for time
     'phase': r'$\phi_0$',
+    'psi': r'$\psi$',
+    'phi_ref': r'$\phi_\mathrm{ref}$',
     # ----- Detector parameters -----
     'log_likelihood': r'$\log\mathcal{L}$',
     'network_optimal_snr': r'$\rho_{\mathrm{opt}}$ (network)',

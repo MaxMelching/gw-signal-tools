@@ -1,5 +1,15 @@
+# ----- Standard Lib Imports -----
+from typing import Any
+
 # ----- Third Party Imports -----
 from gwpy.frequencyseries import FrequencySeries
+
+
+__doc__ = """
+Module for the ``Detector`` class that is intended to provide a simple
+representation of gravitational wave detectors, with all information
+needed by functions in `gw_signal_tools`.
+"""
 
 
 class Detector:
@@ -16,18 +26,22 @@ class Detector:
         Power spectral density of the detector.
     kw_args :
         All other keyword arguments will be interpreted as arguments
-        that are supposed to be used in waveform generation. This allows
-        to specify certain properties that are distinct for detector
-        that this instance represents, e.g. a certain starting frequency
-        (note: this is not required for the `'det'` parameter, which is
-        set automatically based on `name`).
+        that are supposed to be used in inner product calculations. This
+        allows to specify certain properties that are distinct for
+        detector that this instance represents, e.g. a certain starting
+        frequency (note: this is not required for the `'det'` parameter,
+        which is set automatically based on `name`).
+
+        Note: since the PSD is already an attribute of this class, it
+        does not need to be given here (only relevant is `kw_args` is
+        passed as a dictionary and not via keyword arguments).
     """
     def __init__(self, name: str, psd: FrequencySeries, **kw_args) -> None:
         """Initializa a ``Detector``."""
         self.name = name
         self.psd = psd
         # TODO: make default psd? No noise one?
-        self.wf_args = kw_args
+        self.inner_prod_kwargs = kw_args
     
     @property
     def name(self):
@@ -65,20 +79,20 @@ class Detector:
             pass
 
     @property
-    def wf_args(self) -> dict:
-        """Arguments for waveform generation that shall be used
+    def inner_prod_kwargs(self) -> dict:
+        """Arguments for inner product calculations that shall be used
         specifically for this detector.
         """
-        return self._wf_args
+        return self._inner_prod_kwargs
     
-    @wf_args.setter
-    def wf_args(self, wf_args) -> None:
-        self._wf_args = dict(wf_args) | {'det': self.name}
+    @inner_prod_kwargs.setter
+    def inner_prod_kwargs(self, kw_args: dict[str, Any]) -> None:
+        self._inner_prod_kwargs = kw_args | {'psd': self.psd}
 
-    @wf_args.deleter
-    def wf_args(self) -> None:
+    @inner_prod_kwargs.deleter
+    def inner_prod_kwargs(self) -> None:
         try:
-            del self._wf_args
+            del self._inner_prod_kwargs
         except AttributeError:  # pragma: no cover
             pass
     

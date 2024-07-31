@@ -16,11 +16,11 @@ def test_psd():
     livingston.psd = psd_no_noise
     del livingston.psd
 
-def test_wf_args():
-    livingston = Detector('L1', psd_o3_l1)
-    livingston.wf_args = {'total_mass': 50.*u.solMass}
-    assert livingston.wf_args == {'total_mass': 50.*u.solMass, 'det': 'L1'}
-    del livingston.wf_args
+def test_inner_prod_kwargs():
+    livingston = Detector('L1', psd_o3_l1, f_range=[10.*u.Hz, 1024.*u.Hz])
+    assert livingston.inner_prod_kwargs == {'f_range': [10.*u.Hz, 1024.*u.Hz],
+                                            'psd': psd_o3_l1}
+    del livingston.inner_prod_kwargs
 
 def test_repr():
     hanford = Detector('H1', psd_o3_h1)

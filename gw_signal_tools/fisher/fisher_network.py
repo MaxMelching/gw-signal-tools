@@ -250,12 +250,11 @@ class FisherMatrixNetwork(FisherMatrix):
         for det in self.detectors:
             self._fisher_for_dets += [
                 FisherMatrix(
-                    wf_params_at_point=self.wf_params_at_point | det.wf_args,
+                    wf_params_at_point=self.wf_params_at_point | {'det': det.name},
                     params_to_vary=self.params_to_vary,
                     wf_generator=self.wf_generator,
                     direct_computation=False,
-                    psd=det.psd,
-                    **self.metadata
+                    **(self.metadata | det.inner_prod_kwargs)
                 )
             ]
     
@@ -401,8 +400,8 @@ class FisherMatrixNetwork(FisherMatrix):
 
         snr = 0.
         for det in self.detectors:
-            signal = self.wf_generator(self.wf_params_at_point | det.wf_args)
-            snr += norm(signal, psd=det.psd, **_inner_prod_kwargs)**2
+            signal = self.wf_generator(self.wf_params_at_point | {'det': det.name})
+            snr += norm(signal, **(_inner_prod_kwargs | det.inner_prod_kwargs))**2
         
         return snr**.5
 

@@ -309,13 +309,7 @@ class FisherMatrixNetwork(FisherMatrix):
         #    adjusted version of code from FisherMatrix.sys_error here
         #    (main cost is waveform generation and thus optimization)
 
-        # sys_error_list = []
-        # # vector_list = []
-        # fisher = MatrixWithUnits(np.zeros(2*(len(self.params_to_vary),)), self.fisher.unit)
-        # opt_bias = MatrixWithUnits(np.zeros(len(self.params_to_vary)),
-        #     [self.wf_params_at_point[param].unit for param in self.params_to_vary]).reshape((len(self.params_to_vary), 1))
-        # vector = MatrixWithUnits(np.zeros((len(self.params_to_vary), 1)),
-        #     (fisher @ opt_bias).unit)
+
         sys_error = 0.
         fisher = 0.
         opt_bias = 0.
@@ -326,8 +320,6 @@ class FisherMatrixNetwork(FisherMatrix):
         optimization_info = {}
 
         for i, det in enumerate(self.detectors):
-            # sys_error_list += [
-                # self.detector_fisher(det).systematic_error(
             sys_error = self.detector_fisher(i).systematic_error(
                     reference_wf_generator=reference_wf_generator,
                     params=None,  # Get all for now, filter before return
@@ -336,45 +328,29 @@ class FisherMatrixNetwork(FisherMatrix):
                     return_opt_info=True,
                     **inner_prod_kwargs
                 )
-            # ]
             # NOTE: every element is now tuple, so pay attention to indices
 
-            # optimization_info[det.name] = sys_error_list[-1][1]
             optimization_info[det.name] = sys_error[1]
 
             if isinstance(optimize, bool) and not optimize:
-                # used_fisher = self.detector_fisher(det)
-                # used_fisher = self.detector_fisher(i)  # Should be faster
-                # used_opt_bias = MatrixWithUnits(np.zeros(sys_error_list[-1][0].shape), sys_error_list[-1][0].unit)
                 used_opt_bias = 0.
             
                 if optimize_fisher is not None:
-                    # used_fisher = used_fisher.project_fisher(optimize_fisher).fisher
                     used_fisher = sys_error[1]['opt_fisher'].fisher
                 else:
-                    # used_fisher = used_fisher.fisher
                     used_fisher = self.detector_fisher(i).fisher
             else:
                 # Some kind of optimization was carried out, thus we
                 # can access attribute in info dictionary
-                # used_fisher = sys_error_list[-1][1]['opt_fisher']
-                # used_opt_bias = sys_error_list[-1][1]['opt_bias']
                 used_fisher = sys_error[1]['opt_fisher'].fisher
                 used_opt_bias = sys_error[1]['opt_bias']
             
-            # vector += used_fisher @ (sys_error_list[-1][0] - used_opt_bias)
-            # vector += used_fisher @ (sys_error[0] - used_opt_bias)
+                opt_bias += used_fisher @ used_opt_bias
+
             vector += sys_error[1]['deriv_vector']
-            opt_bias += used_opt_bias
             fisher += used_fisher
 
-            # TODO: check how large impact of condition number on this is
-            # -> alternative: split up sys-error function into many more
-            #    or just return the vector as well
-            # -> this might be best. Similar to opt_bias return
-
-        fisher_bias = MatrixWithUnits.inv(fisher) @ vector + opt_bias
-        
+        fisher_bias = MatrixWithUnits.inv(fisher) @ (vector + opt_bias)
         
         # Check which params shall be returned
         if params is not None:

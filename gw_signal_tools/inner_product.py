@@ -1,5 +1,6 @@
 # ----- Standard Lib Imports -----
-from typing import Optional, Callable, Literal
+from typing import Optional, Callable, Literal, Final
+from inspect import signature
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -10,7 +11,8 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
-from gw_signal_tools import preferred_unit_system, logger
+from .units import preferred_unit_system
+from .logging import logger
 from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
@@ -327,6 +329,11 @@ def inner_product(
             min_dt_prec=min_dt_prec,
             return_opt_info=return_opt_info
         )
+
+
+# The following would be called in every class instantiation and to
+# avoid these operations, we pre-compute outside of the class
+_INNER_PROD_ARGS: Final[list[str]] = list(signature(inner_product).parameters)
 
 
 def inner_product_computation(

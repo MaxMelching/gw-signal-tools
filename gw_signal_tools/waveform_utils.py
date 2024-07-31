@@ -10,7 +10,7 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
-from gw_signal_tools import logger
+from .logging import logger
 from .test_utils import allclose_quantity
 
 

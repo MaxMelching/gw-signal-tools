@@ -1,7 +1,6 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
-import logging
-from typing import Optional, Any, Literal, Self, Callable
+from typing import Optional, Any, Callable
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -10,7 +9,7 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
-from gw_signal_tools import logger
+from ..logging import logger
 from ..inner_product import norm
 from .fisher import FisherMatrix
 from ..types import MatrixWithUnits, Detector

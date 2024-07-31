@@ -1,7 +1,6 @@
 # ----- Standard Lib Imports -----
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Callable, Final
-from inspect import signature
+from typing import Optional, Any, Literal, Callable
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -11,34 +10,23 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
-from gw_signal_tools import preferred_unit_system, logger
+from ..units import preferred_unit_system
+from ..logging import logger
 from ..inner_product import (
-    inner_product, norm, optimize_overlap, get_default_opt_params
+    inner_product, norm, optimize_overlap, get_default_opt_params,
+    _INNER_PROD_ARGS
 )
 from ..waveform_utils import get_wf_generator
-from ..types import MatrixWithUnits
+from ..types.matrix_with_units import MatrixWithUnits
 from .fisher_utils import (
     get_waveform_derivative_1D_with_convergence,
-    get_waveform_derivative_1D_numdifftools, fisher_matrix,
-    fisher_matrix_gw_signal_tools, fisher_matrix_numdifftools
+    get_waveform_derivative_1D_numdifftools, fisher_matrix
 )
 
 
 __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
-
-
-# The following would be called in every class instantiation and to
-# avoid these operations, we pre-compute outside of the class
-_FISHER_ARGS: Final[list[str]] = (
-    set(signature(fisher_matrix).parameters) |
-    set(signature(fisher_matrix_gw_signal_tools).parameters) |
-    set(signature(fisher_matrix_numdifftools).parameters)
-)
-
-# Avoid import of _FISHER_ARGS with star imports
-__all__: list[str] = ['FisherMatrix']
 
 
 class FisherMatrix:
@@ -149,11 +137,12 @@ class FisherMatrix:
 
         if len(self.metadata) > len(self.default_metadata):
             # Arguments for inner product may have been given, extract
-            self._inner_prod_kwargs = self.metadata.copy()
-            # Start with metadata, then remove all potential arguments
-            # for Fisher. Leaves keywords for inner product
-            for key in _FISHER_ARGS:
-                self._inner_prod_kwargs.pop(key, None)
+            self._inner_prod_kwargs = {}
+            for key in _INNER_PROD_ARGS:
+                if key in metadata:
+                    # get with default None is potentially bad, some
+                    # arguments might have this value too
+                    self._inner_prod_kwargs[key] = self.metadata[key]
         else:
             self._inner_prod_kwargs = {}
     

@@ -1,7 +1,6 @@
 # ----- Standard Lib Imports -----
 import warnings
-from typing import Optional, Any, Literal, Callable, Final
-from inspect import signature
+from typing import Optional, Any, Literal, Callable
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -12,8 +11,8 @@ import astropy.units as u
 import numdifftools as nd
 
 # ----- Local Package Imports -----
-from gw_signal_tools import logger
-from ..inner_product import inner_product, norm
+from ..logging import logger
+from ..inner_product import inner_product, norm, _INNER_PROD_ARGS
 from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
 
@@ -22,18 +21,6 @@ __doc__ = """
 Module that contains functions to calculate numerical derivatives of
 gravitational waveforms and also a wrapper to calculate a Fisher matrix.
 """
-
-
-# In the following functions, we will frequently access the following
-# list, which is the reason that it is stored outside of the functions
-_INNER_PROD_ARGS: Final[list[str]] = list(signature(inner_product).parameters)
-
-# Avoid import of _INNER_PROD_ARGS with star imports
-__all__: list[str] = [
-    'num_diff', 'fisher_matrix', 'fisher_matrix_gw_signal_tools',
-    'get_waveform_derivative_1D_with_convergence', 'get_waveform_derivative_1D',
-    'fisher_matrix_numdifftools', 'get_waveform_derivative_1D_numdifftools'
-]
 
 
 def num_diff(

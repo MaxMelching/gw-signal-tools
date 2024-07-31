@@ -3,7 +3,7 @@ import pytest
 import astropy.units as u
 
 # ----- Local package imports -----
-import gw_signal_tools.units as gw_signal_tools_units
+from gw_signal_tools.units import gw_signal_tools_units
 # Do NOT import preferred_unit_system here, want to test the one from package
 
 

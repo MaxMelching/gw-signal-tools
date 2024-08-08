@@ -11,6 +11,7 @@ import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
 from .logging import logger
+from .caching import cache_func
 from .test_utils import allclose_quantity
 
 
@@ -845,6 +846,7 @@ def get_wf_generator(
     """
     generator = gwsignal_get_waveform_generator(approximant)
 
+    @cache_func
     def wf_generator(wf_params):
         return get_strain(wf_params, domain, generator, *args, **kwargs)
 

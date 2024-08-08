@@ -892,7 +892,7 @@ def get_default_opt_params(
     return default_opt_params
 
 
-def optimize_overlap(  # TODO: rename to optimize_mismatch?
+def optimize_overlap(
     wf_params: dict[str, u.Quantity],
     fixed_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],

@@ -1,4 +1,5 @@
 from .detector import Detector  # noqa: F401
+from .hash_dict import HashableDict  # noqa: F401
 from .matrix_with_units import MatrixWithUnits  # noqa: F401
 
 __doc__ = """

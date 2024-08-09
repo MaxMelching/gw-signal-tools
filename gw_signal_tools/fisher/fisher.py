@@ -128,11 +128,11 @@ class FisherMatrix:
     ) -> None:
         """Initialize a ``FisherMatrix``."""
         self.wf_params_at_point = wf_params_at_point
+        self.wf_generator = wf_generator
         if isinstance(params_to_vary, str):
             self.params_to_vary = [params_to_vary]
         else:
             self.params_to_vary = params_to_vary.copy()
-        self.wf_generator = wf_generator
         self.metadata = self.default_metadata | metadata
 
         if len(self.metadata) > len(self.default_metadata):
@@ -149,6 +149,45 @@ class FisherMatrix:
         if direct_computation:
             self._calc_fisher()
     
+    # @property
+    # def wf_params_at_point(self) -> dict[str, u.Quantity]:
+    #     return self._wf_params_at_point
+    
+    # @wf_params_at_point.setter
+    # def wf_params_at_point(self, wf_params: dict[str, u.Quantity]) -> None:
+    #     # Do some parameter checks?
+
+    #     self._wf_params_at_point = wf_params
+    
+    @property
+    def params_to_vary(self) -> list[str]:
+        return self._params_to_vary
+    
+    @params_to_vary.setter
+    def params_to_vary(self, params: str | list[str]) -> None:
+        if isinstance(params, str):
+            params = [params]
+        
+        # Assert no degenerate parameters are given
+        assert not ('time' in params and 'tc' in params)
+        assert not ('phase' in params and 'psi' in params)
+        # Built in some phi_ref check too? Maybe even based on hm_or_precessing?
+        # from gw_signal_tools.inner_product import test_hm, test_precessing
+        # assert not (
+        #     (('phase' in params and 'psi' in params))
+        #     or (('phase' in params or 'psi' in params) and 'phi_ref' in params
+        #          if not (test_hm(self.wf_params_at_point, self.wf_generator)
+        #                  or test_precessing(self.wf_params_at_point))
+        #          else True)  # phi_ref only degenerate if hm or precessing
+        # )
+        # TODO: make sure this is at point in __init__ where all self stuff is defined
+
+        self._params_to_vary = params
+
+        self._param_indices = {
+            param: i for i, param in enumerate(params)
+        }  # Avoid linear search through parameters, instead hashing
+        
     def _calc_fisher(self):
         """Calculate the Fisher matrix for this instance."""
         result = fisher_matrix(
@@ -238,7 +277,7 @@ class FisherMatrix:
             self._calc_fisher()
             return self.__getattribute__(name)
         elif name == '_deriv_info':
-            # Same argument as for _fisher
+            # Analogous case as for _fisher
             return {}
     
         return self.fisher.__getattribute__(name)
@@ -270,16 +309,18 @@ class FisherMatrix:
         """
         if isinstance(params, str):
             params = [params]
-        
-        for param in params:
-            assert param in self.params_to_vary, (
-                f'Parameter \'{param}\' was not used to calculate the Fisher '
-                'matrix (which can also mean it was projected out).')
 
-        _params = np.array(params)
-        _params_to_vary = np.array(self.params_to_vary)
-        # param_indices = [np.argwhere(param == _params_to_vary)[0,0] for param in _params_to_vary[np.isin(_params_to_vary, _params)]]
-        param_indices = [np.argwhere(param == _params_to_vary)[0,0] for param in _params[np.isin(_params, _params_to_vary)]]
+        param_indices = np.empty(len(params))
+        
+        for i, param in enumerate(params):
+            try:
+                param_indices[i] = self._param_indices[param]
+            except KeyError:
+                # param is not in self.params_to_vary
+                raise ValueError(
+                    f'Parameter \'{param}\' was not used to calculate the '
+                    'Fisher matrix (which can also mean it was projected out).'
+                )
 
         return param_indices
 
@@ -767,7 +808,6 @@ class FisherMatrix:
             # Do not loop over params, some of them might have been
             # projected out of opt_fisher
             for param in opt_fisher.params_to_vary:
-                # TODO: check if enumerate works too
                 i = opt_fisher.get_param_indices(param)
                 
                 if param in ['tc', 'time']:

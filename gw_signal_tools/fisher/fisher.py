@@ -844,8 +844,8 @@ class FisherMatrix:
         ax = MatrixWithUnits.plot(matrix, *args, **kwargs)
 
         tick_labels = self.params_to_vary if not isinstance(self.params_to_vary, str) else [self.params_to_vary]
-        from ..fisher import latexparams
-        tick_labels = [latexparams[param] if param in latexparams else param for param in tick_labels]
+        from ..plotting import latexparams
+        tick_labels = [latexparams.get(param, param) for param in tick_labels]
         tick_locs = np.arange(0, len(tick_labels)) + 0.5
 
         if xticks:

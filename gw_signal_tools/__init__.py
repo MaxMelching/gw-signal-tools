@@ -25,3 +25,6 @@ from .logging import logger  # noqa: F401
 
 # ---------- Initialize Caching ----------
 from .caching import use_caching, cache_func, disable_caching, enable_caching  # noqa: F401
+
+# ---------- Dictionary to get nicer display of parameters ----------
+from .plotting import latexparams  # noqa: F401

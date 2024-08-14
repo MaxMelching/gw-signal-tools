@@ -1028,7 +1028,6 @@ def optimize_overlap(
              phase_index is not None)
             or (len(_opt_params) == 1 and (time_index is not None or
                                            phase_index is not None))):
-            inner_prod_kwargs['optimize_time_and_phase'] = True
             inner_prod_kwargs['return_opt_info'] = True
             wf2 = vary_wf_generator(wf_params)
 

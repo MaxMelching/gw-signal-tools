@@ -200,6 +200,9 @@ def test_get_indices():
         i, j = index
         assert fisher.fisher[grid_1][i, j] == sub_matr_1[i][j]
         assert fisher.fisher[grid_2][i, j] == sub_matr_2[i][j]
+    
+    with pytest.raises(ValueError):
+        fisher.get_param_indices('mass_ratio')
 
 @pytest.mark.parametrize('inner_prod_kwargs', [
     dict(f_range=[f_min, f_max]),
@@ -343,7 +346,7 @@ def test_plot():
     plt.close()
 
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
-@pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
+@pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_metadata', [None, {'return_info': False, 'convergence_check': 'mismatch'}])
 def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
@@ -361,7 +364,10 @@ def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
     if new_wf_params_at_point is not None:
         assert fisher_tot_mass_v2.wf_params_at_point == new_wf_params_at_point
     if new_params_to_vary is not None:
-        assert fisher_tot_mass_v2.params_to_vary == new_params_to_vary
+        if isinstance(new_params_to_vary, str):
+            assert fisher_tot_mass_v2.params_to_vary == [new_params_to_vary]
+        else:
+            assert fisher_tot_mass_v2.params_to_vary == new_params_to_vary
     if new_wf_generator is not None:
         assert fisher_tot_mass_v2.wf_generator == new_wf_generator
     assert fisher_tot_mass_v2.metadata == (fisher_tot_mass.metadata | new_metadata)

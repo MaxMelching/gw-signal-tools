@@ -370,6 +370,7 @@ def test_power():
     )
 
 def test_matmul():
+    matrix = MatrixWithUnits(example_values, example_units)
     example_units_2 = np.array([[u.s, u.m], [u.s, u.m]], dtype=object)
     matrix2 = MatrixWithUnits(example_values, example_units_2)
 
@@ -414,9 +415,9 @@ def test_matmul():
 
 
     # -- Test with rows and columns
-    matrix_col = MatrixWithUnits(example_values[:, 0], u.s)
+    matrix_col = matrix_in_s[:, 0]
     matrix_col = MatrixWithUnits.reshape(matrix_col, (2, 1))
-    matrix_row = MatrixWithUnits(example_values[0, :], u.s)
+    matrix_row = matrix_in_s[0, :]
     matrix_row = MatrixWithUnits.reshape(matrix_row, (1, 2))
 
     assert_allequal_MatrixWithUnits(

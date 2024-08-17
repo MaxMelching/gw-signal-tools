@@ -129,10 +129,7 @@ class FisherMatrix:
         """Initialize a ``FisherMatrix``."""
         self.wf_params_at_point = wf_params_at_point
         self.wf_generator = wf_generator
-        if isinstance(params_to_vary, str):
-            self.params_to_vary = [params_to_vary]
-        else:
-            self.params_to_vary = params_to_vary.copy()
+        self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
 
         if len(self.metadata) > len(self.default_metadata):
@@ -166,26 +163,28 @@ class FisherMatrix:
     @params_to_vary.setter
     def params_to_vary(self, params: str | list[str]) -> None:
         if isinstance(params, str):
-            params = [params]
+            _params = [params]
+        else:
+            _params = params.copy()  # We potentially remove later on
         
         # Assert no degenerate parameters are given
-        assert not ('time' in params and 'tc' in params)
-        assert not ('phase' in params and 'psi' in params)
+        assert not ('time' in _params and 'tc' in _params)
+        assert not ('phase' in _params and 'psi' in _params)
         # Built in some phi_ref check too? Maybe even based on hm_or_precessing?
         # from gw_signal_tools.inner_product import test_hm, test_precessing
         # assert not (
-        #     (('phase' in params and 'psi' in params))
-        #     or (('phase' in params or 'psi' in params) and 'phi_ref' in params
+        #     (('phase' in _params and 'psi' in _params))
+        #     or (('phase' in _params or 'psi' in _params) and 'phi_ref' in _params
         #          if not (test_hm(self.wf_params_at_point, self.wf_generator)
         #                  or test_precessing(self.wf_params_at_point))
         #          else True)  # phi_ref only degenerate if hm or precessing
         # )
         # TODO: make sure this is at point in __init__ where all self stuff is defined
 
-        self._params_to_vary = params
+        self._params_to_vary = _params
 
         self._param_indices = {
-            param: i for i, param in enumerate(params)
+            param: i for i, param in enumerate(_params)
         }  # Avoid linear search through parameters, instead hashing
         
     def _calc_fisher(self):

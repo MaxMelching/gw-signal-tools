@@ -17,7 +17,7 @@ from ..inner_product import (
     _INNER_PROD_ARGS
 )
 from ..waveform_utils import get_wf_generator
-from ..types.matrix_with_units import MatrixWithUnits
+from ..types import MatrixWithUnits
 from .fisher_utils import (
     get_waveform_derivative_1D_with_convergence,
     get_waveform_derivative_1D_numdifftools, fisher_matrix

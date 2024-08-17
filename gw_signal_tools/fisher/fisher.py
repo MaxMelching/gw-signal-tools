@@ -310,7 +310,7 @@ class FisherMatrix:
         if isinstance(params, str):
             params = [params]
 
-        param_indices = np.empty(len(params))
+        param_indices = np.empty(len(params), dtype=int)
         
         for i, param in enumerate(params):
             try:
@@ -454,6 +454,8 @@ class FisherMatrix:
             out.params_to_vary.remove(param)
             #  Also look at deriv_info, pop params there
             out._deriv_info.pop(param, None)
+        # To update _params_indices, we have to set params_to_vary again
+        out.params_to_vary = out.params_to_vary
         
         # ----- Perform projection -----
         fisher_val = self.value

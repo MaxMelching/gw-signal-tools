@@ -12,11 +12,11 @@ test = FrequencySeries(
     frequencies=frequs
 )
 
-psd_to_file(test, 'no_psd.txt')
+# psd_to_file(test, 'no_psd.txt')
 
 
 # ----- Selectively adjusting units (e.g. to improve condition number) -----
-from gw_signal_tools.matrix_with_units import MatrixWithUnits
+from gw_signal_tools.types import MatrixWithUnits
 import astropy.units as u
 
 test = MatrixWithUnits([42, 96], [u.m, u.s])

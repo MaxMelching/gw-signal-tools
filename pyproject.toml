@@ -104,6 +104,7 @@ testpaths = [
 ]
 
 addopts = [
+  '-v',
   '--doctest-modules',
 ]
 

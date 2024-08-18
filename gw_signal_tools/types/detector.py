@@ -99,3 +99,57 @@ class Detector:
     def __repr__(self) -> str:
         # TODO: make better
         return 'Detector name: ' + self.name + '\nPSD description: ' + self.psd.name
+
+
+class DetectorNetwork:
+    # Essentially list of detectors. But some additional goodies could be added too, think about that
+    def __init__(self, *dets: Any) -> None:
+        self.detectors = dets
+    
+    @property
+    def detectors(self) -> Any:
+        """List of detectors stored in this network."""
+        return self._detectors
+
+    @detectors.setter
+    def detectors(self, dets) -> None:
+        for det in dets:
+            assert isinstance(det, Detector), 'Need detectors of type ``Detector``.'
+        
+        self._detectors = dets
+    
+    @detectors.deleter
+    def detectors(self) -> None:
+        try:
+            del self._detectors
+        except AttributeError:  # pragma: no cover
+            pass
+
+
+import astropy.units as u
+from gwpy.frequencyseries import FrequencySeries
+from gwpy.timeseries import TimeSeries
+from typing import Callable
+
+# class NetworkWaveform:
+class NetworkWaveformGenerator:  # Perhaps more obvious what is done then
+    def __init__(self,
+        wf_generator: Callable[[dict[str, u.Quantity]],
+                               FrequencySeries | TimeSeries],
+        detectors: DetectorNetwork
+    ) -> None:
+        self.wf_generator = wf_generator
+        self.detectors = detectors.detectors
+
+    def __call__(self, wf_params: dict[str, u.Quantity]) -> Any:
+        # TODO: which data type to return? Vector/array of waveforms?
+        # Maybe even MatrixWithUnits or some type inherited from it?
+
+        # Then proceed roughly like this
+        out = []
+        for i, det in enumerate(self.detectors):
+            out[i] = self.wf_generator(wf_params | {'det': det.name})
+        
+        pass
+        # Idea: return vector of waveforms or whatever data type I came up with here
+        # -> but is nice that one can then simply call this like usual generator

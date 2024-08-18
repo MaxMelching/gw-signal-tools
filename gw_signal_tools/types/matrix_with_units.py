@@ -126,10 +126,10 @@ class MatrixWithUnits:
     # -- there will be errors (very unintuitive behaviour).
     __array_priority__ = u.Quantity.__array_priority__ + 10
 
-    _allowed_numeric_types = (int, float, complex, np.number)
+    _allowed_value_types = (int, float, complex, np.number)
     _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
     _allowed_unit_types = _pure_unit_types + (u.Quantity,)
-    _allowed_input_types = _allowed_unit_types + _allowed_numeric_types
+    _allowed_input_types = _allowed_unit_types + _allowed_value_types
 
 
     def  __init__(self, value: ArrayLike, unit: ArrayLike) -> None:
@@ -141,7 +141,7 @@ class MatrixWithUnits:
             value_dtype = value.dtype  # type: ignore
             # Explanation of ignore: we cover case where no dtype exists
         except AttributeError:
-            if type(value) in self._allowed_numeric_types:
+            if type(value) in self._allowed_value_types:
                 value_dtype = type(value)
             else:
                 # Default numeric type
@@ -151,13 +151,8 @@ class MatrixWithUnits:
 
 
         # Scalar unit is allowed input even for value array, handled here
-        if isinstance(unit, self._allowed_input_types):
+        if isinstance(unit, self._allowed_unit_types):
             unit = u.Unit(unit)
-            # unit = u.CompositeUnit(1, [unit], [1])
-            # Enforces keeping prefixes, needed to avoid numerical errors that
-            # happen at times (apparently during conversion using u.Unit,
-            # presumably due to scale that is not 1)
-            # -> had other reason, Unit and CompositeUnit are equivalent
         else:
             assert np.shape(value) == np.shape(unit), \
                 ('`value` and `unit` must have equal shape if unit is an '
@@ -198,7 +193,7 @@ class MatrixWithUnits:
             pass  # New class instance is created, nothing to check
         
         for _, val in np.ndenumerate(value):
-            assert (isinstance(val, self._allowed_numeric_types)
+            assert (isinstance(val, self._allowed_value_types)
                     and not isinstance(val, bool)), \
                 f'Need valid numeric types for all members of `value` (not {type(val)}).'
         
@@ -265,14 +260,14 @@ class MatrixWithUnits:
         return self.__copy__()
     
     def __eq__(self, other: Any) -> np.ndarray:
-        if not isinstance(other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_numeric_types)):
+        if not isinstance(other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_value_types)):
             # Quantities are included here because slicing sometimes returns
             # them, so throwing error here would not be good
             raise TypeError(
                 f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
             )
         else:
-            if isinstance(other, (np.ndarray, self._allowed_numeric_types)):
+            if isinstance(other, (np.ndarray, self._allowed_value_types)):
                 other = other * u.dimensionless_unscaled
 
             return np.equal(self.value, other.value) & np.equal(self.unit, other.unit)
@@ -292,13 +287,13 @@ class MatrixWithUnits:
     def __getitem__(self, key: Any) -> MatrixWithUnits:
         new_value = self.value.__getitem__(key)
         if isinstance(self.unit, self._pure_unit_types):
-            if isinstance(new_value, self._allowed_numeric_types):
+            if isinstance(new_value, self._allowed_value_types):
                 # Scalar
                 return new_value * self.unit
             else:
                 return MatrixWithUnits(new_value, self.unit)
         else:
-            if isinstance(new_value, self._allowed_numeric_types):
+            if isinstance(new_value, self._allowed_value_types):
                 return new_value * self.unit.__getitem__(key)
             else:
                 return MatrixWithUnits(new_value, self.unit.__getitem__(key))
@@ -339,7 +334,7 @@ class MatrixWithUnits:
         # return MatrixWithUnits(np.abs(self.value), self.unit)
     
     def __add__(self, other: Any) -> MatrixWithUnits:
-        if isinstance(other, self._allowed_numeric_types):
+        if isinstance(other, self._allowed_value_types):
             return MatrixWithUnits(self.value + other, self.unit)
         elif isinstance(other, u.Quantity):
             assert np.all(np.equal(other.unit, self.unit))
@@ -374,7 +369,7 @@ class MatrixWithUnits:
         # return (self.__sub__(other)).__neg__()  # Equivalent
             
     def __mul__(self, other: Any) -> MatrixWithUnits:
-        if isinstance(other, self._allowed_numeric_types):
+        if isinstance(other, self._allowed_value_types):
             return MatrixWithUnits(self.value * other, self.unit)
         elif isinstance(other, self._pure_unit_types):
             # ndarray times Unit would produce error, thus do manually
@@ -398,7 +393,7 @@ class MatrixWithUnits:
         return self.__mul__(other)
 
     def __truediv__(self, other):
-        # if isinstance(other, self._allowed_numeric_types):
+        # if isinstance(other, self._allowed_value_types):
         #     return MatrixWithUnits(self.value / other, self.unit)
         # elif isinstance(other, self._pure_unit_types):
         #     # ndarray times Unit would produce error, thus do manually
@@ -428,7 +423,7 @@ class MatrixWithUnits:
             )
     
     def __rtruediv__(self, other: Any) -> MatrixWithUnits:
-        # if isinstance(other, self._allowed_numeric_types):
+        # if isinstance(other, self._allowed_value_types):
         #     return MatrixWithUnits(other / self.value, 1/self.unit)
         # # Following two are actually handled by astropy (correctly), are left
         # # here as backup (to show how they work). Thus excluded from coverage
@@ -459,7 +454,7 @@ class MatrixWithUnits:
             )
             
     def __pow__(self, other: Any) -> MatrixWithUnits:
-        if isinstance(other, self._allowed_numeric_types):
+        if isinstance(other, self._allowed_value_types):
             return MatrixWithUnits(self.value.__pow__(other), self.unit.__pow__(other))
         else:
             raise TypeError(

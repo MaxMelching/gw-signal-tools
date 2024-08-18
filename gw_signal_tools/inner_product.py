@@ -17,6 +17,7 @@ from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
 from .test_utils import allclose_quantity, assert_allclose_quantity
+from .types import Detector
 
 
 __doc__ = """
@@ -24,6 +25,15 @@ Implementation of noise-weighted inner product that is
 common in GW data analysis and helpers for computation.
 """
 
+
+# Create new argument detectors? In there we directly have all PSDs.
+# If this is not None, then signal1 and signal2 also have to be lists
+# of signals, representing strain in all detectors. Using detectors, we
+# can also handle f_range: if inner_product arg f_range is not None,
+# this is taken as range for all detectors. Otherwise we check in each
+# detector instance -> or overwrite f_range based on detector ones?
+# -> nah, create new function. inner_product becomes too complicated
+#    otherwise (not good for maintenance and also speed probably)
 
 def inner_product(
     signal1: TimeSeries | FrequencySeries,
@@ -410,9 +420,11 @@ def inner_product_computation(
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
-    psd: FrequencySeries,
+    psd: FrequencySeries,  # Keep as alias for detectors? Making optional now would break backwars compatibility, no?
+                           # -> would then also have to make optimize ones optional, no?
     optimize_time: bool,
     optimize_phase: bool,
+    detectors: list[Detector] = None,
     min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False
 ) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
@@ -530,7 +542,36 @@ def optimized_inner_product(
         raise ValueError(custom_error_msg)
     
     # ----- Fourth step: computations -----
-    dft_vals = (signal1 * signal2.conjugate() / psd)
+    # TODO: find way to avoid having to duplicate all code for case of
+    # signal lists. Maybe in case of detectors is None and psd given,
+    # make dummy detector and put it in list (also put signals in list)
+    # so that we always check the multi detector case after that?
+    # -> could even leave syntax the same if we re-define signal1, signal2
+    #    as lists and then in for loop set signal1=signal1[i]
+    # -> ah, bad. But maybe with _signal1=signal1[i]
+    if detectors is None:
+        dft_vals = signal1 * signal2.conjugate() / psd
+    else:
+        dft_vals = 0.
+        assert len(detectors) > 0  # Or do beforehand already?
+        assert len(signal1) == len(signal2) and len(signal1) == len(detectors)
+        for i, det in enumerate(detectors):
+            _dft_vals = signal1[i] * signal2[i].conjugate() / det.psd
+            if i > 0:
+                # GWpy adding does not check for same frequencies, thus
+                # we have to check manually
+
+                # assert dft_vals.df == _dft_vals.df
+                # assert dft_vals.f0 == _dft_vals.f0
+                # Maybe not test for strict equality, but instead:
+                # assert_allclose_quantity(dft_vals.df, _dft_vals.df,
+                #                          atol=0., rtol=1e-5)
+                # assert_allclose_quantity(dft_vals.f0, _dft_vals.f0,
+                #                          atol=0.5*dft_vals.df, rtol=0.)
+                assert_allclose_quantity(dft_vals.frequencies,
+                                         _dft_vals.frequencies,
+                                         atol=0.5*dft_vals.df, rtol=0.)
+            dft_vals += _dft_vals
 
     if min_dt_prec is not None:
         try:

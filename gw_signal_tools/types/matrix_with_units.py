@@ -121,9 +121,10 @@ class MatrixWithUnits:
     creates instance with unit dimensionless, but is there for convenience
     in case you don't want to understand more of inner workings of class
     """
-    # __array_priority__ = 100 * u.core.UnitBase.__array_priority__
-    # Does not help for radd etc. because problem is that IrreducibleUnit
-    # is not compatible with numpy array.
+    # -- Set array priority so that Quantity left addition and
+    # -- multiplication with MatrixWithUnits are superseded. Otherwise,
+    # -- there will be errors (very unintuitive behaviour).
+    __array_priority__ = u.Quantity.__array_priority__ + 10
 
     _allowed_numeric_types = (int, float, complex, np.number)
     _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
@@ -376,7 +377,11 @@ class MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):
             return MatrixWithUnits(self.value * other, self.unit)
         elif isinstance(other, self._pure_unit_types):
-            return MatrixWithUnits(self.value, self.unit * other)
+            # ndarray times Unit would produce error, thus do manually
+            new_unit = np.empty(self.shape, dtype=object)
+            for i, val in np.ndenumerate(self.unit):
+                new_unit[i] = u.Unit(val*other)
+            return MatrixWithUnits(self.value, new_unit)
         elif isinstance(other, u.Quantity):
             # Fall back to multiplication with unit and value
             return self * other.value * other.unit
@@ -393,40 +398,65 @@ class MatrixWithUnits:
         return self.__mul__(other)
 
     def __truediv__(self, other):
-        if isinstance(other, self._allowed_numeric_types):
-            return MatrixWithUnits(self.value / other, self.unit)
-        elif isinstance(other, self._pure_unit_types):
-            return MatrixWithUnits(self.value, self.unit / other)
-        elif isinstance(other, u.Quantity):
-            return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
-        elif isinstance(other, MatrixWithUnits):
-            return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
-        else:
-            try:
-                return MatrixWithUnits(self.value / other, self.unit)
-            except:
-                raise TypeError(
-                    f'Division of `MatrixWithUnit` and {type(other)}'
-                    ' is not supported.'
-                )
+        # if isinstance(other, self._allowed_numeric_types):
+        #     return MatrixWithUnits(self.value / other, self.unit)
+        # elif isinstance(other, self._pure_unit_types):
+        #     # ndarray times Unit would produce error, thus do manually
+        #     new_unit = np.empty(self.shape, dtype=object)
+        #     for i, val in np.ndenumerate(self.unit):
+        #         new_unit[i] = u.Unit(val/other)
+        #     return MatrixWithUnits(self.value, new_unit)
+        # elif isinstance(other, u.Quantity):
+        #     return self / other.value / other.unit
+        # elif isinstance(other, MatrixWithUnits):
+        #     return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
+        # else:
+        #     try:
+        #         return MatrixWithUnits(self.value / other, self.unit)
+        #     except:
+        #         raise TypeError(
+        #             f'Division of `MatrixWithUnit` and {type(other)}'
+        #             ' is not supported.'
+        #         )
+
+        try:
+            return self * (1/other)
+        except:
+            raise TypeError(
+                f'Division of `MatrixWithUnit` and {type(other)}'
+                ' is not supported.'
+            )
     
     def __rtruediv__(self, other: Any) -> MatrixWithUnits:
-        if isinstance(other, self._allowed_numeric_types):
-            return MatrixWithUnits(other / self.value, 1/self.unit)
-        # Following two are actually handled by astropy (correctly), are left
-        # here as backup (to show how they work). Thus excluded from coverage
-        elif isinstance(other, self._pure_unit_types):  # pragma: no cover
-            return MatrixWithUnits(1. / self.value, other / self.unit)
-        elif isinstance(other, u.Quantity):  # pragma: no cover
-            return MatrixWithUnits(other.value / self.value, other.unit / self.unit)
-        else:
-            try:
-                return MatrixWithUnits(other / self.value, 1/self.unit)
-            except:
-                raise TypeError(
-                    f'Division of {type(other)} and `MatrixWithUnit`'
-                    ' is not supported.'
-                )
+        # if isinstance(other, self._allowed_numeric_types):
+        #     return MatrixWithUnits(other / self.value, 1/self.unit)
+        # # Following two are actually handled by astropy (correctly), are left
+        # # here as backup (to show how they work). Thus excluded from coverage
+        # elif isinstance(other, self._pure_unit_types):
+        #     # ndarray times Unit would produce error, thus do manually
+        #     new_unit = np.empty(self.shape, dtype=object)
+        #     for i, val in np.ndenumerate(self.unit):
+        #         new_unit[i] = u.Unit(other/val)
+        #     return MatrixWithUnits(1. / self.value, new_unit)
+        # elif isinstance(other, u.Quantity):
+        #     return MatrixWithUnits(other.value / self.value, new_unit)
+        # else:
+        #     try:
+        #         return MatrixWithUnits(other / self.value, 1/self.unit)
+        #     except:
+        #         raise TypeError(
+        #             f'Division of {type(other)} and `MatrixWithUnit`'
+        #             ' is not supported.'
+        #         )
+
+        try:
+            # return other * (1/self)
+            return other * MatrixWithUnits(1/self.value, 1/self.unit)
+        except:
+            raise TypeError(
+                f'Division of `MatrixWithUnit` and {type(other)}'
+                ' is not supported.'
+            )
             
     def __pow__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_numeric_types):

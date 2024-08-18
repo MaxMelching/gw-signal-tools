@@ -10,7 +10,8 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
-from gw_signal_tools import logger
+from .logging import logger
+from .caching import cache_func
 from .test_utils import allclose_quantity
 
 
@@ -106,6 +107,7 @@ def fd_to_td_waveform(signal: FrequencySeries) -> TimeSeries:
     # Avoid wrap-around of signal by manually setting starting time and making
     # sure signal starts at zero using time shift with negative epoch
     signal = signal * np.exp(1.j*2*np.pi*signal.frequencies.value*signal.epoch.value)
+    # TODO: call _signal?
     # NOTE: taking value of epoch here is important, otherwise no conversion
     # to number is performed from Time class
 
@@ -844,6 +846,7 @@ def get_wf_generator(
     """
     generator = gwsignal_get_waveform_generator(approximant)
 
+    @cache_func
     def wf_generator(wf_params):
         return get_strain(wf_params, domain, generator, *args, **kwargs)
 

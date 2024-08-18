@@ -5,7 +5,7 @@ import astropy.units as u
 from gwpy.types import Series
 
 # ----- Local Package Imports -----
-from gw_signal_tools.types import MatrixWithUnits
+from .types import MatrixWithUnits
 
 
 __doc__ = """

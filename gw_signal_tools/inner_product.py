@@ -1,5 +1,6 @@
 # ----- Standard Lib Imports -----
-from typing import Optional, Callable, Literal
+from typing import Optional, Callable, Literal, Final
+from inspect import signature
 
 # ----- Third Party Imports -----
 import numpy as np
@@ -10,7 +11,8 @@ from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
-from gw_signal_tools import preferred_unit_system, logger
+from .units import preferred_unit_system
+from .logging import logger
 from .waveform_utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
@@ -327,6 +329,11 @@ def inner_product(
             min_dt_prec=min_dt_prec,
             return_opt_info=return_opt_info
         )
+
+
+# The following would be called in every class instantiation and to
+# avoid these operations, we pre-compute outside of the class
+_INNER_PROD_ARGS: Final[list[str]] = list(signature(inner_product).parameters)
 
 
 def inner_product_computation(
@@ -885,7 +892,7 @@ def get_default_opt_params(
     return default_opt_params
 
 
-def optimize_overlap(  # TODO: rename to optimize_mismatch?
+def optimize_overlap(
     wf_params: dict[str, u.Quantity],
     fixed_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
@@ -1021,14 +1028,13 @@ def optimize_overlap(  # TODO: rename to optimize_mismatch?
              phase_index is not None)
             or (len(_opt_params) == 1 and (time_index is not None or
                                            phase_index is not None))):
-            inner_prod_kwargs['optimize_time_and_phase'] = True
             inner_prod_kwargs['return_opt_info'] = True
             wf2 = vary_wf_generator(wf_params)
 
             _match_val, opt_info = overlap(wf1, wf2, **inner_prod_kwargs)
 
             logger.info('Optimization was conducted successfully. Remaining '
-                        f' waveform mismatch is {1.-_match_val:.5f}.')
+                        f'waveform mismatch is {1.-_match_val:.5f}.')
             
             opt_params_results = {}
             tc = opt_info['peak_time']

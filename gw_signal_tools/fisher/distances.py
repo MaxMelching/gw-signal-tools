@@ -280,6 +280,10 @@ def linearized_distance(
                 'Invalid `param_to_vary` input is given, contains more than '
                 'one parameter (and no parameters to project on).'
             )
+    else:
+        assert params_to_project is None, (
+            'Cannot project if a single `param_to_vary` is given.'
+        )                               
 
     center_val = wf_params[param_to_vary]
     

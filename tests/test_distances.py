@@ -132,6 +132,38 @@ def test_projected_linearized_distance(param_to_vary):
 
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
 
+@pytest.mark.parametrize('params_to_project', [['time', 'phase'], 'time'])
+def test_params_to_project(params_to_project):
+    param_to_vary = 'total_mass'
+    center_val = wf_params[param_to_vary]
+    param_range = u.Quantity([0.9*center_val, 1.1*center_val])
+    step_size = 5e-2*center_val
+
+    params_to_vary = [param_to_vary]
+    if isinstance(params_to_project, str):
+        params_to_vary.append(params_to_project)
+    else:
+        params_to_vary += params_to_project
+
+    dist1 = linearized_distance(
+        param_to_vary=params_to_vary,
+        param_vals=param_range,
+        wf_params=wf_params,
+        params_to_project=params_to_project,
+        wf_generator=wf_gen
+    )
+
+    dist2 = linearized_distance(
+        param_to_vary=params_to_vary,
+        param_vals=param_range,
+        wf_params=wf_params,
+        params_to_project=params_to_project,
+        wf_generator=wf_gen
+    )
+
+    assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
+
+
 class ErrorRaising(unittest.TestCase):
     param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]

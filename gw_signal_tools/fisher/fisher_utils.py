@@ -456,9 +456,9 @@ def get_waveform_derivative_1D_with_convergence(
         wf = wf_generator(wf_params_at_point)
 
         if param_to_vary == 'phase':
-            deriv = wf * 1.j
+            deriv = wf * 1.j / u.rad
         else:
-            deriv = wf * 2.j
+            deriv = wf * 2.j / u.rad
 
         derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
@@ -472,7 +472,7 @@ def get_waveform_derivative_1D_with_convergence(
     elif param_to_vary == 'distance':
         wf = wf_generator(wf_params_at_point)
 
-        deriv = (-wf_params_at_point['distance']) * wf
+        deriv = (-1./wf_params_at_point['distance']) * wf
 
         derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
@@ -999,11 +999,11 @@ def get_waveform_derivative_1D_numdifftools(
     if (param_to_vary == 'time' or param_to_vary == 'tc'):
         return _wf_at_point * (-1.j * 2. * np.pi * _wf_at_point.frequencies)
     elif param_to_vary == 'phase':
-        return _wf_at_point * 1.j
+        return _wf_at_point * 1.j / u.rad
     elif param_to_vary == 'psi':
-        return _wf_at_point * 2.j
+        return _wf_at_point * 2.j / u.rad
     elif param_to_vary == 'distance':
-        return (-wf_params_at_point['distance']) * _wf_at_point
+        return (-1./wf_params_at_point['distance']) * _wf_at_point
     else:
         assert param_to_vary in wf_params_at_point, \
             ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'

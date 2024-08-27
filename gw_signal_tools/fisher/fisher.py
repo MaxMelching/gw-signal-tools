@@ -158,6 +158,11 @@ class FisherMatrix:
     
     @property
     def params_to_vary(self) -> list[str]:
+        """
+        Parameters constituting the Fisher matrix.
+        
+        :type: `list[str]`
+        """
         return self._params_to_vary
     
     @params_to_vary.setter
@@ -182,10 +187,19 @@ class FisherMatrix:
         # TODO: make sure this is at point in __init__ where all self stuff is defined
 
         self._params_to_vary = _params
-
+        self._nparams = len(_params)
         self._param_indices = {
             param: i for i, param in enumerate(_params)
         }  # Avoid linear search through parameters, instead hashing
+    
+    @property
+    def nparams(self):
+        """
+        Number of parameters constituting the Fisher matrix.
+        
+        :type: `int`
+        """
+        return self._nparams
         
     def _calc_fisher(self):
         """Calculate the Fisher matrix for this instance."""
@@ -467,8 +481,7 @@ class FisherMatrix:
             )
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
-        n = len(self.params_to_vary)  # Equal to self.fisher.shape[0]
-        full_inv = np.zeros((n, n))
+        full_inv = np.zeros(2*(self.nparams, ))
         full_inv[index_grid] = sub_matrix_inv
         full_inv = MatrixWithUnits(full_inv, self.unit**-1)
 
@@ -530,7 +543,7 @@ class FisherMatrix:
             param_indices = self.get_param_indices(params)
         else:
             # Take all parameters
-            param_indices = len(self.params_to_vary)*[True]
+            param_indices = self.nparams*[True]
         
         return MatrixWithUnits.sqrt(self.fisher_inverse.diagonal()[param_indices])
         # TODO: make it return column vector, is more natural, right?
@@ -791,7 +804,7 @@ class FisherMatrix:
             for i, deriv in enumerate(derivs):
                 derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*time_shift + 1.j*phase_shift)
         
-        vector = MatrixWithUnits.from_numpy_array(np.zeros((len(derivs), 1)))
+        vector = MatrixWithUnits.from_numpy_array(np.zeros((opt_fisher.nparams, 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         optimization_info['deriv_vector'] = vector
@@ -815,6 +828,7 @@ class FisherMatrix:
                     opt_bias[i] = time_shift
                 elif param == 'psi':
                     opt_bias[i] = 0.5*phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
+                    # TODO: maybe remove this composition?
                 elif param == 'phase':
                     opt_bias[i] = phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
                 else:

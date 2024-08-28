@@ -5,6 +5,7 @@ from typing import Callable, Optional, Literal, Any
 import numpy as np
 import astropy.units as u
 from gwpy.frequencyseries import FrequencySeries
+from gwpy.timeseries import TimeSeries
 import matplotlib.pyplot as plt
 
 from ..inner_product import norm, inner_product
@@ -19,13 +20,13 @@ from ..logging import logger
 class Derivative():
     """
     Calculate the derivative of an arbitrary waveform with respect to
-    an arbitrary input parameter.
+    an arbitrary input parameter (in both frequency and time domain).
     """
     def __init__(
         self,
         wf_params_at_point: dict[str, u.Quantity],
         param_to_vary: str,
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
         step_sizes: Optional[list[float] | np.ndarray] = None,
         start_step_size: Optional[float] = 1e-2,
         convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
@@ -39,7 +40,7 @@ class Derivative():
     ) -> None:
         self.wf_params_at_point = wf_params_at_point
         self.param_to_vary = param_to_vary
-        self._wf_generator = wf_generator
+        self.wf_generator = wf_generator
         # self._wf = wf_generator(wf_params_at_point)
         # self._step_size = step_size
 
@@ -47,6 +48,12 @@ class Derivative():
             self.step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]
             # Indexing makes sure we do not start at 5*start_step_size
         else:
+            if isinstance(step_sizes, float):
+                step_sizes = [step_sizes]
+            
+            if len(step_sizes) == 1:
+                self.max_refine_numb = max_refine_numb = 1
+
             self.step_sizes = step_sizes
         
         self.convergence_check = convergence_check
@@ -57,7 +64,7 @@ class Derivative():
 
         self.max_refine_numb = max_refine_numb
 
-        self.deriv_formula = 'five_point_stencil'
+        self.deriv_formula = deriv_formula
 
         self.inner_prod_kwargs = inner_prod_kwargs
         self.inner_prod_kwargs['return_opt_info'] = False
@@ -94,7 +101,7 @@ class Derivative():
         return self._wf_generator
     
     @wf_generator.setter
-    def wf_generator(self, generator: Callable[[dict[str, u.Quantity]], FrequencySeries]) -> None:
+    def wf_generator(self, generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]) -> None:
         self._wf_generator = generator
         self.wf = generator(self.wf_params_at_point)
     
@@ -183,11 +190,11 @@ class Derivative():
     # -> even cached_property would not be useful
     # -> maybe out own custom cacher would help here. But not used for now
     @property
-    def wf(self) -> FrequencySeries:
+    def wf(self) -> FrequencySeries | TimeSeries:
         return self._wf
     
     @wf.setter
-    def wf(self, wf: FrequencySeries) -> None:
+    def wf(self, wf: FrequencySeries | TimeSeries) -> None:
         self._wf = wf
 
     @property
@@ -349,6 +356,9 @@ class Derivative():
                         'Skipping this step size.'
                     )
 
+                    # TODO: call test_point here, where new deriv_routine is
+                    # set. Then maybe call deriv_routine again (?)
+
                     # Still have to append something to lists, otherwise
                     # indices become inconsistent with step_sizes
                     self._derivative_vals += [0.0]
@@ -364,30 +374,7 @@ class Derivative():
             self._derivative_vals += [deriv_param]
             self._deriv_norms += [derivative_norm]
 
-
-            match self.convergence_check:
-                case 'diff_norm':
-                    if len(self._derivative_vals) >= 2:
-                        self._convergence_vals += [
-                            norm(deriv_param - self._derivative_vals[-2],
-                                **self.inner_prod_kwargs)/np.sqrt(derivative_norm)
-                        ]
-                    else:
-                        self._convergence_vals += [np.inf]
-                        continue
-                case 'mismatch':
-                    # Compute mismatch, using that we already know norms
-                    if len(self._derivative_vals) >= 2:
-                        self._convergence_vals += [
-                            1. - inner_product(
-                            deriv_param,
-                            self._derivative_vals[-2],
-                            **self.inner_prod_kwargs
-                        ) / np.sqrt(derivative_norm * self._deriv_norms[-2])
-                        ]  # Index -1 is deriv_param
-                    else:
-                        self._convergence_vals += [np.inf]
-                        continue
+            self._calc_convergence_val()
 
             self._check_converged()
 
@@ -395,13 +382,38 @@ class Derivative():
                 # self.min_dev_index = self.refine_numb, i  # Then it can also be used to access step_sizes
                 self.min_dev_index = i  # Then it can also be used to access step_sizes
                 break
+
+    def _calc_convergence_val(self):
+        match self.convergence_check:
+            case 'diff_norm':
+                if len(self._derivative_vals) >= 2:
+                    self._convergence_vals += [
+                        norm(self._derivative_vals[-1] - self._derivative_vals[-2],
+                            **self.inner_prod_kwargs)/np.sqrt(self._deriv_norms[-1])
+                    ]
+                else:
+                    self._convergence_vals += [np.inf]
+                    # continue
+            case 'mismatch':
+                # Compute mismatch, using that we already know norms
+                if len(self._derivative_vals) >= 2:
+                    self._convergence_vals += [
+                        1. - inner_product(
+                        self._derivative_vals,
+                        self._derivative_vals[-2],
+                        **self.inner_prod_kwargs
+                    ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
+                    ]  # Index -1 is deriv_param
+                else:
+                    self._convergence_vals += [np.inf]
+                    # continue
             
     
     # Idea: this is what we call and what actually returns the derivative
     # TODO: maybe we can create fancy __call__ logic? Where params_at_point are passed?
     # -> could make this optional argument in __init__ then? Nah, this
     # is not possible. 
-    def __call__(self, new_point: Optional[dict[str, u.Quantity]] = None) -> FrequencySeries:
+    def __call__(self, new_point: Optional[dict[str, u.Quantity]] = None) -> FrequencySeries | TimeSeries:
         if new_point is not None:
             self.wf_params_at_point = new_point
         return self.deriv
@@ -449,7 +461,7 @@ class Derivative():
     def central_difference(self):
         return NotImplemented
     
-    def five_point_stencil(self, step_size: float):
+    def five_point_stencil(self, step_size: float) -> FrequencySeries | TimeSeries:
         step_size = self.abs_or_rel_step_size(step_size)
         param_vals = self.param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
@@ -478,33 +490,28 @@ class Derivative():
     @deriv_info.setter
     def deriv_info(self, info):
         for key, val in info.items():
+            # -- Make each key from deriv_info available as attribute
             setattr(self, key, val)
         
         self._deriv_info = info
     
-    # TODO: maybe write getattr and there we try to return deriv_info[attr]?
-    # Because this function is only called if attribute is not available,
-    # 
-    
-    # def __getattr__(self, name: str) -> Any:
-    #     try:
-    #         return self.deriv_info[name]
-    #     except (KeyError, AttributeError):
-    #         # Not a key in deriv_info or invalid attribute is being accessed
-    #         raise AttributeError(f'``Derivative`` has no attribute "{name}".')
 
     def convergence_plot(self):
-        derivative_vals = []
-
+        from ..plotting import latexparams
+        # TODO: maybe make sure derivative has been calculated? Maybe
+        # check length of self._derivative_vals
         fig = plt.figure()
         ax = fig.subplots(nrows=2, sharex=True)
 
-        for i in range(len(derivative_vals)):
-            ax[0].plot(derivative_vals[i].real, '--',
-                       label=f'{self.step_sizes[self.refine_numb][i]:.3e}')
-            ax[1].plot(derivative_vals[i].imag, '--')
-            # No label for second because otherwise, everything shows up twice
-            # in figure legend
+        for i, deriv_val in enumerate(self._derivative_vals):
+            ax[0].plot(
+                deriv_val.real,
+                '--',
+                label=f'{self.step_sizes[self.refine_numb][i]:.3e}'
+            )
+            ax[1].plot(deriv_val.imag, '--')
+            # No label for second because otherwise, everything shows up
+            # twice in figure legend
 
         fig.legend(
             title='Step Sizes',
@@ -512,8 +519,13 @@ class Derivative():
             loc='center left'
         )
         
-        fig.suptitle(f'Parameter: {self.param_to_vary}')  # TODO: use latexparams here?
-        ax[1].set_xlabel('$f$')
+        fig.suptitle(f'Parameter: {latexparams.get(self.param_to_vary,
+                                                   self.param_to_vary)}')
+        if isinstance(deriv_val, TimeSeries):
+            ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
+        else:
+            ax[1].set_xlabel(rf'$f$ [{deriv_val.xindex.unit:latex}]')
+
         ax[0].set_ylabel('Derivative Re')
         ax[1].set_ylabel('Derivative Im')
 

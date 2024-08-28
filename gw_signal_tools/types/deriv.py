@@ -12,11 +12,6 @@ from ..inner_product import norm, inner_product
 from ..logging import logger
 
 
-# TODO: decide if we make two classes, one that only calculates for
-# a single step size and one with convergence. Or if we keep the
-# former as special of the latter (pretty straightforward to get former
-# behaviour if we have latter) -> yep, let's make a single one
-
 class Derivative():
     """
     Calculate the derivative of an arbitrary waveform with respect to
@@ -41,8 +36,6 @@ class Derivative():
         self.wf_params_at_point = wf_params_at_point
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
-        # self._wf = wf_generator(wf_params_at_point)
-        # self._step_size = step_size
 
         if step_sizes is None:
             self.step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]
@@ -92,6 +85,9 @@ class Derivative():
     def param_to_vary(self, param: str):
         if (param != 'time' and param != 'tc'
             and param != 'phase' and param != 'psi'):
+            # TODO: could also add distance here. Has analytical
+            # derivative too, so strictly speaking it is not required
+            # to be in wf_params_at_point
             assert param in self.wf_params_at_point
 
         self._param_to_vary = param
@@ -129,13 +125,6 @@ class Derivative():
     
     @step_sizes.setter
     def step_sizes(self, step_sizes: list[int]):
-        # -- Make sure _step_sizes is already defined
-        try:
-            self._step_sizes
-        except AttributeError:
-            self._step_sizes = {}
-        
-        # self._step_sizes[self.refine_numb] = step_sizes
         self._step_sizes = step_sizes
     
     @property
@@ -199,6 +188,7 @@ class Derivative():
 
     @property
     def deriv(self):
+        # -- Check if parameter has analytical derivative
         if (self.param_to_vary == 'time' or self.param_to_vary == 'tc'):
             deriv = self.wf * (-1.j * 2. * np.pi * self.wf.frequencies)
 
@@ -211,9 +201,19 @@ class Derivative():
             return deriv
         elif (self.param_to_vary == 'phase' or self.param_to_vary == 'psi'):
             if self.param_to_vary == 'phase':
-                deriv = self.wf * 1.j
+                deriv = self.wf * 1.j / u.rad
             else:
-                deriv = self.wf * 2.j
+                deriv = self.wf * 2.j / u.rad
+
+            derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
+
+            self.deriv_info = {
+                'norm_squared': derivative_norm,
+                'description': 'This derivative is exact.'
+            }
+            return deriv
+        elif self.param_to_vary == 'distance':
+            deriv = (-1./self.wf_params_at_point['distance']) * self.wf
 
             derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
 
@@ -230,9 +230,7 @@ class Derivative():
         self.refine_numb = 0
 
         for self.refine_numb in range(self.max_refine_numb):
-            # TODO: call this index here j and then make min_dev_index
-            # have ndim 2 so that it also includes the j?
-
+            # -- Initialize value storage
             self._derivative_vals = []
             self._deriv_norms = []
             self._convergence_vals = []
@@ -247,12 +245,10 @@ class Derivative():
                 # I.e. set to 0.0 if no breaking wanted
                 
                 if np.all(np.equal(self._convergence_vals, np.inf)):
-                    # Only invalid step sizes for this parameter, we have to
-                    # decrease further
-                    # self.min_dev_index = self.refine_numb, len(self.step_sizes) - 1
+                    # Only invalid step sizes for this parameter, we
+                    # have to decrease further
                     self.min_dev_index = len(self.step_sizes) - 1
                 else:
-                    # self.min_dev_index = self.refine_numb, np.nanargmin(self._convergence_vals)  # type: ignore
                     self.min_dev_index = np.nanargmin(self._convergence_vals)  # type: ignore
                 # Explanation of ignore: it seems like a signedinteger is returned
                 # by nanargmin, violates static checking for int. Note that we do
@@ -261,8 +257,6 @@ class Derivative():
 
                 if self.refine_numb < (self.max_refine_numb - 1):
                     self._update_step_sizes()
-
-                # self.refine_numb += 1  # Should now work through for loop
             else:
                 break
 
@@ -313,14 +307,14 @@ class Derivative():
         # Cut steps made around step size with best criterion value in half
         # compared to current steps (we take average step size in case
         # difference to left and right is unequal)
-
-        # current_step_sizes = self.step_sizes[self.refine_numb]
         current_step_sizes = self.step_sizes
 
         # TODO: account for new definition of min_dev_index
         if self.min_dev_index < (len(current_step_sizes) - 1):
-            left_step = (current_step_sizes[self.min_dev_index - 1] - current_step_sizes[self.min_dev_index]) / 4.0
-            right_step = (current_step_sizes[self.min_dev_index + 1] - current_step_sizes[self.min_dev_index]) / 4.0
+            left_step = (current_step_sizes[self.min_dev_index - 1]
+                         - current_step_sizes[self.min_dev_index]) / 4.0
+            right_step = (current_step_sizes[self.min_dev_index + 1]
+                          - current_step_sizes[self.min_dev_index]) / 4.0
             # 4.0 due to factor of two in step_sizes below
 
             self.step_sizes = current_step_sizes[self.min_dev_index] + np.array(
@@ -340,12 +334,7 @@ class Derivative():
         # for i, step_size in enumerate(self.step_sizes[-1]):
         for i, step_size in enumerate(self.step_sizes):
             try:
-                deriv_param = self.deriv_routine(
-                    # self.wf_params_at_point,
-                    # self.param_to_vary,
-                    # self.wf_generator,
-                    step_size
-                )
+                deriv_param = self.deriv_routine(step_size)
             except ValueError as err:
                 err_msg = str(err)
 
@@ -358,6 +347,7 @@ class Derivative():
 
                     # TODO: call test_point here, where new deriv_routine is
                     # set. Then maybe call deriv_routine again (?)
+                    self.test_point()
 
                     # Still have to append something to lists, otherwise
                     # indices become inconsistent with step_sizes
@@ -368,45 +358,37 @@ class Derivative():
                 else:
                     raise ValueError(err_msg)
 
-
             derivative_norm = norm(deriv_param, **self.inner_prod_kwargs)**2
 
             self._derivative_vals += [deriv_param]
             self._deriv_norms += [derivative_norm]
 
             self._calc_convergence_val()
-
             self._check_converged()
 
             if self.is_converged and self.break_upon_convergence:
-                # self.min_dev_index = self.refine_numb, i  # Then it can also be used to access step_sizes
                 self.min_dev_index = i  # Then it can also be used to access step_sizes
                 break
 
     def _calc_convergence_val(self):
-        match self.convergence_check:
-            case 'diff_norm':
-                if len(self._derivative_vals) >= 2:
-                    self._convergence_vals += [
-                        norm(self._derivative_vals[-1] - self._derivative_vals[-2],
-                            **self.inner_prod_kwargs)/np.sqrt(self._deriv_norms[-1])
-                    ]
-                else:
-                    self._convergence_vals += [np.inf]
-                    # continue
-            case 'mismatch':
-                # Compute mismatch, using that we already know norms
-                if len(self._derivative_vals) >= 2:
-                    self._convergence_vals += [
-                        1. - inner_product(
-                        self._derivative_vals,
+        if len(self._derivative_vals) >= 2:
+            match self.convergence_check:
+                case 'diff_norm':
+                    crit_val = norm(
+                        self._derivative_vals[-1] - self._derivative_vals[-2],
+                        **self.inner_prod_kwargs
+                    ) / np.sqrt(self._deriv_norms[-1])
+                case 'mismatch':
+                    # Compute mismatch, using that we already know norms
+                    crit_val = 1. - inner_product(
+                        self._derivative_vals[-1],
                         self._derivative_vals[-2],
                         **self.inner_prod_kwargs
                     ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
-                    ]  # Index -1 is deriv_param
-                else:
-                    self._convergence_vals += [np.inf]
-                    # continue
+        else:
+            crit_val = np.inf
+        
+        self._convergence_vals += [crit_val]
             
     
     # Idea: this is what we call and what actually returns the derivative
@@ -420,7 +402,7 @@ class Derivative():
     
 
     # def test_point(self):
-    def test_point(self, steps):
+    def test_point(self):
         if self.param_to_vary == 'mass_ratio':
             # Test for possible issues with parameter
             # -> potentially change deriv_formula based on that
@@ -466,8 +448,9 @@ class Derivative():
         param_vals = self.param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
         waveforms = [
-            self.wf_generator(self.wf_params_at_point | {self.param_to_vary: param_val}
-                        ) for param_val in param_vals
+            self.wf_generator(
+                self.wf_params_at_point | {self.param_to_vary: param_val}
+            ) for param_val in param_vals
         ]
 
         deriv_series = (waveforms[0] - 8.*waveforms[1]
@@ -519,8 +502,7 @@ class Derivative():
             loc='center left'
         )
         
-        fig.suptitle(f'Parameter: {latexparams.get(self.param_to_vary,
-                                                   self.param_to_vary)}')
+        fig.suptitle(f'Parameter: {latexparams.get(self.param_to_vary, self.param_to_vary)}')
         if isinstance(deriv_val, TimeSeries):
             ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
         else:

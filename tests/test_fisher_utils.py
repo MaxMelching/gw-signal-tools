@@ -98,10 +98,13 @@ pc.default_dict.pop('mass2', None);
 
 from gw_signal_tools.types.deriv import Derivative
 
+param_to_vary = 'total_mass'
+# param_to_vary = 'mass_ratio'
+# param_to_vary = 'distance'
+
 test_deriv_object = Derivative(
     wf_params_at_point=wf_params,
-    param_to_vary='total_mass',
-    # param_to_vary='mass_ratio',
+    param_to_vary=param_to_vary,
     wf_generator=wf_generator
 )
 
@@ -109,19 +112,17 @@ test_deriv = test_deriv_object.deriv
 
 test_deriv_2, info_2 = get_waveform_derivative_1D_with_convergence(
     wf_params_at_point=wf_params,
-    param_to_vary='total_mass',
-    # param_to_vary='mass_ratio',
+    param_to_vary=param_to_vary,
     wf_generator=wf_generator,
     return_info=True
 )
 plt.close()
-from gw_signal_tools.fisher.fisher_utils import get_waveform_derivative_1D_numdifftools
-test_deriv_3 = get_waveform_derivative_1D_numdifftools(
-    wf_params_at_point=wf_params,
-    param_to_vary='total_mass',
-    # param_to_vary='mass_ratio',
-    wf_generator=wf_generator,
-)
+# from gw_signal_tools.fisher.fisher_utils import get_waveform_derivative_1D_numdifftools
+# test_deriv_3 = get_waveform_derivative_1D_numdifftools(
+#     wf_params_at_point=wf_params,
+#     param_to_vary=param_to_vary,
+#     wf_generator=wf_generator,
+# )
 
 
 print(info_2)
@@ -130,9 +131,10 @@ print(test_deriv_object.step_sizes, test_deriv_object._convergence_vals,
       test_deriv_object.min_dev_index, test_deriv_object.refine_numb,
       test_deriv_object.final_step_size, test_deriv_object.final_convergence_val)
 
-plt.plot(test_deriv)
-plt.plot(test_deriv_2, '--')
-plt.plot(test_deriv_3, ':')
+# plt.plot(test_deriv)
+# plt.plot(test_deriv_2, '--')
+# plt.plot(test_deriv_3, ':')
+plt.plot(test_deriv - test_deriv_2)
 plt.show()
 
 

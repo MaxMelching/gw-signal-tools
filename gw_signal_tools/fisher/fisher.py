@@ -827,10 +827,10 @@ class FisherMatrix:
                 if param in ['tc', 'time']:
                     opt_bias[i] = time_shift
                 elif param == 'psi':
-                    opt_bias[i] = 0.5*phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
-                    # TODO: maybe remove this composition?
+                    opt_bias[i] = 0.5*phase_shift#.value*u.rad.compose(units=self._preferred_units)[0]
+                    # TODO: only put composition back in if Fisher e.g. does too, otherwise error
                 elif param == 'phase':
-                    opt_bias[i] = phase_shift.value*u.rad.compose(units=self._preferred_units)[0]
+                    opt_bias[i] = phase_shift#.value*u.rad.compose(units=self._preferred_units)[0]
                 else:
                     wf_param_val = self.wf_params_at_point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val

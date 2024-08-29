@@ -7,6 +7,7 @@ import astropy.units as u
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 
 from ..inner_product import norm, inner_product
 from ..logging import logger
@@ -29,7 +30,7 @@ class Derivative():
         break_upon_convergence: bool = True,
         max_refine_numb: Optional[int] = 3,
         double_convergence: bool = True,  # Whether to demand double convergence or not
-        deriv_formula: str = 'five_point_stencil',
+        deriv_formula: str = 'five_point',
         # return_info: bool = False,
         **inner_prod_kwargs
     ) -> None:
@@ -287,6 +288,11 @@ class Derivative():
         return self._derivative_vals[self.min_dev_index]
     
     def _check_converged(self):
+        """
+        Check if derivative has converged, according to the selected
+        convergence check (either two or three consecutive values of
+        convergence checker must be below `self.convergence_threshold`).
+        """
         if self.double_convergence:
             if (len(self._convergence_vals) >= 2
                 and (self._convergence_vals[-1] <= self.convergence_threshold)
@@ -304,20 +310,26 @@ class Derivative():
 
 
     def _update_step_sizes(self):
+        """
+        Calculate new set of step sizes based on current ones. These
+        will be centered aroud the step size where the current minimal
+        deviation between two step sizes occurred.
+        """
         # Cut steps made around step size with best criterion value in half
         # compared to current steps (we take average step size in case
         # difference to left and right is unequal)
-        current_step_sizes = self.step_sizes
+        current_steps = self.step_sizes
+        current_center_step = self.step_sizes[self.min_dev_index]
 
         # TODO: account for new definition of min_dev_index
-        if self.min_dev_index < (len(current_step_sizes) - 1):
-            left_step = (current_step_sizes[self.min_dev_index - 1]
-                         - current_step_sizes[self.min_dev_index]) / 4.0
-            right_step = (current_step_sizes[self.min_dev_index + 1]
-                          - current_step_sizes[self.min_dev_index]) / 4.0
-            # 4.0 due to factor of two in step_sizes below
+        if self.min_dev_index < (len(current_steps) - 1):
+            left_step = (current_steps[self.min_dev_index - 1]
+                         - current_center_step) / 4.
+            right_step = (current_steps[self.min_dev_index + 1]
+                          - current_center_step) / 4.
+            # -- 4. due to factor of two in step_sizes below
 
-            self.step_sizes = current_step_sizes[self.min_dev_index] + np.array(
+            self.step_sizes = current_center_step + np.array(
                 [2.*left_step, 1.*left_step, 1.*right_step, 2.*right_step]
             )
             # TODO: also include 0.0 here? I.e. the optimal one, as of now?
@@ -327,10 +339,20 @@ class Derivative():
             # smaller step sizes are explored
 
             # Refine in same way that we do with start_step_size
-            self.step_sizes = np.reshape(np.outer([current_step_sizes[self.min_dev_index]/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+            self.step_sizes = np.reshape(
+                np.outer(
+                    [current_center_step/10**i for i in range(4)],
+                    [5, 1]
+                ),
+                -1
+            )[1:]  # Indexing makes sure we do not start at 5*start_step_size
 
     
     def _iterate_through_step_sizes(self):
+        """
+        Calculate derivatives for current `self.step_sizes`, checking
+        if values converge in the meantime.
+        """
         # for i, step_size in enumerate(self.step_sizes[-1]):
         for i, step_size in enumerate(self.step_sizes):
             try:
@@ -347,7 +369,7 @@ class Derivative():
 
                     # TODO: call test_point here, where new deriv_routine is
                     # set. Then maybe call deriv_routine again (?)
-                    self.test_point()
+                    self.test_point(step_size)
 
                     # Still have to append something to lists, otherwise
                     # indices become inconsistent with step_sizes
@@ -371,6 +393,10 @@ class Derivative():
                 break
 
     def _calc_convergence_val(self):
+        """
+        Calculates the value of the criterion `self.convergence_check`
+        for the current values in `self._derivative_vals`.
+        """
         if len(self._derivative_vals) >= 2:
             match self.convergence_check:
                 case 'diff_norm':
@@ -401,24 +427,94 @@ class Derivative():
         return self.deriv
     
 
-    # def test_point(self):
-    def test_point(self):
+    def test_point(self, step_size: float):
+        """
+        Check if `self.wf_params_at_point` contains potentially tricky
+        values, e.g. mass ratios close to 1. If yes, a subsequent
+        adjustment takes place.
+
+        Parameters
+        ----------
+        step_size : float
+            Current step size that produced an 'Input domain error'.
+        """
+        step_size = self.abs_or_rel_step_size(step_size)
+        # -- This is important, determines step size that is actually
+        # -- used by the routine (also adds proper unit)
+
+        # TODO: maybe store self.param_center_val in param_val? Would
+        # make lots of stuff shorter and would make central access to value easier
+
+        # TODO: check if we need checks whether or not certain formula
+        # is used at the moment
+
+        # TODO: I think we should rather check for 2.*step_size, right?
+        # Because no failure for 1.* could still mean failure for 2.*
+        # -> but maybe this would be resolved in next iteration...
         if self.param_to_vary == 'mass_ratio':
-            # Test for possible issues with parameter
-            # -> potentially change deriv_formula based on that
-            ...
+            # if self.param_center_val <= 1. and (self.param_center_val + step_size > 1.):
+            #     self.deriv_formula = self.backward
+            # elif self.param_center_val > 1. and (self.param_center_val - step_size < 1.):
+            #     self.deriv_formula = self.forward
+            # elif self.param_center_val > 0. and (self.param_center_val - step_size < 0.):
+            #     self.deriv_formula = self.forward
+
+            if self.param_center_val <= 1.:
+                # -- q <= 1, but adding step_size makes > 1
+                if ((self.param_center_val + 2.*step_size > 1.)
+                    or (self.param_center_val + step_size > 1.)):
+                    self.deriv_formula = self.backward
+            else:
+                if ((self.param_center_val - 2.*step_size < 1.)
+                    or (self.param_center_val - step_size < 1.)):
+                    # -- q > 1, but subtracting step_size makes < 1
+                    self.deriv_formula = self.forward
+                elif ((self.param_center_val - 2.*step_size < 0.)
+                      or (self.param_center_val - step_size < 0.)):
+                    # -- q close to 0, subtracting step_size makes < 0
+                    self.deriv_formula = self.forward
+        elif self.param_to_vary == 'sym_mass_ratio':
+            # TODO: check unit here!
+            if ((self.param_center_val + 2.*step_size > 0.25)
+                or (self.param_center_val + step_size > 0.25)):
+                # -- nu close to 0.25, adding step_size makes > 0.25
+                self.deriv_formula = self.backward
+            elif ((self.param_center_val - 2.*step_size < 0.)
+                  or (self.param_center_val - step_size < 0.)):
+                # -- nu close to 0, subtracting step_size makes < 0
+                self.deriv_formula = self.forward
+
+        # TODO: what other parameters are relevant in this regard?
+        # Maybe spins? Inclination probably?
     
 
     @property
     def deriv_formula(self) -> str:
+        """
+        (Function) name of the derivative formula that is used.
+
+        :type: `str`
+        """
         return self._deriv_formula
     
     @deriv_formula.setter
     def deriv_formula(self, formula: str) -> None:
-        # TODO: check for valid one?
+        # -- Check for valid formula, then set it
+        # assert formula in self.__dict__, (
+        #     f'Invalid formula name {formula} is given. Available options are '
+        #     '`forward`, `backward`, `central`, `five_point` or any custom '
+        #     'attribute that might be set by you.'
+        # )
+        # TODO: or rather make class attribute _allowed_deriv_routines
+        # where we store these default ones? And people can inherit
+        # from class and then add their own names + attribute to that
+
+        # TODO: shit, actually does not work
+
         self._deriv_formula = formula
     
     def deriv_routine(self, *args, **kw_args):
+        """Caller that allows access to currently set derivative formula."""
         # return self.__getattribute__(self.deriv_formula)(self, *args, **kw_args)
         # return self.__getattribute__(self.deriv_formula)(*args, **kw_args)
         # -- using __call__ would perhaps make more clear what happens
@@ -426,24 +522,82 @@ class Derivative():
         return self.__getattribute__(self.deriv_formula).__call__(*args, **kw_args)
 
     def abs_or_rel_step_size(self, step_size):
-        # Choose relative or absolute step size, based on param value
+        """
+        Choose relative or absolute step size, based on
+        `self.param_center_val` (the value of `self.param_to_vary` in
+        `self.wf_params_at_point`).
+        """
         if np.log10(self.param_center_val.value) < 1:
-            step_size = np.abs(u.Quantity(step_size, unit=self.param_center_val.unit))
+            step_size = np.abs(u.Quantity(step_size,
+                                          unit=self.param_center_val.unit))
         else:
-            step_size = np.abs(u.Quantity(step_size * self.param_center_val, unit=self.param_center_val.unit))
+            step_size = np.abs(u.Quantity(step_size * self.param_center_val,
+                                          unit=self.param_center_val.unit))
         
         return step_size
 
-    def forward_difference(self):
-        return NotImplemented
+
+    # TODO: check again if this implementation is really most efficient.
+    # Something like "return (wf2 - wf1) / step_size" seems like nice option too
+
+    def forward(self, step_size: float) -> FrequencySeries | TimeSeries:
+        """
+        Calculates the forward difference of `self.wf_generator` at
+        `self.wf_params_at_point` with respect to `self.param_to_vary`
+        using the given `step_size`.
+        """
+        step_size = self.abs_or_rel_step_size(step_size)
+        wf_p1 = self.wf_generator(self.wf_params_at_point | {
+            self.param_to_vary: self.param_center_val + step_size
+        })
+
+        deriv_series = wf_p1 - self.wf
+        deriv_series /= step_size
+
+        return deriv_series
     
-    def backward_difference(self):
-        return NotImplemented
+    def backward(self, step_size: float) -> FrequencySeries | TimeSeries:
+        """
+        Calculates the backward difference of `self.wf_generator` at
+        `self.wf_params_at_point` with respect to `self.param_to_vary`
+        using the given `step_size`.
+        """
+        step_size = self.abs_or_rel_step_size(step_size)
+        wf_m1 = self.wf_generator(self.wf_params_at_point | {
+            self.param_to_vary: self.param_center_val - step_size
+        })
+
+        deriv_series = self.wf - wf_m1
+        deriv_series /= step_size
+
+        return deriv_series
     
-    def central_difference(self):
-        return NotImplemented
+    def central(self, step_size: float) -> FrequencySeries | TimeSeries:
+        """
+        Calculates the central difference of `self.wf_generator` at
+        `self.wf_params_at_point` with respect to `self.param_to_vary`
+        using the given `step_size`.
+        """
+        step_size = self.abs_or_rel_step_size(step_size)
+        param_vals = self.param_center_val + np.array([-1., 1.])*step_size
+
+        waveforms = [
+            self.wf_generator(
+                self.wf_params_at_point | {self.param_to_vary: param_val}
+            ) for param_val in param_vals
+        ]
+
+        deriv_series = waveforms[1] - waveforms[0]
+        deriv_series /= 2.*step_size
+
+        return deriv_series
     
-    def five_point_stencil(self, step_size: float) -> FrequencySeries | TimeSeries:
+    def five_point(self, step_size: float) -> FrequencySeries | TimeSeries:
+        """
+        Calculates the five point stencil of `self.wf_generator` at
+        `self.wf_params_at_point` with respect to `self.param_to_vary`
+        using the given `step_size`.
+        """
         step_size = self.abs_or_rel_step_size(step_size)
         param_vals = self.param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
@@ -462,16 +616,16 @@ class Derivative():
 
     # -- Information related properties
     @property
-    def deriv_info(self):
-        # return certain properties. These should also be accessible
-        # using self.
-        # return {
-        #     'final_step_size': self.step_sizes[self.min_dev_index]
-        # }
+    def deriv_info(self) -> dict[str, Any]:
+        """
+        Information about the calculated derivative, given as a
+        dictionary. All keys from this dictionary are also accessible
+        as a class attribute.
+        """
         return self._deriv_info
     
     @deriv_info.setter
-    def deriv_info(self, info):
+    def deriv_info(self, info: dict[str, Any]):
         for key, val in info.items():
             # -- Make each key from deriv_info available as attribute
             setattr(self, key, val)
@@ -479,7 +633,7 @@ class Derivative():
         self._deriv_info = info
     
 
-    def convergence_plot(self):
+    def convergence_plot(self) -> mpl.axes.Axes:
         from ..plotting import latexparams
         # TODO: maybe make sure derivative has been calculated? Maybe
         # check length of self._derivative_vals

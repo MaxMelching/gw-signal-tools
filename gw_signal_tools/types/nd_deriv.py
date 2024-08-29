@@ -1,7 +1,16 @@
 import numdifftools as nd
 
+# from gwpy.frequencyseries import FrequencySeries
+# class NDFrequencySeries(FrequencySeries):
+#     _ndim=2
+# -- From testing with n-dim output. Did not use in the end
+
 
 class WaveformDerivative(nd.Derivative):
+    """
+    Note: for a time domain model, you have to make sure that output
+    always has the same size!!! Otherwise operations do not work
+    """
     def __init__(self, wf_generator, wf_params_at_point, param_to_vary,
                 #  step=None, method='central', order=2, n=1, **options):
                  *args, **kwds):
@@ -13,6 +22,18 @@ class WaveformDerivative(nd.Derivative):
 
         def fun(x):
             return wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})#.value
+        
+            # -- Testing n-dim output
+            # wf = wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+
+            # return np.stack([wf, wf])
+
+            # WORKS!!! This is great, means that we can easily pass a
+            # NDWaveform as well, right?
+            # -> but definitely check if each row is handled separately
+            #    or if things are handled for each column (don't think
+            #    so, but we should make sure; otherwise just make
+            #    separate calls to the derivative)
         
         
         # super().__init__(fun, step, method, order, n, **options)
@@ -37,14 +58,15 @@ class WaveformDerivative(nd.Derivative):
         wf = self._wf_generator(self._wf_params_at_point)
         # Idea: use type that wf_generator returns to have flexibility
         # with respect to whether TimeSeries/FrequencySeries is passed
-        # out = type(wf).__new__(
         out = type(wf)(
+        # out = NDFrequencySeries(
             data=deriv,
             xindex=wf.frequencies,
             unit=wf.unit / param_unit
         )
 
         return out
+        # return deriv  # Testing n-dim output
     
     @property
     def deriv(self):
@@ -139,6 +161,7 @@ test = WaveformDerivative(
     # base_step=1e-2
     base_step=1e-2*wf_params[test_param].value,
     # method='forward'
+    # method='complex'  # Does not work for complex input
 )
 
 
@@ -169,3 +192,9 @@ plt.plot(test_deriv_3, ':')
 
 
 plt.show()
+
+
+# -- Testing n-dim output
+# deriv = test.deriv
+# print(deriv)
+# print(np.allclose(deriv[0], deriv[1], atol=0., rtol=0.))

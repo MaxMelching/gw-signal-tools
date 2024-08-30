@@ -114,87 +114,131 @@ def _add_error_to_outliers_fixed(der, trim_fact=10):
 _Limit._add_error_to_outliers = staticmethod(_add_error_to_outliers_fixed)
 
 
+# -- Multi-function Testing
+func1_counter = 0
+func2_counter = 0
+
+def func1(x):
+    global func1_counter
+    func1_counter += 1
+    # return x**2
+    return np.sin(x)
+
+def func2(x):
+    global func2_counter
+    func2_counter += 1
+    return np.exp(x)
+
+def func(x):
+    return np.stack([func1(x), func2(x)])
+
+func_deriv = nd.Derivative(
+    func,
+    base_step=1,  # To provoke slower convergence, test if there is difference
+    full_output=True
+)
+
+# point = 3
+point = np.linspace(0, 2, num=5)
+num_deriv, info = func_deriv(point)
+print(np.vstack([np.cos(point), np.exp(point)]))
+print(num_deriv)
+
+print(func1_counter, func2_counter)
+print(info.final_step)
+# Ok, so both counters are equal, which of course makes sense because
+# they are called simultaneously. final_step is more important and it
+# indeed shows that every entry is handled separately (i.e. each row is,
+# just like each column is)
+# -> that means from a calling perspective, NDWaveformGenerator would
+#    work with this Derivative class here. Would also be convenient
+#    because return of attributes would be handled well. On the other
+#    hand, it could be that we accumulate waveform calls although the
+#    corresponding derivative is already converged... But I would think
+#    this discrepancy should not be too large, so perhaps code clarity
+#    is king here
+
 
 # -- Testing
-from gw_signal_tools.waveform_utils import get_wf_generator
-import astropy.units as u
-import matplotlib.pyplot as plt
+# from gw_signal_tools.waveform_utils import get_wf_generator
+# import astropy.units as u
+# import matplotlib.pyplot as plt
 
-f_min = 20.*u.Hz
-f_max = 1024.*u.Hz
+# f_min = 20.*u.Hz
+# f_max = 1024.*u.Hz
 
-wf_params = {
-    'total_mass': 100.*u.solMass,
-    'mass_ratio': 0.42*u.dimensionless_unscaled,
-    'deltaT': 1./2048.*u.s,
-    'f22_start': f_min,
-    'f_max': f_max,
-    'deltaF': 2**-5*u.Hz,
-    'f22_ref': 20.*u.Hz,
-    'phi_ref': 0.*u.rad,
-    'distance': 1.*u.Mpc,
-    'inclination': 0.0*u.rad,
-    'eccentricity': 0.*u.dimensionless_unscaled,
-    'longAscNodes': 0.*u.rad,
-    'meanPerAno': 0.*u.rad,
-    'condition': 0
-}
+# wf_params = {
+#     'total_mass': 100.*u.solMass,
+#     'mass_ratio': 0.42*u.dimensionless_unscaled,
+#     'deltaT': 1./2048.*u.s,
+#     'f22_start': f_min,
+#     'f_max': f_max,
+#     'deltaF': 2**-5*u.Hz,
+#     'f22_ref': 20.*u.Hz,
+#     'phi_ref': 0.*u.rad,
+#     'distance': 1.*u.Mpc,
+#     'inclination': 0.0*u.rad,
+#     'eccentricity': 0.*u.dimensionless_unscaled,
+#     'longAscNodes': 0.*u.rad,
+#     'meanPerAno': 0.*u.rad,
+#     'condition': 0
+# }
 
-test_params = ['total_mass', 'mass_ratio']
-
-
-approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)#, mode='mixed')
-
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
-import lalsimulation.gwsignal.core.parameter_conventions as pc
-pc.default_dict.pop('mass1', None);
-pc.default_dict.pop('mass2', None);
-
-# test_param = 'total_mass'
-test_param = 'mass_ratio'
-# test_param = 'distance'
-test = WaveformDerivative(
-    wf_generator,
-    wf_params,
-    test_param,
-    # base_step=1e-2
-    base_step=1e-2*wf_params[test_param].value,
-    # method='forward'
-    # method='complex'  # Does not work for complex input
-)
+# test_params = ['total_mass', 'mass_ratio']
 
 
-from gw_signal_tools.types.deriv import Derivative
-# print(Derivative.__dict__)
-# print('five_point' in Derivative.__dict__)
+# approximant = 'IMRPhenomXPHM'
+# wf_generator = get_wf_generator(approximant)#, mode='mixed')
+
+# # Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+# import lalsimulation.gwsignal.core.parameter_conventions as pc
+# pc.default_dict.pop('mass1', None);
+# pc.default_dict.pop('mass2', None);
+
+# # test_param = 'total_mass'
+# test_param = 'mass_ratio'
+# # test_param = 'distance'
+# test = WaveformDerivative(
+#     wf_generator,
+#     wf_params,
+#     test_param,
+#     # base_step=1e-2
+#     base_step=1e-2*wf_params[test_param].value,
+#     # method='forward'
+#     # method='complex'  # Does not work for complex input
+# )
 
 
-test_deriv_object = Derivative(
-    wf_params_at_point=wf_params,
-    param_to_vary=test_param,
-    wf_generator=wf_generator
-)
-
-test_deriv = test_deriv_object.deriv
-
-from gw_signal_tools.fisher.fisher_utils import get_waveform_derivative_1D_numdifftools
-test_deriv_3 = get_waveform_derivative_1D_numdifftools(
-    wf_params_at_point=wf_params,
-    param_to_vary=test_param,
-    wf_generator=wf_generator,
-)
-
-# plt.plot(test())
-plt.plot(test.deriv)
-plt.plot(test_deriv, '--')
-plt.plot(test_deriv_3, ':')
+# from gw_signal_tools.types.deriv import Derivative
+# # print(Derivative.__dict__)
+# # print('five_point' in Derivative.__dict__)
 
 
-plt.show()
+# test_deriv_object = Derivative(
+#     wf_params_at_point=wf_params,
+#     param_to_vary=test_param,
+#     wf_generator=wf_generator
+# )
+
+# test_deriv = test_deriv_object.deriv
+
+# from gw_signal_tools.fisher.fisher_utils import get_waveform_derivative_1D_numdifftools
+# test_deriv_3 = get_waveform_derivative_1D_numdifftools(
+#     wf_params_at_point=wf_params,
+#     param_to_vary=test_param,
+#     wf_generator=wf_generator,
+# )
+
+# # plt.plot(test())
+# plt.plot(test.deriv)
+# plt.plot(test_deriv, '--')
+# plt.plot(test_deriv_3, ':')
 
 
-# -- Testing n-dim output
-# deriv = test.deriv
-# print(deriv)
-# print(np.allclose(deriv[0], deriv[1], atol=0., rtol=0.))
+# plt.show()
+
+
+# # -- Testing n-dim output
+# # deriv = test.deriv
+# # print(deriv)
+# # print(np.allclose(deriv[0], deriv[1], atol=0., rtol=0.))

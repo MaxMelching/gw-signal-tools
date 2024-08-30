@@ -100,145 +100,172 @@ print(Series._ndim)
 
 class NDFrequencySeries(NDSeries):
     # -- Copy FrequencySeries properties --------
-    _default_xunit = u.Unit('Hz')
-    _print_slots = ['f0', 'df', 'epoch', 'name', 'channel']
+    # _default_xunit = u.Unit('Hz')
+    # _print_slots = ['f0', 'df', 'epoch', 'name', 'channel']
 
-    def __new__(cls, data, unit=None, f0=None, df=None, frequencies=None,
-                name=None, epoch=None, channel=None, **kwargs):
-        """Generate a new NDFrequencySeries.
-        """
-        if f0 is not None:
-            kwargs['x0'] = f0
-        if df is not None:
-            kwargs['dx'] = df
-        if frequencies is not None:
-            kwargs['xindex'] = frequencies
+    # def __new__(cls, data, unit=None, f0=None, df=None, frequencies=None,
+    #             name=None, epoch=None, channel=None, **kwargs):
+    #     """Generate a new NDFrequencySeries.
+    #     """
+    #     if f0 is not None:
+    #         kwargs['x0'] = f0
+    #     if df is not None:
+    #         kwargs['dx'] = df
+    #     if frequencies is not None:
+    #         kwargs['xindex'] = frequencies
 
-        # generate FrequencySeries
-        return super().__new__(
-            cls, data, unit=unit, name=name, channel=channel,
-            epoch=epoch, **kwargs)
+    #     # generate FrequencySeries
+    #     return super().__new__(
+    #         cls, data, unit=unit, name=name, channel=channel,
+    #         epoch=epoch, **kwargs)
 
-    f0 = property(Series.x0.__get__, Series.x0.__set__, Series.x0.__delete__,
-                  """Starting frequency for this `FrequencySeries`
+    # f0 = property(Series.x0.__get__, Series.x0.__set__, Series.x0.__delete__,
+    #               """Starting frequency for this `FrequencySeries`
 
-                  :type: `~astropy.units.Quantity` scalar
-                  """)
+    #               :type: `~astropy.units.Quantity` scalar
+    #               """)
 
-    df = property(Series.dx.__get__, Series.dx.__set__, Series.dx.__delete__,
-                  """Frequency spacing of this `FrequencySeries`
+    # df = property(Series.dx.__get__, Series.dx.__set__, Series.dx.__delete__,
+    #               """Frequency spacing of this `FrequencySeries`
 
-                  :type: `~astropy.units.Quantity` scalar
-                  """)
+    #               :type: `~astropy.units.Quantity` scalar
+    #               """)
 
-    frequencies = property(fget=Series.xindex.__get__,
-                           fset=Series.xindex.__set__,
-                           fdel=Series.xindex.__delete__,
-                           doc="""Series of frequencies for each sample""")
+    # frequencies = property(fget=Series.xindex.__get__,
+    #                        fset=Series.xindex.__set__,
+    #                        fdel=Series.xindex.__delete__,
+    #                        doc="""Series of frequencies for each sample""")
+    
+    # This here shold be sufficient, right?
+    def __new__(cls, *args, **kw_args):
+        return FrequencySeries.__new__(*args, **kw_args)
+    
+    # -- Get properties from FrequencySeries
+    _default_xunit = FrequencySeries._default_xunit
+    _print_slots = FrequencySeries._print_slots
+    f0 = FrequencySeries.f0
+    df = FrequencySeries.df
+    frequencies = FrequencySeries.frequencies
     
 
 from gwpy.timeseries import TimeSeries
-from gwpy.timeseries.core import _format_time
-from gwpy.time import Time, to_gps
+# from gwpy.timeseries.core import _format_time
+# from gwpy.time import Time, to_gps
 
 class NDTimeSeries(NDSeries):
     # -- Copy TimeSeries properties -------------
-    _default_xunit = u.second
-    _print_slots = ('t0', 'dt', 'name', 'channel')
+    # _default_xunit = u.second
+    # _print_slots = ('t0', 'dt', 'name', 'channel')
 
-    def __new__(cls, data, unit=None, t0=None, dt=None, sample_rate=None,
-                times=None, channel=None, name=None, **kwargs):
-        """Generate a new `TimeSeriesBase`.
-        """
-        # parse t0 or epoch
-        epoch = kwargs.pop('epoch', None)
-        if epoch is not None and t0 is not None:
-            raise ValueError("give only one of epoch or t0")
-        if epoch is None and t0 is not None:
-            kwargs['x0'] = _format_time(t0)
-        elif epoch is not None:
-            kwargs['x0'] = _format_time(epoch)
-        # parse sample_rate or dt
-        if sample_rate is not None and dt is not None:
-            raise ValueError("give only one of sample_rate or dt")
-        if sample_rate is None and dt is not None:
-            kwargs['dx'] = dt
-        # parse times
-        if times is not None:
-            kwargs['xindex'] = times
+    # def __new__(cls, data, unit=None, t0=None, dt=None, sample_rate=None,
+    #             times=None, channel=None, name=None, **kwargs):
+    #     """Generate a new `TimeSeriesBase`.
+    #     """
+    #     # parse t0 or epoch
+    #     epoch = kwargs.pop('epoch', None)
+    #     if epoch is not None and t0 is not None:
+    #         raise ValueError("give only one of epoch or t0")
+    #     if epoch is None and t0 is not None:
+    #         kwargs['x0'] = _format_time(t0)
+    #     elif epoch is not None:
+    #         kwargs['x0'] = _format_time(epoch)
+    #     # parse sample_rate or dt
+    #     if sample_rate is not None and dt is not None:
+    #         raise ValueError("give only one of sample_rate or dt")
+    #     if sample_rate is None and dt is not None:
+    #         kwargs['dx'] = dt
+    #     # parse times
+    #     if times is not None:
+    #         kwargs['xindex'] = times
 
-        # generate TimeSeries
-        new = super().__new__(cls, data, name=name, unit=unit,
-                              channel=channel, **kwargs)
+    #     # generate TimeSeries
+    #     new = super().__new__(cls, data, name=name, unit=unit,
+    #                           channel=channel, **kwargs)
 
-        # manually set sample_rate if given
-        if sample_rate is not None:
-            new.sample_rate = sample_rate
+    #     # manually set sample_rate if given
+    #     if sample_rate is not None:
+    #         new.sample_rate = sample_rate
 
-        return new
+    #     return new
 
-    # -- TimeSeries properties ------------------
+    # # -- TimeSeries properties ------------------
 
-    # rename properties from the Series
-    t0 = Series.x0
-    dt = Series.dx
-    span = Series.xspan
-    times = Series.xindex
+    # # rename properties from the Series
+    # t0 = Series.x0
+    # dt = Series.dx
+    # span = Series.xspan
+    # times = Series.xindex
 
-    # -- epoch
-    # this gets redefined to attach to the t0 property
-    @property
-    def epoch(self):
-        """GPS epoch for these data.
+    # # -- epoch
+    # # this gets redefined to attach to the t0 property
+    # @property
+    # def epoch(self):
+    #     """GPS epoch for these data.
 
-        This attribute is stored internally by the `t0` attribute
+    #     This attribute is stored internally by the `t0` attribute
 
-        :type: `~astropy.time.Time`
-        """
-        try:
-            return Time(self.t0, format='gps', scale='utc')
-        except AttributeError:
-            return None
+    #     :type: `~astropy.time.Time`
+    #     """
+    #     try:
+    #         return Time(self.t0, format='gps', scale='utc')
+    #     except AttributeError:
+    #         return None
 
-    @epoch.setter
-    def epoch(self, epoch):
-        if epoch is None:
-            del self.t0
-        elif isinstance(epoch, Time):
-            self.t0 = epoch.gps
-        else:
-            try:
-                self.t0 = to_gps(epoch)
-            except TypeError:
-                self.t0 = epoch
+    # @epoch.setter
+    # def epoch(self, epoch):
+    #     if epoch is None:
+    #         del self.t0
+    #     elif isinstance(epoch, Time):
+    #         self.t0 = epoch.gps
+    #     else:
+    #         try:
+    #             self.t0 = to_gps(epoch)
+    #         except TypeError:
+    #             self.t0 = epoch
 
-    # -- sample_rate
-    @property
-    def sample_rate(self):
-        """Data rate for this `TimeSeries` in samples per second (Hertz).
+    # # -- sample_rate
+    # @property
+    # def sample_rate(self):
+    #     """Data rate for this `TimeSeries` in samples per second (Hertz).
 
-        This attribute is stored internally by the `dx` attribute
+    #     This attribute is stored internally by the `dx` attribute
 
-        :type: `~astropy.units.Quantity` scalar
-        """
-        return (1 / self.dt).to('Hertz')
+    #     :type: `~astropy.units.Quantity` scalar
+    #     """
+    #     return (1 / self.dt).to('Hertz')
 
-    @sample_rate.setter
-    def sample_rate(self, val):
-        if val is None:
-            del self.dt
-            return
-        self.dt = (1 / u.Quantity(val, u.Hertz)).to(self.xunit)
+    # @sample_rate.setter
+    # def sample_rate(self, val):
+    #     if val is None:
+    #         del self.dt
+    #         return
+    #     self.dt = (1 / u.Quantity(val, u.Hertz)).to(self.xunit)
 
-    # -- duration
-    @property
-    def duration(self):
-        """Duration of this series in seconds
+    # # -- duration
+    # @property
+    # def duration(self):
+    #     """Duration of this series in seconds
 
-        :type: `~astropy.units.Quantity` scalar
-        """
-        return u.Quantity(self.span[1] - self.span[0], self.xunit,
-                              dtype=float)
+    #     :type: `~astropy.units.Quantity` scalar
+    #     """
+    #     return u.Quantity(self.span[1] - self.span[0], self.xunit,
+    #                           dtype=float)
+
+
+    # This here should be sufficient, right?
+    def __new__(cls, *args, **kw_args):
+        return TimeSeries.__new__(*args, **kw_args)
+    
+    # -- Get properties from TimeSeries
+    _default_xunit = TimeSeries._default_xunit
+    _print_slots = TimeSeries._print_slots
+    t0 = TimeSeries.t0
+    dt = TimeSeries.dt
+    span = TimeSeries.span
+    times = TimeSeries.times
+    epoch = TimeSeries.epoch
+    sample_rate = TimeSeries.sample_rate
+    duration = TimeSeries.duration
 
 
 class NDWaveform(NDSeries):

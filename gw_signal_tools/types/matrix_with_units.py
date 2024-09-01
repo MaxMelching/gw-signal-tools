@@ -192,7 +192,18 @@ class MatrixWithUnits:
         except AttributeError:
             pass  # New class instance is created, nothing to check
         
-        for _, val in np.ndenumerate(value):
+        # TODO: replace with ndindex[shape] (?) For sure check only
+        # elements up to self._ndim (or maybe up to 2, fixed)
+        # -> this is NOT needed for unit loops. Only value potentially
+        #    has non-zero ndim
+        # -> ah shit, we often use MatrixWithUnits that have ndim
+        #    smaller than 2, for example row/column vectors... How do we
+        #    deal with that? Maybe just allow it, but build it so that
+        #    it is possible to allow Series as well
+        # for _, val in np.ndenumerate(value):
+        for i in np.ndindex(np.shape(value)[:2]):  # [:-1] does not work
+            # print(i)
+            val = value[i]
             assert (isinstance(val, self._allowed_value_types)
                     and not isinstance(val, bool)), \
                 f'Need valid numeric types for all members of `value` (not {type(val)}).'
@@ -297,6 +308,13 @@ class MatrixWithUnits:
                 return new_value * self.unit.__getitem__(key)
             else:
                 return MatrixWithUnits(new_value, self.unit.__getitem__(key))
+    
+    # -- How GWpy does it for Index. Do the same?
+    # def __getitem__(self, key):
+    #     item = super().__getitem__(key)
+    #     if item.isscalar:
+    #         return item.view(Quantity)
+    #     return item
     
     def __setitem__(self, key: Any, value: Any) -> None:
         try:
@@ -651,6 +669,7 @@ class MatrixWithUnits:
                 np.diagonal(self.value, *args, **kwargs).copy(),
                 np.diagonal(self.unit, *args, **kwargs).copy()
             )
+        # TODO: test if copying is required
     
     def sqrt(self):
         return MatrixWithUnits(np.sqrt(self.value), self.unit**(1/2))

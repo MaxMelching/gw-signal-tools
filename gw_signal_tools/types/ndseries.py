@@ -1,77 +1,16 @@
+# -- Standard Lib Imports -----------------------
+from __future__ import annotations
 from typing import Any
+
+# -- Third Party Imports ------------------------
 import astropy.units as u
 import numpy as np
-from .matrix_with_units import MatrixWithUnits
-
-
-from gwpy.types import Series, Index
-
-class SeriesMatrixWithUnits(MatrixWithUnits):
-# class SeriesMatrix(MatrixWithUnits):  # Second idea for name
-    """
-    Basic idea of class: each Series is treated as element, not
-    """
-    _allowed_value_types = (Index, )
-    _pure_unit_types = (u.IrreducibleUnit, u.CompositeUnit, u.Unit)
-    _allowed_unit_types = _pure_unit_types + (u.Quantity,)
-    _allowed_input_types = (Series, ) + _allowed_unit_types + _allowed_value_types
-
-    def __init__(self, value: Any) -> None:
-        self.value = value
-
-        self.unit = None
-        # Maybe set to units of each Series? Not really helpful, but
-        # better than having to avoid removing this property or so
-
-
-y_vals = np.array([1, 2, 3])
-x_vals = np.array([0, 1, 2])
-test = Series(value=y_vals, xindex=x_vals, unit=u.s)
-
-test_matrix = np.array([test, 2*test])
-
-print(test_matrix)
-print(test_matrix.T)
-print(test_matrix @ test_matrix.T)  # Works, but returns numeric values
-print(y_vals @ y_vals.T)
-print(test*test)
-
-# print(SeriesMatrixWithUnits(test_matrix, u.dimensionless_unscaled))
-
-# Problem: np.ndenumerate goes through every value. For np.ndindex, we
-# can make control the indices since shape is passed. If we pass
-# self.shape, then controlling this attribute appropriately for
-# SerierMatrixWithUnits should yield desired behaviour, that each
-# element is Series then
-
-# Idea: make a single index? Because numpy arrays throw it away, no?
-# And then control that (i) every element has same one in initialization
-# and (ii) that when setting new element, this has same as all others
-# (which could just be handled via one that is stored in attribute)
-
-# Uhhh, could be nice because of following: then no need to inherit
-# from MatrixWithUnits, unit property would be kind of useless anyway
-# (maybe not; but certain functions like plot also don't make sense).
-# Instead, we make xindex property in the described manner and then
-# have as values the Series values only (ah, so I guess unit needed
-# too). But then we can really use numpy array multiplication that
-# also works in much more complicated shapes, right? And we add as
-# additional test for SeriesMatrixWithUnits that the respective xindex
-# are compatible
-# -> since we do need unit I think (for value=Series.value to work). So
-#    maybe make BaseMatrix class where all operations are defined and
-#    then we have MatrixWithUnits as instance that holds numeric values
-#    (with plotting and all of this stuff), while SeriesMatrixWithUnits
-#    is more basic and only allows operations with suitable types
-
-
-# Perhaps even more convenient: just subclass Series? Alternative would
-# be to add self.xindex = property(Series.xindex) (no idea if this is
-# correct syntax, but that's not the point) to new subclass of
-# MatrixWithUnits
-
-from gwpy.frequencyseries import FrequencySeries
 from gwpy.types import Series
+from gwpy.frequencyseries import FrequencySeries
+from gwpy.timeseries import TimeSeries
+from gwpy.timeseries.core import _format_time
+# from gwpy.time import Time, to_gps
+
 
 # class SeriesVector(FrequencySeries):
 # class SeriesVector(Series):
@@ -85,17 +24,100 @@ class NDSeries(Series):
     # for all series at i-th sample. And to really get i-th row, one
     # has to use SeriesVector[i, :] -> I think would be worth it and
     # also make sense from idea of class
+
+    @staticmethod
+    def from_series_list(val: list[Series]) -> NDSeries:
+        assert len(val) > 0, 'Need non-empty `val`.'
+        values = []
+        units = []
+        xindex_vals = []
+        xindex_units = []
+        epochs = []
+        # for i, series in enumerate(val):
+        #     values[i] = series.value
+        #     units[i] = series.unit
+        #     xindices[i] = series.xindex
+        #     epochs[i] = series.epoch
+        for series in val:
+            values += [series.value]
+            units += [series.unit]
+            # xindices += [series.xindex]
+            xindex_vals += [series.xindex.value]
+            xindex_units += [series.xindex.unit]
+            # epochs += [series.epoch.value]
+            # epochs += [series.epoch.__getattribute__('value', None)]
+            try:
+                epochs += [series.epoch.value]
+            except AttributeError:
+                epochs += [np.nan]
+        
+
+        # from numpy.testing import assert_allclose
+        # assert_allclose(units, units[0])
+        # assert_allclose(xindices, xindices[0])
+        # assert_allclose(epochs, epochs[0])
+
+        assert np.all(np.equal(units, units[0]))
+        # assert np.all(np.isclose(xindices, xindices[0]))
+        assert np.all(np.isclose(xindex_vals, xindex_vals[0]))
+        assert np.all(np.equal(xindex_units, xindex_units[0]))
+        assert np.all(np.isclose(epochs, epochs[0], equal_nan=True))
+
+        # return NDSeries(value=values, unit=units[0], xindex=xindices[0],
+        return NDSeries(value=values, unit=units[0], xindex=val[0].xindex)#,
+                        # epoch=epochs[0] if (epochs[0] != np.nan) else None)
+
+    def __getitem__(self, key: Any) -> NDSeries:
+        # print(key)
+        out = super().__getitem__(key)
+
+        # -- V1
+        # if out.value.ndim == 1:
+        #     # return Series(out)
+        #     return Series(out.value, out.unit, xindex=out.xindex)
+        # elif out.shape[1] == 1:
+        #     return NDSeries(out.value, out.unit, xindex=out.xindex)
+        # else:
+        #     # return NDSeries(out)
+        #     return out
+
+        # -- V2
+        # if isinstance(key, int):  # Does not catch np.int64...
+        #     out = Series(out.value, out.unit, xindex=out.xindex)
+        # elif len(key) == 2 and key[0] == slice(None, None, None):
+        #     out = NDSeries(out.value.reshape((len(out.value), 1)), out.unit,
+        #                    xindex=out.xindex[key[1]])
+        #                 #    xindex=out.xindex)
+        # if not isinstance(out, u.Quantity):
+        #     out.__metadata_finalize__(self)  # Copy metadata that was not set yet
+        # return out
     
+        # -- V3, final
+        if np.isscalar(key):
+            out = Series(out.value, out.unit, xindex=out.xindex)
+            out.__metadata_finalize__(self)  # Copy metadata that was not set yet
+        elif len(key) == 2 and key[0] == slice(None, None, None):
+            # -- Column of array means we return values at the same
+            # -- xindex value and therefore, do not have a Series
+            # -- anymore. Similarly to the GWpy Series, this results in
+            # -- a Quantity being returned.
+            # -- This also determines return of value_at
+            out = u.Quantity(out.value, out.unit)
+        return out
+    
+    def value_at(self, x):
+        # -- Essentially a copy of Series.value_at, just with an
+        # -- adjusted changed indexing at the end
+        x = u.Quantity(x, self.xindex.unit).value
+        try:
+            idx = (self.xindex.value == x).nonzero()[0][0]
+        except IndexError as e:
+            e.args = ("Value %r not found in array index" % x,)
+            raise
+        return self[:, idx]
 
     # Convenient: we can just add a matmul operation that works in way
     # we intend it to work
-
-# test = NDSeries(data=np.zeros((2, 2)), xindex=[0, 1], unit=u.s)
-test = NDSeries(value=np.zeros((2, 2)), xindex=[0, 1], unit=u.s)
-
-print(test)
-print(FrequencySeries._ndim)
-print(Series._ndim)
 
 
 class NDFrequencySeries(NDSeries):
@@ -103,21 +125,22 @@ class NDFrequencySeries(NDSeries):
     # _default_xunit = u.Unit('Hz')
     # _print_slots = ['f0', 'df', 'epoch', 'name', 'channel']
 
-    # def __new__(cls, data, unit=None, f0=None, df=None, frequencies=None,
-    #             name=None, epoch=None, channel=None, **kwargs):
-    #     """Generate a new NDFrequencySeries.
-    #     """
-    #     if f0 is not None:
-    #         kwargs['x0'] = f0
-    #     if df is not None:
-    #         kwargs['dx'] = df
-    #     if frequencies is not None:
-    #         kwargs['xindex'] = frequencies
+    def __new__(cls, data, unit=None, f0=None, df=None, frequencies=None,
+                name=None, epoch=None, channel=None, **kwargs):
+        """Generate a new NDFrequencySeries.
+        """
+        # -- Copy code from FrequencySeries.__new__, bust now super()
+        # -- calls NDSeries and not Series
+        if f0 is not None:
+            kwargs['x0'] = f0
+        if df is not None:
+            kwargs['dx'] = df
+        if frequencies is not None:
+            kwargs['xindex'] = frequencies
 
-    #     # generate FrequencySeries
-    #     return super().__new__(
-    #         cls, data, unit=unit, name=name, channel=channel,
-    #         epoch=epoch, **kwargs)
+        return super().__new__(
+            cls, data, unit=unit, name=name, channel=channel,
+            epoch=epoch, **kwargs)
 
     # f0 = property(Series.x0.__get__, Series.x0.__set__, Series.x0.__delete__,
     #               """Starting frequency for this `FrequencySeries`
@@ -136,9 +159,10 @@ class NDFrequencySeries(NDSeries):
     #                        fdel=Series.xindex.__delete__,
     #                        doc="""Series of frequencies for each sample""")
     
-    # This here shold be sufficient, right?
-    def __new__(cls, *args, **kw_args):
-        return FrequencySeries.__new__(*args, **kw_args)
+    # This here shold be sufficient, right? -> nope, calls Series.__new__
+    # def __new__(cls, *args, **kw_args):
+    #     return FrequencySeries.__new__(cls, *args, **kw_args)
+    # __new__ = FrequencySeries.__new__  # Also not correct
     
     # -- Get properties from FrequencySeries
     _default_xunit = FrequencySeries._default_xunit
@@ -148,45 +172,40 @@ class NDFrequencySeries(NDSeries):
     frequencies = FrequencySeries.frequencies
     
 
-from gwpy.timeseries import TimeSeries
-# from gwpy.timeseries.core import _format_time
-# from gwpy.time import Time, to_gps
-
 class NDTimeSeries(NDSeries):
     # -- Copy TimeSeries properties -------------
     # _default_xunit = u.second
     # _print_slots = ('t0', 'dt', 'name', 'channel')
 
-    # def __new__(cls, data, unit=None, t0=None, dt=None, sample_rate=None,
-    #             times=None, channel=None, name=None, **kwargs):
-    #     """Generate a new `TimeSeriesBase`.
-    #     """
-    #     # parse t0 or epoch
-    #     epoch = kwargs.pop('epoch', None)
-    #     if epoch is not None and t0 is not None:
-    #         raise ValueError("give only one of epoch or t0")
-    #     if epoch is None and t0 is not None:
-    #         kwargs['x0'] = _format_time(t0)
-    #     elif epoch is not None:
-    #         kwargs['x0'] = _format_time(epoch)
-    #     # parse sample_rate or dt
-    #     if sample_rate is not None and dt is not None:
-    #         raise ValueError("give only one of sample_rate or dt")
-    #     if sample_rate is None and dt is not None:
-    #         kwargs['dx'] = dt
-    #     # parse times
-    #     if times is not None:
-    #         kwargs['xindex'] = times
+    def __new__(cls, data, unit=None, t0=None, dt=None, sample_rate=None,
+                times=None, channel=None, name=None, **kwargs):
+        """Generate a new `TimeSeriesBase`.
+        """
+        # parse t0 or epoch
+        epoch = kwargs.pop('epoch', None)
+        if epoch is not None and t0 is not None:
+            raise ValueError("give only one of epoch or t0")
+        if epoch is None and t0 is not None:
+            kwargs['x0'] = _format_time(t0)
+        elif epoch is not None:
+            kwargs['x0'] = _format_time(epoch)
+        # parse sample_rate or dt
+        if sample_rate is not None and dt is not None:
+            raise ValueError("give only one of sample_rate or dt")
+        if sample_rate is None and dt is not None:
+            kwargs['dx'] = dt
+        # parse times
+        if times is not None:
+            kwargs['xindex'] = times
 
-    #     # generate TimeSeries
-    #     new = super().__new__(cls, data, name=name, unit=unit,
-    #                           channel=channel, **kwargs)
+        new = super().__new__(cls, data, name=name, unit=unit,
+                              channel=channel, **kwargs)
 
-    #     # manually set sample_rate if given
-    #     if sample_rate is not None:
-    #         new.sample_rate = sample_rate
+        # manually set sample_rate if given
+        if sample_rate is not None:
+            new.sample_rate = sample_rate
 
-    #     return new
+        return new
 
     # # -- TimeSeries properties ------------------
 
@@ -252,9 +271,10 @@ class NDTimeSeries(NDSeries):
     #                           dtype=float)
 
 
-    # This here should be sufficient, right?
-    def __new__(cls, *args, **kw_args):
-        return TimeSeries.__new__(*args, **kw_args)
+    # This here should be sufficient, right? -> nope, calls Series.__new__
+    # def __new__(cls, *args, **kw_args):
+    #     return TimeSeries.__new__(*args, **kw_args)
+    # __new__ = TimeSeries.__new__  # Also not correct
     
     # -- Get properties from TimeSeries
     _default_xunit = TimeSeries._default_xunit
@@ -266,8 +286,3 @@ class NDTimeSeries(NDSeries):
     epoch = TimeSeries.epoch
     sample_rate = TimeSeries.sample_rate
     duration = TimeSeries.duration
-
-
-class NDWaveform(NDSeries):
-    def __init__(self) -> None:
-        super().__init__()

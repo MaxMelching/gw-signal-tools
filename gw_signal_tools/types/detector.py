@@ -1,7 +1,7 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports -----------------------
 from typing import Any
 
-# ----- Third Party Imports -----
+# -- Third Party Imports ------------------------
 from gwpy.frequencyseries import FrequencySeries
 
 
@@ -105,6 +105,10 @@ class DetectorNetwork:
     # Essentially list of detectors. But some additional goodies could be added too, think about that
     def __init__(self, *dets: Any) -> None:
         self.detectors = dets
+
+        self._detector_indices = {}
+        for i, det in enumerate(self.detectors):
+            self._detector_indices[det.name] = i
     
     @property
     def detectors(self) -> Any:
@@ -114,7 +118,9 @@ class DetectorNetwork:
     @detectors.setter
     def detectors(self, dets) -> None:
         for det in dets:
-            assert isinstance(det, Detector), 'Need detectors of type ``Detector``.'
+            assert isinstance(det, Detector), (
+                'Need each detector to be of type ``Detector``.'
+            )
         
         self._detectors = dets
     
@@ -124,32 +130,18 @@ class DetectorNetwork:
             del self._detectors
         except AttributeError:  # pragma: no cover
             pass
-
-
-import astropy.units as u
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
-from typing import Callable
-
-# class NetworkWaveform:
-class NetworkWaveformGenerator:  # Perhaps more obvious what is done then
-    def __init__(self,
-        wf_generator: Callable[[dict[str, u.Quantity]],
-                               FrequencySeries | TimeSeries],
-        detectors: DetectorNetwork
-    ) -> None:
-        self.wf_generator = wf_generator
-        self.detectors = detectors.detectors
-
-    def __call__(self, wf_params: dict[str, u.Quantity]) -> Any:
-        # TODO: which data type to return? Vector/array of waveforms?
-        # Maybe even MatrixWithUnits or some type inherited from it?
-
-        # Then proceed roughly like this
-        out = []
-        for i, det in enumerate(self.detectors):
-            out[i] = self.wf_generator(wf_params | {'det': det.name})
-        
-        pass
-        # Idea: return vector of waveforms or whatever data type I came up with here
-        # -> but is nice that one can then simply call this like usual generator
+    
+    def index_from_detector(self, det: Detector | str):
+        """Get index for a detector or detector name."""
+        if isinstance(det, Detector):
+            return self._detector_indices[det.name]
+        elif isinstance(det, str):
+            return self._detector_indices[det]
+        else:  # pragma: no cover
+            raise ValueError(
+                '`det` must be a ``Detector`` instance or a string.'
+            )
+    
+    def detector_from_index(self, index: int) -> Detector:
+        """Get detector for a given index."""
+        return self.detectors[index]

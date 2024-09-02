@@ -3,6 +3,10 @@ from typing import Any
 
 # -- Third Party Imports ------------------------
 from gwpy.frequencyseries import FrequencySeries
+import numpy as np
+
+# -- Local Package Imports ----------------------
+from .series_matrix_with_units import SeriesMatrixWithUnits
 
 
 __doc__ = """
@@ -44,7 +48,7 @@ class Detector:
         self.inner_prod_kwargs = kw_args
     
     @property
-    def name(self):
+    def name(self) -> str:
         """Name of the detector."""
         return self._name
     
@@ -61,7 +65,7 @@ class Detector:
             pass
     
     @property
-    def psd(self):
+    def psd(self) -> FrequencySeries:
         """Power spectral density (PSD) of the detector."""
         return self._psd
     
@@ -123,6 +127,7 @@ class DetectorNetwork:
             )
         
         self._detectors = dets
+        self._ndet = len(dets)
     
     @detectors.deleter
     def detectors(self) -> None:
@@ -130,6 +135,10 @@ class DetectorNetwork:
             del self._detectors
         except AttributeError:  # pragma: no cover
             pass
+    
+    @property
+    def ndet(self) -> int:
+        return self._ndet
     
     def index_from_detector(self, det: Detector | str):
         """Get index for a detector or detector name."""
@@ -145,3 +154,48 @@ class DetectorNetwork:
     def detector_from_index(self, index: int) -> Detector:
         """Get detector for a given index."""
         return self.detectors[index]
+    
+    @property
+    def name(self):
+        """Name of the detector network."""
+        return self._name
+    
+    @name.setter
+    def name(self, name: str) -> None:
+        assert isinstance(name, str), 'New `name` must be a string.'
+        self._name = name
+    
+    @name.deleter
+    def name(self) -> None:
+        try:
+            del self._name
+        except AttributeError:  # pragma: no cover
+            pass
+    
+    @property
+    def psd(self) -> SeriesMatrixWithUnits:
+        """Power spectral density (PSD) matrix of the detector network."""
+        return self._psd
+    
+    @psd.setter
+    def psd(self, psd: SeriesMatrixWithUnits) -> None:
+        assert isinstance(psd, SeriesMatrixWithUnits), (
+            'New `psd` must be a ``SeriesMatrixWithUnits``.')
+        self._psd = psd
+    
+    @psd.deleter
+    def psd(self) -> None:
+        try:
+            del self._psd
+        except AttributeError:  # pragma: no cover
+            pass
+    
+    def _psd_matrix_from_dets(self) -> None:
+        """Set PSD matrix from given detectors PSDs."""
+        psd = SeriesMatrixWithUnits(np.zeros(2*(self.ndet, )))
+        for i, det in enumerate(self.detectors):
+            psd[i, i] = det.psd
+        
+        self._psd = psd
+
+        # TODO: how to set CSDs?

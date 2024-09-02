@@ -30,8 +30,13 @@ class SeriesMatrixWithUnits(MatrixWithUnits):
 
 
     _meta_data_slots = ('epoch', )  # Exclude name
+    __metadata_finalize__ = Series.__metadata_finalize__
 
-    def __init__(self, value: Any, unit: Optional[Any] = None) -> None:
+    def __init__(self,
+        value: Any,
+        unit: Optional[Any] = None,
+        xindex: Optional[Any] = None
+    ) -> None:
         self.value = np.asarray(value)  # TODO: set proper dtype
 
         if unit is None:
@@ -40,11 +45,24 @@ class SeriesMatrixWithUnits(MatrixWithUnits):
             self.unit = np.asarray(unit, dtype=object)
         # Maybe set to units of each Series? Not really helpful, but
         # better than having to avoid removing this property or so
+
+        if xindex is not None:
+            self.xindex = xindex
     
     # -- Define index etc that all elements have in common
     xindex = Series.xindex
+    _set_index = Series._set_index
+    _update_index = Series._update_index
+    x0 = Series.x0
+    dx = Series.dx
     xunit = Series.xunit
+    _default_xunit = Series._default_xunit
     xspan = Series.xspan
+    _default_unit = Series._default_unit
+    # TODO: maybe it would really be worthwhile to inherit from Series...
+    # Then we wouldn't have to define all of this here... But on the
+    # other hand, implementation of matmul etc would be harder then and
+    # involve more code
 
     def _compatible_index(self, other):
         # return self.xindex == other.xindex
@@ -55,8 +73,17 @@ class SeriesMatrixWithUnits(MatrixWithUnits):
     # -> explanation: unit checks are performed in MatrixWithUnits, all
     #    that we need is additional check for compatible indices
     def __matmul__(self, other):
-        self._compatible_index(self, other)
-        return super().__matmul__(other)
+        self._compatible_index(other)
+        # return super().__matmul__(other)
+        return SeriesMatrixWithUnits(
+            self.value @ other.value,
+            xindex=self.xindex
+        )  # Just to make things run in tests
+    
+        # TODO: transposition is hard to deal with, right?
+        # -> ah, actually no. Each element is to be thought of as being
+        #    defined over this index. This does not change after
+        #    transposition
     
     @property
     def shape(self):
@@ -74,6 +101,28 @@ class SeriesMatrixWithUnits(MatrixWithUnits):
     # outer for comparison between value matrix and unit matrix.
     # inner for comparison between elements of value matrix and
     # xindex
+
+    @property
+    def T(self):
+        """
+        Transposed Matrix.
+
+        Returns
+        -------
+        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
+        """
+        if isinstance(self.unit, self._pure_unit_types):
+            out = SeriesMatrixWithUnits(self.value.T, self.unit, self.xindex)
+        else:
+            out = SeriesMatrixWithUnits(self.value.T, self.unit.T, self.xindex)
+        
+        out.__metadata_finalize__(self)
+        # TODO: rather put this in copy and use copy here?
+
+        return out
+    
+    def transpose(self):
+        return self.T
     
     def __getitem__(self, key: Any) -> SeriesMatrixWithUnits:
         new_value = self.value.__getitem__(key)

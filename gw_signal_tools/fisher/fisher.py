@@ -305,7 +305,9 @@ class FisherMatrix:
         
         return self._deriv_info
     
-    def get_param_indices(self, params: str | list[str]) -> list[int]:
+    def get_param_indices(self,
+        params: Optional[str | list[str]] = None
+    ) -> list[int]:
         """
         Get indices that correspond to certain parameter names in
         :code:`self.params_to_vary`.
@@ -320,6 +322,10 @@ class FisherMatrix:
         list[int]
             Indices of :code:`params` in :code:`self.params_to_vary`.
         """
+        if params is None:
+            # -- Take all parameters
+            return self.nparams*[True]
+        
         if isinstance(params, str):
             params = [params]
 
@@ -539,12 +545,7 @@ class FisherMatrix:
         Calculating this does not make sense if a PSD for no noise is
         used during the Fisher matrix calculations.
         """
-        if params is not None:
-            param_indices = self.get_param_indices(params)
-        else:
-            # Take all parameters
-            param_indices = self.nparams*[True]
-        
+        param_indices = self.get_param_indices(params)        
         return MatrixWithUnits.sqrt(self.fisher_inverse.diagonal()[param_indices])
         # TODO: make it return column vector, is more natural, right?
 
@@ -840,10 +841,7 @@ class FisherMatrix:
 
         # Check which params shall be returned
         if params is not None:
-            if isinstance(params, str):
-                params = [params]
             param_indices = opt_fisher.get_param_indices(params)
-
             fisher_bias = fisher_bias[param_indices]
         
         if return_opt_info is False:

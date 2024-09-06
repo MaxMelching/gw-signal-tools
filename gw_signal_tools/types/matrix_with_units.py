@@ -626,6 +626,8 @@ class MatrixWithUnits:
         return MatrixWithUnits(arr, u.dimensionless_unscaled)
     
     def reshape(self, new_shape: Any) -> MatrixWithUnits:
+        # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
+        # -- both return a view of the old array
         if isinstance(self.unit, self._pure_unit_types):
             return MatrixWithUnits(np.reshape(self.value, new_shape),
                                    self.unit)
@@ -716,6 +718,14 @@ class MatrixWithUnits:
 
 
     # ---------- Some custom additions -----
+    def to_row(self) -> MatrixWithUnits:
+        """Reshape this matrix into a row vector."""
+        return self.reshape((1, self.size))
+    
+    def to_col(self) -> MatrixWithUnits:
+        """Reshape this matrix into a column vector."""
+        return self.reshape((self.size, 1))
+    
     def plot(self, ax: Optional[Any] = None):
         # NOTE: all of this code is inspired by heatmap in seaborn, in fact
         # the relative_luminosity function is copied from there

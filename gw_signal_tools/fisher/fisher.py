@@ -12,11 +12,11 @@ import astropy.units as u
 # ----- Local Package Imports -----
 from ..units import preferred_unit_system
 from ..logging import logger
-from ..inner_product import (
+from ..waveform.inner_product import (
     inner_product, norm, optimize_overlap, get_default_opt_params,
     _INNER_PROD_ARGS
 )
-from ..waveform_utils import get_wf_generator
+from ..waveform.utils import get_wf_generator
 from ..types import MatrixWithUnits
 from .fisher_utils import (
     get_waveform_derivative_1D_with_convergence,

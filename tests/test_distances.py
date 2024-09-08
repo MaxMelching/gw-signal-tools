@@ -11,7 +11,7 @@ from gwpy.testing.utils import assert_quantity_equal
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.waveform_utils import get_wf_generator
+from gw_signal_tools.waveform.utils import get_wf_generator
 from gw_signal_tools.fisher import (
     distance, linearized_distance
 )

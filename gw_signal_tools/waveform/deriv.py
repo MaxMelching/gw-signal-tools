@@ -9,11 +9,11 @@ from gwpy.timeseries import TimeSeries
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-from ..inner_product import norm, inner_product
+from .inner_product import norm, inner_product
 from ..logging import logger
 
 
-class Derivative():
+class Derivative():  # TODO: find better name, kind of interferes with numdifftools one
     """
     Calculate the derivative of an arbitrary waveform with respect to
     an arbitrary input parameter (in both frequency and time domain).

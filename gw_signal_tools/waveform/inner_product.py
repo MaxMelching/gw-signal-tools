@@ -10,13 +10,13 @@ from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
-# -- Local Package Imports
-from .units import preferred_unit_system
-from .logging import logger
-from .waveform_utils import (
+# ----- Local Package Imports -----
+from ..units import preferred_unit_system
+from ..logging import logger
+from .utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
-from .test_utils import allclose_quantity, assert_allclose_quantity
+from ..test_utils import allclose_quantity, assert_allclose_quantity
 
 
 __doc__ = """
@@ -160,7 +160,7 @@ def inner_product(
     
     # -- Handling PSD
     if psd is None:
-        from .PSDs import psd_no_noise
+        from ..PSDs import psd_no_noise
 
         psd = psd_no_noise.copy()
 

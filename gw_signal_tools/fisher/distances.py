@@ -9,7 +9,7 @@ from gwpy.frequencyseries import FrequencySeries
 
 # ---------- Local Package Imports ----------
 from ..fisher import FisherMatrix
-from ..inner_product import inner_product, norm, overlap
+from ..waveform.inner_product import inner_product, norm, overlap
 
 
 __doc__ = """

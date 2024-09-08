@@ -4,7 +4,7 @@ import pytest
 
 # ----- Local Package Imports -----
 from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
-from gw_signal_tools.waveform_utils import get_wf_generator
+from gw_signal_tools.waveform.utils import get_wf_generator
 from gw_signal_tools.types import Detector
 from gw_signal_tools.PSDs import psd_no_noise
 

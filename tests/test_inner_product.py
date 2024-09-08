@@ -10,11 +10,11 @@ import lalsimulation.gwsignal.core.waveform as wfm
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.waveform_utils import (
+from gw_signal_tools.waveform.utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
 from gwpy.testing.utils import assert_quantity_equal
-from gw_signal_tools.inner_product import (
+from gw_signal_tools.waveform.inner_product import (
     inner_product, norm, overlap, optimize_overlap, optimized_inner_product
 )
 from gw_signal_tools.PSDs import psd_no_noise

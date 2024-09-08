@@ -12,7 +12,7 @@ import numdifftools as nd
 
 # ----- Local Package Imports -----
 from ..logging import logger
-from ..inner_product import inner_product, norm, _INNER_PROD_ARGS
+from ..waveform.inner_product import inner_product, norm, _INNER_PROD_ARGS
 from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
 

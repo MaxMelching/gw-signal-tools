@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.waveform_utils import get_wf_generator
+from gw_signal_tools.waveform.utils import get_wf_generator
 from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.fisher import (
     FisherMatrix, fisher_matrix, fisher_matrix_gw_signal_tools,

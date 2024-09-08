@@ -12,7 +12,7 @@ from gwpy.frequencyseries import FrequencySeries
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.waveform_utils import (
+from gw_signal_tools.waveform.utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs,

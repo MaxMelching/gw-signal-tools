@@ -56,7 +56,11 @@ test_deriv_object = Derivative(
     wf_generator=wf_generator
 )
 
+
 test_deriv = test_deriv_object.deriv
+test_deriv_object._deriv
+test_deriv_object.deriv
+
 
 test_deriv_2, info_2 = get_waveform_derivative_1D_with_convergence(
     wf_params_at_point=wf_params,

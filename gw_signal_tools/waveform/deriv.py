@@ -78,6 +78,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
             # Class has just been initialized, no wf_generator yet
             pass
 
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
+
     @property
     def param_to_vary(self):
         return self._param_to_vary
@@ -93,6 +97,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
 
         self._param_to_vary = param
 
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
+
     @property
     def wf_generator(self):
         return self._wf_generator
@@ -101,6 +109,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
     def wf_generator(self, generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]) -> None:
         self._wf_generator = generator
         self.wf = generator(self.wf_params_at_point)
+
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
     
     # @property
     # def step_size(self):
@@ -143,6 +155,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
                     )
         
         self._convergence_check = convergence_check
+
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
     
     @property
     def convergence_threshold(self) -> float:
@@ -159,6 +175,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
         
         self._convergence_threshold = convergence_threshold
 
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
+
     @property
     def max_refine_numb(self) -> int:
         return self._max_refine_numb
@@ -166,6 +186,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
     @max_refine_numb.setter
     def max_refine_numb(self, num: int) -> None:
         self._max_refine_numb = int(num)
+
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
     
     # -- Internally used properties
     @property
@@ -189,6 +213,12 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
 
     @property
     def deriv(self):
+        if hasattr(self, '_deriv'):
+            # -- Derivative was already computed, just return. We make
+            # -- sure that all relevant settings remained the same in
+            # -- the corresponding setters, otherwise _deriv deleted
+            return self._deriv
+        
         # -- Check if parameter has analytical derivative
         if (self.param_to_vary == 'time' or self.param_to_vary == 'tc'):
             deriv = self.wf * (-1.j * 2. * np.pi * self.wf.frequencies)
@@ -285,7 +315,8 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
             'final_set_of_step_sizes': self.step_sizes
         }
         
-        return self._derivative_vals[self.min_dev_index]
+        self._deriv = self._derivative_vals[self.min_dev_index]
+        return self._deriv    
     
     def _check_converged(self):
         """
@@ -512,6 +543,10 @@ class Derivative():  # TODO: find better name, kind of interferes with numdiffto
         # TODO: shit, actually does not work
 
         self._deriv_formula = formula
+
+        if hasattr(self, '_deriv'):
+            # -- Derivative that was calculated is not valid anymore
+            del self._deriv
     
     def deriv_routine(self, *args, **kw_args):
         """Caller that allows access to currently set derivative formula."""

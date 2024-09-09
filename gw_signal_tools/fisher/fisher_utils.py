@@ -12,7 +12,7 @@ import numdifftools as nd
 
 # ----- Local Package Imports -----
 from ..logging import logger
-from ..waveform.inner_product import inner_product, norm, _INNER_PROD_ARGS
+from ..waveform import inner_product, norm, _INNER_PROD_ARGS, Derivative, WaveformDerivative
 from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
 
@@ -85,54 +85,135 @@ def num_diff(
     return signal_deriv
 
 
-def fisher_matrix(
-    deriv_routine: Literal['gw_signal_tools', 'numdifftools'],
-    **deriv_and_inner_prod_kwargs
-) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
-    """
-    Wrapper that allows to select between the two available routines for
-    Fisher matrix calculation by passing the argument `deriv_routine`.
-    All other arguments are passed to the selected routine and described
-    in more detail in the corresponding functions
-    `fisher_matrix_gw_signal_tools`, `fisher_matrix_numdifftools`.
+# def fisher_matrix(
+#     deriv_routine: Literal['gw_signal_tools', 'numdifftools'],
+#     **deriv_and_inner_prod_kwargs
+# ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, str]]]:
+#     """
+#     Wrapper that allows to select between the two available routines for
+#     Fisher matrix calculation by passing the argument `deriv_routine`.
+#     All other arguments are passed to the selected routine and described
+#     in more detail in the corresponding functions
+#     `fisher_matrix_gw_signal_tools`, `fisher_matrix_numdifftools`.
     
-    Notes
-    -----
-    The two routines differ in the way they calculate derivatives, as
-    the argument name already indicates. The `'gw_signal_tools'` option
-    uses a custom routine that applies the five-point stencil method to
-    the output of `wf_generator` and assesses convergence based on a
-    criteria whose origin lies in GW data analysis (utilizing the
-    noise-weighted inner product defined in this context).
+#     Notes
+#     -----
+#     The two routines differ in the way they calculate derivatives, as
+#     the argument name already indicates. The `'gw_signal_tools'` option
+#     uses a custom routine that applies the five-point stencil method to
+#     the output of `wf_generator` and assesses convergence based on a
+#     criteria whose origin lies in GW data analysis (utilizing the
+#     noise-weighted inner product defined in this context).
 
-    The `'numdifftools'` option, on the other hand, calculates the
-    derivative of amplitude and phase of the waveform separately, which
-    are recombined using the product rule to give the waveform
-    derivative. These derivatives are calculated the `numdifftools`
-    package.
+#     The `'numdifftools'` option, on the other hand, calculates the
+#     derivative of amplitude and phase of the waveform separately, which
+#     are recombined using the product rule to give the waveform
+#     derivative. These derivatives are calculated the `numdifftools`
+#     package.
 
-    Both routines have advantages and disadvantages: since two
-    derivatives have to be estimated for the latter case,
-    `'gw_signal_tools'` is typically faster than `'numdifftools'`.
-    However, `'numdifftools'` typically yields more stable results for
-    highly oscillatory derivatives, where `'gw_signal_tools'` can
-    struggle to find results with comparable accuracy (which means that
-    it does find results that do look similar, but the convergence when
-    decreasing step sizes is sometimes not as stable; reason is use of
-    direct waveform differences, combined with five-point stencil that
-    can encounter numerical issues in some cases).
-    """
-    match deriv_routine:
-        case 'gw_signal_tools':
-            return fisher_matrix_gw_signal_tools(
-                **deriv_and_inner_prod_kwargs
-            )
-        case 'numdifftools':
-            return fisher_matrix_numdifftools(
-                **deriv_and_inner_prod_kwargs
-            )
-        case _:  # pragma: no cover
-            raise ValueError('Invalid `deriv_routine`.')
+#     Both routines have advantages and disadvantages: since two
+#     derivatives have to be estimated for the latter case,
+#     `'gw_signal_tools'` is typically faster than `'numdifftools'`.
+#     However, `'numdifftools'` typically yields more stable results for
+#     highly oscillatory derivatives, where `'gw_signal_tools'` can
+#     struggle to find results with comparable accuracy (which means that
+#     it does find results that do look similar, but the convergence when
+#     decreasing step sizes is sometimes not as stable; reason is use of
+#     direct waveform differences, combined with five-point stencil that
+#     can encounter numerical issues in some cases).
+#     """
+#     match deriv_routine:
+#         case 'gw_signal_tools':
+#             return fisher_matrix_gw_signal_tools(
+#                 **deriv_and_inner_prod_kwargs
+#             )
+#         case 'numdifftools':
+#             return fisher_matrix_numdifftools(
+#                 **deriv_and_inner_prod_kwargs
+#             )
+#         case _:  # pragma: no cover
+#             raise ValueError('Invalid `deriv_routine`.')
+
+def fisher_matrix(
+    wf_params_at_point: dict[str, u.Quantity],
+    params_to_vary: str | list[str],
+    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    deriv_routine: Literal['gw_signal_tools', 'numdifftools'],
+    return_info: bool = False,
+    **deriv_and_inner_prod_kwargs
+) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
+    # -- Separate deriv and inner_prod kwargs, check defaults
+    _deriv_kw_args = {}
+    _inner_prod_kwargs = {}
+    for key, value in deriv_and_inner_prod_kwargs.items():
+        if key in _INNER_PROD_ARGS:
+            _inner_prod_kwargs[key] = value
+        else:
+            _deriv_kw_args[key] = value
+    _inner_prod_kwargs['return_opt_info'] = False
+    # Ensure float output of inner_product
+
+    if isinstance(params_to_vary, str):
+        params_to_vary = [params_to_vary]
+
+    param_numb = len(params_to_vary)
+
+    # -- Initialize Fisher Matrix as MatrixWithUnits instance
+    fisher_matrix = MatrixWithUnits(
+        np.zeros(2*(param_numb, ), dtype=float),
+        np.full(2*(param_numb, ), u.dimensionless_unscaled, dtype=object)
+    )
+
+    # -- Compute relevant derivatives in frequency domain
+    deriv_info = {}
+
+    for i, param in enumerate(params_to_vary):
+        match deriv_routine:
+            case 'gw_signal_tools':
+                full_deriv = Derivative(
+                    wf_params_at_point=wf_params_at_point,
+                    param_to_vary=param,
+                    wf_generator=wf_generator,
+                    **deriv_and_inner_prod_kwargs
+                )
+
+                deriv, info = full_deriv.deriv, full_deriv.deriv_info
+                info['deriv'] = deriv
+                fisher_matrix[i, i] = info['norm_squared']
+            case 'numdifftools':
+                full_deriv = WaveformDerivative(
+                    wf_params_at_point=wf_params_at_point,
+                    param_to_vary=param,
+                    wf_generator=wf_generator,
+                    **_deriv_kw_args
+                )
+
+                deriv = full_deriv.deriv
+                info = {'deriv': deriv}
+                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
+            case _:  # pragma: no cover
+                raise ValueError('Invalid `deriv_routine`.')
+
+        deriv_info[param] = info
+
+    # -- Populate remaining entries of Fisher matrix
+    for i, param_i in enumerate(params_to_vary):
+        for j, param_j in enumerate(params_to_vary):
+
+            if i == j:
+                # Was already set in previous loop
+                continue
+            else:
+                fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
+                    deriv_info[param_i]['deriv'],
+                    deriv_info[param_j]['deriv'],
+                    **_inner_prod_kwargs
+                )
+
+    if return_info:
+        return fisher_matrix, deriv_info
+    else:
+        return fisher_matrix
 
 
 # NOTE: removing some of the arguments to pass all kwargs to derivative
@@ -249,13 +330,14 @@ def fisher_matrix_gw_signal_tools(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        deriv, info = get_waveform_derivative_1D_with_convergence(
+        full_deriv = Derivative(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,
             return_info=True,
             **deriv_and_inner_prod_kwargs
         )
+        deriv, info = full_deriv.deriv, full_deriv.deriv_info
 
         deriv_series_storage[param] = deriv
         info['deriv'] = deriv
@@ -264,8 +346,6 @@ def fisher_matrix_gw_signal_tools(
         if return_info:
             # TODO: maybe copy selected stuff only?
             deriv_info[param] = info
-        else:
-            plt.close('all')  # Otherwise axes remain open and eventually get displayed
 
     # ----- Populate Fisher matrix -----
     for i, param_i in enumerate(params_to_vary):
@@ -894,12 +974,13 @@ def fisher_matrix_numdifftools(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        deriv = get_waveform_derivative_1D_numdifftools(
+        full_deriv = WaveformDerivative(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,
             **_deriv_kw_args
         )
+        deriv = full_deriv.deriv
 
         deriv_series_storage[param] = deriv
         fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2

@@ -24,8 +24,7 @@ __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
 
-# TODO: remove return_info option. Should always be true, makes
-# calculations faster and easier to ensure consistency with used derivs
+
 class FisherMatrix:
     r"""
     A data type tailored to Fisher matrices. It stores the Fisher matrix
@@ -103,8 +102,7 @@ class FisherMatrix:
     stored in ``FisherMatrix.fisher`` (for example array-conversion).
     """
     default_metadata = {
-        'deriv_routine': 'gw_signal_tools',
-        'return_info': True,
+        'deriv_routine': 'gw_signal_tools'
     }
 
     _preferred_units = preferred_unit_system
@@ -128,6 +126,7 @@ class FisherMatrix:
         self.wf_generator = wf_generator
         self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
+        self.metadata['return_info'] = True  # We rely on this
 
         if len(self.metadata) > len(self.default_metadata):
             # Arguments for inner product may have been given, extract
@@ -200,21 +199,12 @@ class FisherMatrix:
         
     def _calc_fisher(self):
         """Calculate the Fisher matrix for this instance."""
-        result = fisher_matrix(
+        self._fisher, self._deriv_info = fisher_matrix(
             wf_params_at_point=self.wf_params_at_point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             **self.metadata
         )
-
-        if self.metadata['return_info']:
-            self._fisher, self._deriv_info = result
-            plt.close('all')  # Avoid too many open axes
-        else:
-            self._fisher = result
-
-            # self._deriv_info = {'general_info': 'There is no info available.'}
-            self._deriv_info = {}
 
         if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
             # Conservative threshold choice for double precision,
@@ -718,7 +708,7 @@ class FisherMatrix:
                     opt_wf_params,
                     self.params_to_vary,
                     self.wf_generator,
-                    **(self.metadata | {'return_info': True} | inner_prod_kwargs)
+                    **(self.metadata | inner_prod_kwargs)
                 )
             
 
@@ -764,36 +754,9 @@ class FisherMatrix:
             raise ValueError('Given `optimize` input not accepted.')
         
         # ----- Now calculation of systematic error -----
-        if opt_fisher.metadata['return_info']:
-            derivs = [
-                opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
-            ]
-        else:
-            # NOTE: it does make sense to calculate derivs for the
-            # parameters in params only because this argument is meant
-            # to determine return. For error, parameters that are not in
-            # in params still play a role and have to be accounted for.
-            _metadata = opt_fisher.metadata.copy()
-            _metadata.pop('return_info', None)
-
-            if _metadata.pop('deriv_routine') == 'gw_signal_tools':
-                derivs = [
-                    WaveformDerivativeGWSignaltools(
-                        opt_fisher.wf_params_at_point,
-                        param_to_vary,
-                        opt_fisher.wf_generator,
-                        **_metadata
-                    ).deriv for param_to_vary in opt_fisher.params_to_vary
-                ]
-            else:
-                derivs = [
-                    WaveformDerivativeGWSignaltools(
-                        opt_fisher.wf_params_at_point,
-                        param_to_vary,
-                        opt_fisher.wf_generator,
-                        **_metadata
-                    ).deriv for param_to_vary in opt_fisher.params_to_vary
-                ]
+        derivs = [
+            opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
+        ]
         
         if (opt_is_bool and optimize) or isinstance(optimize, list):
             # For Fisher matrix, time and phase shift have no influence,

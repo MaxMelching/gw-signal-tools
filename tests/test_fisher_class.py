@@ -346,7 +346,7 @@ def test_plot():
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
-@pytest.mark.parametrize('new_metadata', [None, {'return_info': False, 'convergence_check': 'mismatch'}])
+@pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
 def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
                       new_wf_generator, new_metadata):
     if new_metadata is None:

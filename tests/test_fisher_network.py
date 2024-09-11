@@ -189,7 +189,7 @@ def test_snr(inner_prod_kwargs):
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_detectors', [None, [hanford]])
-@pytest.mark.parametrize('new_metadata', [None, {'return_info': False, 'convergence_check': 'mismatch'}])
+@pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
 def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
                       new_wf_generator, new_detectors, new_metadata):
     if new_metadata is None:

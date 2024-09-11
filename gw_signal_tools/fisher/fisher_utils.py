@@ -12,7 +12,10 @@ import numdifftools as nd
 
 # ----- Local Package Imports -----
 from ..logging import logger
-from ..waveform import inner_product, norm, _INNER_PROD_ARGS, Derivative, WaveformDerivative
+from ..waveform import (
+    inner_product, norm, _INNER_PROD_ARGS, WaveformDerivativeGWSignaltools,
+    WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
+)
 from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
 
@@ -169,8 +172,10 @@ def fisher_matrix(
 
     for i, param in enumerate(params_to_vary):
         match deriv_routine:
+            # -- Manual case check because of different info return
+            # -- and different usage of _inner_prod_kwargs
             case 'gw_signal_tools':
-                full_deriv = Derivative(
+                full_deriv = WaveformDerivativeGWSignaltools(
                     wf_params_at_point=wf_params_at_point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
@@ -181,16 +186,20 @@ def fisher_matrix(
                 info['deriv'] = deriv
                 fisher_matrix[i, i] = info['norm_squared']
             case 'numdifftools':
-                full_deriv = WaveformDerivative(
+                _deriv_kw_args['full_output'] = True
+
+                full_deriv = WaveformDerivativeNumdifftools(
                     wf_params_at_point=wf_params_at_point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
                     **_deriv_kw_args
                 )
 
-                deriv = full_deriv.deriv
-                info = {'deriv': deriv}
+                deriv, info = full_deriv.deriv
+                info['deriv'] = deriv
                 fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
+            case 'amplitude_phase':
+                full_deriv = WaveformDerivativeAmplitudePhase
             case _:  # pragma: no cover
                 raise ValueError('Invalid `deriv_routine`.')
 
@@ -330,11 +339,11 @@ def fisher_matrix_gw_signal_tools(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        full_deriv = Derivative(
+        full_deriv = WaveformDerivativeGWSignaltools(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,
-            return_info=True,
+            # return_info=True,
             **deriv_and_inner_prod_kwargs
         )
         deriv, info = full_deriv.deriv, full_deriv.deriv_info
@@ -490,258 +499,276 @@ def get_waveform_derivative_1D_with_convergence(
     AssertionError
         If an invalid :code:`params_to_vary` is provided.
     """
-    # ----- Check defaults -----
-    inner_prod_kwargs['return_opt_info'] = False
-    # Ensure float output of inner_product, even if optimization on
+    # # ----- Check defaults -----
+    # inner_prod_kwargs['return_opt_info'] = False
+    # # Ensure float output of inner_product, even if optimization on
 
-    if step_sizes is None:
-        step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
-        # NOTE: keeping 1e-2 as default start_step_size is most likely too
-        # high for relative ones. But depending on point that derivative is
-        # evaluated in, absolute step sizes are used sometimes, too, and in
-        # that case, 1e-2 seems to be a valid starting point.
-        # Also, five-point-stencil does not need values as small as the ones
-        # commonly used with e.g. central difference.
+    # if step_sizes is None:
+    #     step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+    #     # NOTE: keeping 1e-2 as default start_step_size is most likely too
+    #     # high for relative ones. But depending on point that derivative is
+    #     # evaluated in, absolute step sizes are used sometimes, too, and in
+    #     # that case, 1e-2 seems to be a valid starting point.
+    #     # Also, five-point-stencil does not need values as small as the ones
+    #     # commonly used with e.g. central difference.
 
-    if convergence_check is None:
-        convergence_check = 'diff_norm'
-    else:
-        if convergence_check not in ['mismatch', 'diff_norm']:
-            raise ValueError(
-                    'Invalid value for `convergence_check`.'
-                )
+    # if convergence_check is None:
+    #     convergence_check = 'diff_norm'
+    # else:
+    #     if convergence_check not in ['mismatch', 'diff_norm']:
+    #         raise ValueError(
+    #                 'Invalid value for `convergence_check`.'
+    #             )
 
-    if convergence_threshold is None:
-        match convergence_check:
-            case 'diff_norm':
-                convergence_threshold = 0.001
-            case 'mismatch':
-                convergence_threshold = 0.001
+    # if convergence_threshold is None:
+    #     match convergence_check:
+    #         case 'diff_norm':
+    #             convergence_threshold = 0.001
+    #         case 'mismatch':
+    #             convergence_threshold = 0.001
 
-    # ----- Calculation -----
-    if (param_to_vary == 'time' or param_to_vary == 'tc'):
-        wf = wf_generator(wf_params_at_point)
-        deriv = wf * (-1.j * 2. * np.pi * wf.frequencies)
+    # # ----- Calculation -----
+    # if (param_to_vary == 'time' or param_to_vary == 'tc'):
+    #     wf = wf_generator(wf_params_at_point)
+    #     deriv = wf * (-1.j * 2. * np.pi * wf.frequencies)
 
-        derivative_norm = norm(deriv, **inner_prod_kwargs)**2
+    #     derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
-        if return_info:
-            return deriv, {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
-            }
-        else:
-            return deriv
-    elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
-        wf = wf_generator(wf_params_at_point)
+    #     if return_info:
+    #         return deriv, {
+    #             'norm_squared': derivative_norm,
+    #             'description': 'This derivative is exact.'
+    #         }
+    #     else:
+    #         return deriv
+    # elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
+    #     wf = wf_generator(wf_params_at_point)
 
-        if param_to_vary == 'phase':
-            deriv = wf * 1.j / u.rad
-        else:
-            deriv = wf * 2.j / u.rad
+    #     if param_to_vary == 'phase':
+    #         deriv = wf * 1.j / u.rad
+    #     else:
+    #         deriv = wf * 2.j / u.rad
 
-        derivative_norm = norm(deriv, **inner_prod_kwargs)**2
+    #     derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
-        if return_info:
-            return deriv, {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
-            }
-        else:
-            return deriv
-    elif param_to_vary == 'distance':
-        wf = wf_generator(wf_params_at_point)
+    #     if return_info:
+    #         return deriv, {
+    #             'norm_squared': derivative_norm,
+    #             'description': 'This derivative is exact.'
+    #         }
+    #     else:
+    #         return deriv
+    # elif param_to_vary == 'distance':
+    #     wf = wf_generator(wf_params_at_point)
 
-        deriv = (-1./wf_params_at_point['distance']) * wf
+    #     deriv = (-1./wf_params_at_point['distance']) * wf
 
-        derivative_norm = norm(deriv, **inner_prod_kwargs)**2
+    #     derivative_norm = norm(deriv, **inner_prod_kwargs)**2
 
-        if return_info:
-            return deriv, {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
-            }
-        else:
-            return deriv
-    else:
-        assert param_to_vary in wf_params_at_point, \
-            ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'
-             '`\'phase`\' or a key in `wf_params_at_point`.')
+    #     if return_info:
+    #         return deriv, {
+    #             'norm_squared': derivative_norm,
+    #             'description': 'This derivative is exact.'
+    #         }
+    #     else:
+    #         return deriv
+    # else:
+    #     assert param_to_vary in wf_params_at_point, \
+    #         ('`param_to_vary` must be `\'tc\'`/`\'time\'`, `\'psi\'`/'
+    #          '`\'phase`\' or a key in `wf_params_at_point`.')
 
-    is_converged = False
-    refine_numb = 0
-    for _ in range(3):  # Maximum number of refinements of step size
-        derivative_vals = []
-        deriv_norms = []
-        convergence_vals = []
+    # is_converged = False
+    # refine_numb = 0
+    # for _ in range(3):  # Maximum number of refinements of step size
+    #     derivative_vals = []
+    #     deriv_norms = []
+    #     convergence_vals = []
 
-        for i, step_size in enumerate(step_sizes):
-            try:
-                deriv_param = get_waveform_derivative_1D(
-                    wf_params_at_point,
-                    param_to_vary,
-                    wf_generator,
-                    step_size
-                )
-            except ValueError as err:
-                err_msg = str(err)
+    #     for i, step_size in enumerate(step_sizes):
+    #         try:
+    #             deriv_param = get_waveform_derivative_1D(
+    #                 wf_params_at_point,
+    #                 param_to_vary,
+    #                 wf_generator,
+    #                 step_size
+    #             )
+    #         except ValueError as err:
+    #             err_msg = str(err)
 
-                if 'Input domain error' in err_msg:
-                    logger.info(
-                        f'{step_size} is not a valid step size for a parameter'
-                        f' value of {wf_params_at_point[param_to_vary]}. '
-                        'Skipping this step size.'
-                    )
+    #             if 'Input domain error' in err_msg:
+    #                 logger.info(
+    #                     f'{step_size} is not a valid step size for a parameter'
+    #                     f' value of {wf_params_at_point[param_to_vary]}. '
+    #                     'Skipping this step size.'
+    #                 )
 
-                    # Still have to append something to lists, otherwise
-                    # indices become inconsistent with step_sizes
-                    derivative_vals += [0.0]
-                    deriv_norms += [np.inf]
-                    convergence_vals += [np.inf]
-                    continue
-                else:
-                    raise ValueError(err_msg)
-
-
-            derivative_norm = norm(deriv_param, **inner_prod_kwargs)**2
-
-            derivative_vals += [deriv_param]
-            deriv_norms += [derivative_norm]
+    #                 # Still have to append something to lists, otherwise
+    #                 # indices become inconsistent with step_sizes
+    #                 derivative_vals += [0.0]
+    #                 deriv_norms += [np.inf]
+    #                 convergence_vals += [np.inf]
+    #                 continue
+    #             else:
+    #                 raise ValueError(err_msg)
 
 
-            match convergence_check:
-                case 'diff_norm':
-                    if len(derivative_vals) >= 2:
-                        convergence_vals += [
-                            norm(deriv_param - derivative_vals[-2],
-                                 **inner_prod_kwargs)/np.sqrt(derivative_norm)
-                        ]
-                    else:
-                        convergence_vals += [np.inf]
-                        continue
-                case 'mismatch':
-                    # Compute mismatch, using that we already know norms
-                    if len(derivative_vals) >= 2:
-                        convergence_vals += [
-                            1. - inner_product(
-                            deriv_param,
-                            derivative_vals[-2],
-                            **inner_prod_kwargs
-                        ) / np.sqrt(derivative_norm * deriv_norms[-2])
-                        ]  # Index -1 is deriv_param
-                    else:
-                        convergence_vals += [np.inf]
-                        continue
+    #         derivative_norm = norm(deriv_param, **inner_prod_kwargs)**2
 
-            # if (convergence_vals[-1] <= convergence_threshold):
-                # We use five-point stencil, which converges fast, so
-                # that it is justified to interpret two consecutive
-                # results being very similar as convergence
-                # -> testing revealed that criterion below leads to more
-                #    consistent results, thus we leave for now
-            if (len(convergence_vals) >= 2
-                and (convergence_vals[-1] <= convergence_threshold)
-                and (convergence_vals[-2] <= convergence_threshold)):
-                # Double checking is more robust
-                is_converged = True  # Remains true, is never set to False again
+    #         derivative_vals += [deriv_param]
+    #         deriv_norms += [derivative_norm]
 
-                if break_upon_convergence:
-                    min_dev_index = i  # Then it can also be used to access step_sizes
-                    break
+
+    #         match convergence_check:
+    #             case 'diff_norm':
+    #                 if len(derivative_vals) >= 2:
+    #                     convergence_vals += [
+    #                         norm(deriv_param - derivative_vals[-2],
+    #                              **inner_prod_kwargs)/np.sqrt(derivative_norm)
+    #                     ]
+    #                 else:
+    #                     convergence_vals += [np.inf]
+    #                     continue
+    #             case 'mismatch':
+    #                 # Compute mismatch, using that we already know norms
+    #                 if len(derivative_vals) >= 2:
+    #                     convergence_vals += [
+    #                         1. - inner_product(
+    #                         deriv_param,
+    #                         derivative_vals[-2],
+    #                         **inner_prod_kwargs
+    #                     ) / np.sqrt(derivative_norm * deriv_norms[-2])
+    #                     ]  # Index -1 is deriv_param
+    #                 else:
+    #                     convergence_vals += [np.inf]
+    #                     continue
+
+    #         # if (convergence_vals[-1] <= convergence_threshold):
+    #             # We use five-point stencil, which converges fast, so
+    #             # that it is justified to interpret two consecutive
+    #             # results being very similar as convergence
+    #             # -> testing revealed that criterion below leads to more
+    #             #    consistent results, thus we leave for now
+    #         if (len(convergence_vals) >= 2
+    #             and (convergence_vals[-1] <= convergence_threshold)
+    #             and (convergence_vals[-2] <= convergence_threshold)):
+    #             # Double checking is more robust
+    #             is_converged = True  # Remains true, is never set to False again
+
+    #             if break_upon_convergence:
+    #                 min_dev_index = i  # Then it can also be used to access step_sizes
+    #                 break
         
-        last_used_step_sizes = step_sizes  # Save for plots
+    #     last_used_step_sizes = step_sizes  # Save for plots
         
-        # Check if step sizes shall be refined. This is be done if no breaking
-        # upon convergence is wanted or if no convergence was reached yet
-        if not break_upon_convergence or not is_converged:
-            # TODO: remove break_upon_convergence and just handle that via convergence_threshold?
-            # I.e. set to 0.0 if no breaking wanted
+    #     # Check if step sizes shall be refined. This is be done if no breaking
+    #     # upon convergence is wanted or if no convergence was reached yet
+    #     if not break_upon_convergence or not is_converged:
+    #         # TODO: remove break_upon_convergence and just handle that via convergence_threshold?
+    #         # I.e. set to 0.0 if no breaking wanted
             
-            if np.all(np.equal(convergence_vals, np.inf)):
-                # Only invalid step sizes for this parameter, we have to
-                # decrease further
-                min_dev_index = len(step_sizes) - 1
-            else:
-                min_dev_index = np.nanargmin(convergence_vals)  # type: ignore
-            # Explanation of ignore: it seems like a signedinteger is returned
-            # by nanargmin, violates static checking for int. Note that we do
-            # use nan-version here just in case something goes wrong in norm or
-            # so, making it zero (should not happen, though)
+    #         if np.all(np.equal(convergence_vals, np.inf)):
+    #             # Only invalid step sizes for this parameter, we have to
+    #             # decrease further
+    #             min_dev_index = len(step_sizes) - 1
+    #         else:
+    #             min_dev_index = np.nanargmin(convergence_vals)  # type: ignore
+    #         # Explanation of ignore: it seems like a signedinteger is returned
+    #         # by nanargmin, violates static checking for int. Note that we do
+    #         # use nan-version here just in case something goes wrong in norm or
+    #         # so, making it zero (should not happen, though)
 
-            # Cut steps made around step size with best criterion value in half
-            # compared to current steps (we take average step size in case
-            # difference to left and right is unequl)
-            if min_dev_index < (len(step_sizes) - 1):
-                left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
-                right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
-                # 4.0 due to factor of two in step_sizes below
+    #         # Cut steps made around step size with best criterion value in half
+    #         # compared to current steps (we take average step size in case
+    #         # difference to left and right is unequl)
+    #         if min_dev_index < (len(step_sizes) - 1):
+    #             left_step = (step_sizes[min_dev_index - 1] - step_sizes[min_dev_index]) / 4.0
+    #             right_step = (step_sizes[min_dev_index + 1] - step_sizes[min_dev_index]) / 4.0
+    #             # 4.0 due to factor of two in step_sizes below
 
-                step_sizes = step_sizes[min_dev_index] + np.array(
-                    [2.*left_step, 1.*left_step, 1.*right_step, 2.*right_step]
-                )
-                # TODO: also include 0.0 here? I.e. the optimal one, as of now?
-            else:
-                # Smallest convergence value at smallest step size, so
-                # min_dev_index + 1 is invalid index. Instead of zooming in,
-                # smaller step sizes are explored
+    #             step_sizes = step_sizes[min_dev_index] + np.array(
+    #                 [2.*left_step, 1.*left_step, 1.*right_step, 2.*right_step]
+    #             )
+    #             # TODO: also include 0.0 here? I.e. the optimal one, as of now?
+    #         else:
+    #             # Smallest convergence value at smallest step size, so
+    #             # min_dev_index + 1 is invalid index. Instead of zooming in,
+    #             # smaller step sizes are explored
 
-                # Refine in same way that we do with start_step_size
-                step_sizes = np.reshape(np.outer([step_sizes[min_dev_index]/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
+    #             # Refine in same way that we do with start_step_size
+    #             step_sizes = np.reshape(np.outer([step_sizes[min_dev_index]/10**i for i in range(4)], [5, 1]), -1)[1:]  # Indexing makes sure we do not start at 5*start_step_size
 
 
-            refine_numb += 1
-        else:
-            break
+    #         refine_numb += 1
+    #     else:
+    #         break
 
-    # ----- Verification of result and information collection -----
-    if not is_converged:
-        logger.info(
-            'Calculations using the selected step sizes did not converge '
-            f'for parameter `{param_to_vary}` using convergence check method '
-            f'`{convergence_check}`, even after {refine_numb} refinements of '
-            'step sizes. The minimal value of the criterion was '
-            f'{convergence_vals[min_dev_index]}, ' + ((f'which is above the '
-            f'selected threshold of {convergence_threshold}. ')
-            if convergence_vals[min_dev_index] > convergence_threshold else (
-            f'which is below the selected threshold of {convergence_threshold}'
-            ', but the previous and following value were not.')) +
-            'If you are not satisfied with the result (for an eye test, you '
-            'can plot the `convergence_plot` value returned in case '
-            '`return_info=True`), consider changing the initial step sizes.'
-        )
+    # # ----- Verification of result and information collection -----
+    # if not is_converged:
+    #     logger.info(
+    #         'Calculations using the selected step sizes did not converge '
+    #         f'for parameter `{param_to_vary}` using convergence check method '
+    #         f'`{convergence_check}`, even after {refine_numb} refinements of '
+    #         'step sizes. The minimal value of the criterion was '
+    #         f'{convergence_vals[min_dev_index]}, ' + ((f'which is above the '
+    #         f'selected threshold of {convergence_threshold}. ')
+    #         if convergence_vals[min_dev_index] > convergence_threshold else (
+    #         f'which is below the selected threshold of {convergence_threshold}'
+    #         ', but the previous and following value were not.')) +
+    #         'If you are not satisfied with the result (for an eye test, you '
+    #         'can plot the `convergence_plot` value returned in case '
+    #         '`return_info=True`), consider changing the initial step sizes.'
+    #     )
     
-    if return_info:
-        fig = plt.figure()
-        ax = fig.subplots(nrows=2, sharex=True)
+    # if return_info:
+    #     fig = plt.figure()
+    #     ax = fig.subplots(nrows=2, sharex=True)
 
-        for i in range(len(derivative_vals)):
-            ax[0].plot(derivative_vals[i].real, '--',
-                       label=f'{last_used_step_sizes[i]:.3e}')
-            ax[1].plot(derivative_vals[i].imag, '--')
-            # No label for second because otherwise, everything shows up twice
-            # in figure legend
+    #     for i in range(len(derivative_vals)):
+    #         ax[0].plot(derivative_vals[i].real, '--',
+    #                    label=f'{last_used_step_sizes[i]:.3e}')
+    #         ax[1].plot(derivative_vals[i].imag, '--')
+    #         # No label for second because otherwise, everything shows up twice
+    #         # in figure legend
 
-        fig.legend(
-            title='Step Sizes',
-            bbox_to_anchor=(0.96, 0.5),
-            loc='center left'
-        )
+    #     fig.legend(
+    #         title='Step Sizes',
+    #         bbox_to_anchor=(0.96, 0.5),
+    #         loc='center left'
+    #     )
         
-        fig.suptitle(f'Parameter: {param_to_vary}')  # TODO: use latexparams here?
-        ax[1].set_xlabel('$f$')
-        ax[0].set_ylabel('Derivative Re')
-        ax[1].set_ylabel('Derivative Im')
+    #     fig.suptitle(f'Parameter: {param_to_vary}')  # TODO: use latexparams here?
+    #     ax[1].set_xlabel('$f$')
+    #     ax[0].set_ylabel('Derivative Re')
+    #     ax[1].set_ylabel('Derivative Im')
 
-        return derivative_vals[min_dev_index], {
-            'norm_squared': deriv_norms[min_dev_index],
-            'final_step_size': step_sizes[min_dev_index],
-            'final_convergence_val': convergence_vals[min_dev_index],
-            'number_of_refinements': refine_numb,
-            'final_set_of_step_sizes': step_sizes,
-            'convergence_plot': ax
-        }
+    #     return derivative_vals[min_dev_index], {
+    #         'norm_squared': deriv_norms[min_dev_index],
+    #         'final_step_size': step_sizes[min_dev_index],
+    #         'final_convergence_val': convergence_vals[min_dev_index],
+    #         'number_of_refinements': refine_numb,
+    #         'final_set_of_step_sizes': step_sizes,
+    #         'convergence_plot': ax
+    #     }
+    # else:
+    #     return derivative_vals[min_dev_index]
+    deriv = WaveformDerivativeGWSignaltools(
+        wf_params_at_point=wf_params_at_point,
+        param_to_vary=param_to_vary,
+        wf_generator=wf_generator,
+        step_sizes=step_sizes,
+        start_step_size=start_step_size,
+        convergence_check=convergence_check,
+        convergence_threshold=convergence_threshold,
+        break_upon_convergence=break_upon_convergence,
+        # return_info=return_info,
+        **inner_prod_kwargs
+    )
+    _deriv = deriv.deriv
+
+    if return_info:
+        return _deriv, deriv.deriv_info
     else:
-        return derivative_vals[min_dev_index]
+        return _deriv
 
 
 def get_waveform_derivative_1D(
@@ -974,7 +1001,7 @@ def fisher_matrix_numdifftools(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        full_deriv = WaveformDerivative(
+        full_deriv = WaveformDerivativeNumdifftools(
             wf_params_at_point=wf_params_at_point,
             param_to_vary=param,
             wf_generator=wf_generator,

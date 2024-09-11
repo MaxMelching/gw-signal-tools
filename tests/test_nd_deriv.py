@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 
 # ----- Local Package Imports -----
 from gw_signal_tools.waveform.utils import get_wf_generator
-from gw_signal_tools.waveform.nd_deriv import WaveformDerivative
-from gw_signal_tools.waveform.deriv import Derivative
+from gw_signal_tools.waveform import (
+    WaveformDerivativeGWSignaltools, WaveformDerivativeNumdifftools,
+    WaveformDerivativeAmplitudePhase, WaveformDerivative
+)
 
 
 f_min = 20.*u.Hz
@@ -42,10 +44,10 @@ pc.default_dict.pop('mass2', None);
 # test_param = 'total_mass'
 test_param = 'mass_ratio'
 # test_param = 'distance'
-test = WaveformDerivative(
-    wf_generator,
+test = WaveformDerivativeNumdifftools(
     wf_params,
     test_param,
+    wf_generator,
     # base_step=1e-2
     base_step=1e-2*wf_params[test_param].value,
     # method='forward'
@@ -54,11 +56,12 @@ test = WaveformDerivative(
 
 
 # -- Comparison with custom Derivative class
-# print(Derivative.__dict__)
-# print('five_point' in Derivative.__dict__)
+print(WaveformDerivativeGWSignaltools.__dict__)
+print(WaveformDerivativeNumdifftools.__dict__)
+# print('five_point' in WaveformDerivativeGWSignaltools.__dict__)
 
 
-test_deriv_object = Derivative(
+test_deriv_object = WaveformDerivativeGWSignaltools(
     wf_params_at_point=wf_params,
     param_to_vary=test_param,
     wf_generator=wf_generator
@@ -66,17 +69,17 @@ test_deriv_object = Derivative(
 
 test_deriv = test_deriv_object.deriv
 
-from gw_signal_tools.fisher.fisher_utils import get_waveform_derivative_1D_numdifftools
-test_deriv_3 = get_waveform_derivative_1D_numdifftools(
-    wf_params_at_point=wf_params,
-    param_to_vary=test_param,
-    wf_generator=wf_generator,
-)
+# test_deriv_3 = WaveformDerivativeAmplitudePhase(
+#     wf_params_at_point=wf_params,
+#     param_to_vary=test_param,
+#     wf_generator=wf_generator,
+# )
+
 
 # plt.plot(test())
 plt.plot(test.deriv)
 plt.plot(test_deriv, '--')
-plt.plot(test_deriv_3, ':')
+# plt.plot(test_deriv_3, ':')
 
 
 plt.show()
@@ -86,3 +89,64 @@ plt.show()
 # deriv = test.deriv
 # print(deriv)
 # print(np.allclose(deriv[0], deriv[1], atol=0., rtol=0.))
+
+# -- Had following definition in the class for this test
+# def fun(x):
+#     # -- Testing n-dim output
+#     wf = wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+
+#     return np.stack([wf, wf])
+
+# from gwpy.frequencyseries import FrequencySeries
+# class NDFrequencySeries(FrequencySeries):
+#     _ndim=2
+# -- From testing with n-dim output. Did not use in the end
+
+
+# -- Multi-function Testing
+import numpy as np
+import numdifftools as nd
+
+
+func1_counter = 0
+func2_counter = 0
+
+def func1(x):
+    global func1_counter
+    func1_counter += 1
+    # return x**2
+    return np.sin(x)
+
+def func2(x):
+    global func2_counter
+    func2_counter += 1
+    return np.exp(x)
+
+def func(x):
+    return np.stack([func1(x), func2(x)])
+
+func_deriv = nd.Derivative(
+    func,
+    base_step=1,  # To provoke slower convergence, test if there is difference
+    full_output=True
+)
+
+# point = 3
+point = np.linspace(0, 2, num=5)
+num_deriv, info = func_deriv(point)
+print(np.vstack([np.cos(point), np.exp(point)]))
+print(num_deriv)
+
+print(func1_counter, func2_counter)
+print(info.final_step)
+# Ok, so both counters are equal, which of course makes sense because
+# they are called simultaneously. final_step is more important and it
+# indeed shows that every entry is handled separately (i.e. each row is,
+# just like each column is)
+# -> that means from a calling perspective, NDWaveformGenerator would
+#    work with this Derivative class here. Would also be convenient
+#    because return of attributes would be handled well. On the other
+#    hand, it could be that we accumulate waveform calls although the
+#    corresponding derivative is already converged... But I would think
+#    this discrepancy should not be too large, so perhaps code clarity
+#    is king here

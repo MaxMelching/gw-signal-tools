@@ -5,12 +5,9 @@ import matplotlib.pyplot as plt
 import pytest
 
 # ----- Local Package Imports -----
-from gw_signal_tools.waveform.utils import get_wf_generator
+from gw_signal_tools.waveform import get_wf_generator, norm
 from gw_signal_tools.types import MatrixWithUnits
-from gw_signal_tools.fisher import (
-    FisherMatrix, fisher_matrix, fisher_matrix_gw_signal_tools,
-    fisher_matrix_numdifftools
-)
+from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
 )
@@ -71,19 +68,21 @@ def test_inverse():
                            fisher_tot_mass.fisher_inverse.unit))
     
 def test_fisher_calc():
-    fisher_tot_mass_2 = fisher_matrix_gw_signal_tools(
+    fisher_tot_mass_2 = fisher_matrix(
         wf_params,
         'total_mass',
-        phenomx_generator
+        phenomx_generator,
+        deriv_routine='gw_signal_tools'
     )
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
 
 def test_criterion_consistency():
-    fisher_tot_mass_2 = fisher_matrix_gw_signal_tools(
+    fisher_tot_mass_2 = fisher_matrix(
         wf_params,
         'total_mass',
         phenomx_generator,
-        convergence_check='mismatch'
+        convergence_check='mismatch',
+        deriv_routine='gw_signal_tools'
     )
     
     assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
@@ -157,7 +156,7 @@ def test_base_step_consistency():
         calc_params,
         phenomx_generator,
         deriv_routine='numdifftools',
-        start_step_size=None  # Enables automatic selection
+        base_step=None  # Enables automatic selection
     )
 
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
@@ -322,7 +321,6 @@ def test_sys_error(params):
     dict(df=2**-2, min_dt_prec=1e-5*u.s)
 ])
 def test_snr(inner_prod_kwargs):
-    from gw_signal_tools.inner_product import norm
     snr = norm(phenomx_generator(wf_params), **inner_prod_kwargs)
     assert snr == fisher_tot_mass.snr(**inner_prod_kwargs)
 

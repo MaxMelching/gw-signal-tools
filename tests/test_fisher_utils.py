@@ -1,31 +1,24 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import unittest
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from numpy.testing import assert_allclose
-import numdifftools as nd
 import matplotlib.pyplot as plt
 import astropy.units as u
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
 import pytest
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.test_utils import (
-    assert_allclose_quantity, assert_allclose_MatrixWithUnits,
-    assert_allclose_series
+    assert_allclose_MatrixWithUnits
 )
-from gw_signal_tools.waveform.inner_product import norm
-from gw_signal_tools.waveform.utils import get_wf_generator
-from gw_signal_tools.fisher import (
-    num_diff, get_waveform_derivative_1D,
-    get_waveform_derivative_1D_with_convergence, fisher_matrix,
-    fisher_matrix_gw_signal_tools, fisher_matrix_numdifftools
-)
+from gw_signal_tools.waveform import get_wf_generator
+from gw_signal_tools.fisher import num_diff, fisher_matrix
 
 
-#%% ---------- Testing Derivative Methods ----------
+#%% -- Testing Derivative Methods ---------------------------------------------
 def test_num_diff():
     step_size = 0.01
     x_vals = np.arange(0.0, 2.0, step=step_size)
@@ -63,7 +56,7 @@ def test_num_diff_input(h):
     # No need to compare something, is just to test that h is accepted
 
 
-#%% ----- Initializing commonly used variables for Fisher tests -----
+#%% -- Initializing commonly used variables for Fisher tests ------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
@@ -96,208 +89,26 @@ pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
 
-#%% ----- Derivative consistency checks -----
-@pytest.mark.parametrize('param_to_vary', test_params)
-@pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
-def test_wf_deriv_numdifftools(param_to_vary, crit):
-    def deriv_wrapper_real(param_val):
-        return wf_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).real
-
-    def deriv_wrapper_imag(param_val):
-        return wf_generator(wf_params | {param_to_vary: param_val * wf_params[param_to_vary].unit}).imag
-
-
-    center_val = wf_params[param_to_vary]
-    max_step_size = 1e-2
-
-    nd_deriv_real = nd.Derivative(deriv_wrapper_real, full_output=False, base_step=max_step_size)
-
-    nd_deriv_imag = nd.Derivative(deriv_wrapper_imag, full_output=False, base_step=max_step_size)
-
-
-    deriv = get_waveform_derivative_1D_with_convergence(
-        wf_params,
-        param_to_vary,
-        wf_generator,
-        convergence_check=crit
-    )
-    plt.close()
-
-    nd_deriv = nd_deriv_real(center_val) + 1.j * nd_deriv_imag(center_val)
-    
-
-    mask = deriv.frequencies <= 256.0 * u.Hz
-
-    assert_allclose(deriv.value[mask], nd_deriv[mask], atol=0.0, rtol=0.06)
-    # Once again, the problems seem to occur mostly around zeros, which is
-    # also the reason why we exclude values where derivative is close to zero
-
-
-    # Check Fisher values
-    nd_deriv = FrequencySeries(
-        nd_deriv,
-        frequencies=deriv.frequencies,
-        unit=deriv.unit
-    )
-
-    assert_allclose_quantity(
-        norm(deriv),
-        norm(nd_deriv),
-        atol=0.0,
-        rtol=5e-4
-    )
-    # Very good agreement, supports claim above that most severe relative
-    # differences occur around zeros, where impact is not very high.
-    # Note that no frequency regions are excluded here
-    
-
-    # Eye test: here are plots of the derivatives
-    # plt.plot(deriv.real)
-    # plt.plot(deriv.imag)
-    # plt.plot(deriv.frequencies, nd_deriv.real, '--')
-    # plt.plot(deriv.frequencies, nd_deriv.imag, '--')
-
-    # plt.title(param_to_vary)
-    # plt.show()
-
-# TODO: test how things behave with smaller df!!!
-
-
-@pytest.mark.parametrize('param', test_params)
-@pytest.mark.parametrize('q_val', [0.42, 0.05])
-@pytest.mark.parametrize('break_conv', [True, False])
-def test_step_size(param, q_val, break_conv):
-    deriv, deriv_info = get_waveform_derivative_1D_with_convergence(
-        wf_params | {'mass_ratio': q_val*u.dimensionless_unscaled},
-        param,
-        wf_generator,
-        break_upon_convergence=break_conv,
-        return_info=True
-    )
-    plt.close()
-
-    deriv_fixed_step_size = get_waveform_derivative_1D(
-        wf_params | {'mass_ratio': q_val*u.dimensionless_unscaled},
-        param,
-        wf_generator,
-        step_size=deriv_info['final_step_size']
-    )
-
-    # These must be equal (not just close)
-    if break_conv:
-        assert_allclose_series(deriv, deriv_fixed_step_size, atol=0.0, rtol=0.0)
-    else:
-        deriv.crop(end=256 * u.Hz, copy=False)
-        deriv_fixed_step_size.crop(end=256 * u.Hz, copy=False)
-
-        # assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=2e-24, rtol=6e-4)
-        if param != 'total_mass':
-            assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-24, rtol=2e-3)
-        else:
-            # One peak for q=0.42 where deviation is larger than otherwise.
-            # No idea where this comes from
-            assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-23, rtol=2e-3)
-        # Not sure why, but they are never fully equal here. Maybe we are off
-        # by one index (though I checked this), but results look very equal
-        # and all deviations are around zeros, where small deviations result
-        # in large errors. Fisher matrix values below are very similar even
-        # for break_upon_convergence=False, which is only thing that counts
-        # Moreover, q=0.05 produces VERY challenging waveforms, this is merely
-        # to test if index error is handled correctly
-
-
-    # For eye test, this is where maximum deviation occurs
-    # -> imaginary part seems to be source of error
-    # deriv, deriv_info = get_waveform_derivative_1D_with_convergence(
-    #     wf_params,
-    #     'total_mass',
-    #     phenomx_generator,
-    #     return_info=True,
-    #     break_upon_convergence=False
-    # )
-
-    # deriv2 = get_waveform_derivative_1D(
-    #     wf_params,# | {'mass_ratio': 0.05*u.dimensionless_unscaled},
-    #     'total_mass',
-    #     phenomx_generator,
-    #     step_size=deriv_info['final_step_size']
-    # )
-
-    # print(deriv_info['final_step_size'])
-    # plt.close()
-    # plt.plot(deriv.real)
-    # plt.plot(deriv.imag)
-    # plt.plot(deriv2.real, '--')
-    # plt.plot(deriv2.imag, '--')
-    # # plt.plot(np.abs(deriv))
-    # # plt.plot(np.abs(deriv), '--')
-    # plt.plot(np.abs(deriv - deriv2)*50, label='Difference')
-    # plt.xlim(130, 170)
-    # # plt.ylim(-5e-22, 5e-22)
-    # plt.legend()
-    # plt.show()
-
-@pytest.mark.parametrize('param', test_params)
-def test_custom_convergence(param):
-    deriv_1 = get_waveform_derivative_1D_with_convergence(
-        wf_params,
-        param,
-        wf_generator,
-        return_info=False
-    )
-
-    deriv_2 = get_waveform_derivative_1D_with_convergence(
-        wf_params,
-        param,
-        wf_generator,
-        step_sizes=[1e-2],  # Force convergence testing
-        return_info=False
-    )
-
-    assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
-
-def test_invalid_step_size():
-    param = 'mass_ratio'
-    param_val = 0.42*u.dimensionless_unscaled
-
-    deriv_1 = get_waveform_derivative_1D_with_convergence(
-        wf_params | {'mass_ratio': param_val},
-        param,
-        wf_generator,
-        step_sizes=[2*param_val, 1e-2],
-        return_info=False
-    )
-    # Idea: provoke error for complete coverage, then use same step size as below
-
-    deriv_2 = get_waveform_derivative_1D_with_convergence(
-        wf_params,
-        param,
-        wf_generator,
-        step_sizes=[1e-2],
-        return_info=False
-    )
-
-    assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
-
-
-#%% ----- Fisher consistency checks -----
+#%% -- Fisher consistency checks ----------------------------------------------
 @pytest.mark.parametrize('break_conv', [True, False])
 def test_convergence_check(break_conv):
-    fisher_diff_norm = fisher_matrix_gw_signal_tools(
+    fisher_diff_norm = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
         convergence_check='diff_norm',
-        break_upon_convergence=break_conv
+        break_upon_convergence=break_conv,
+        deriv_routine='gw_signal_tools'
     )
     plt.close()
     
-    fisher_mismatch = fisher_matrix_gw_signal_tools(
+    fisher_mismatch = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
         convergence_check='mismatch',
-        break_upon_convergence=break_conv
+        break_upon_convergence=break_conv,
+        deriv_routine='gw_signal_tools'
     )
     plt.close()
 
@@ -310,20 +121,22 @@ def test_convergence_check(break_conv):
 
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
 def test_break_upon_convergence(crit):
-    fisher_without_convergence = fisher_matrix_gw_signal_tools(
+    fisher_without_convergence = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
         convergence_check=crit,
-        break_upon_convergence=True
+        break_upon_convergence=True,
+        deriv_routine='gw_signal_tools'
     )
 
-    fisher_with_convergence = fisher_matrix_gw_signal_tools(
+    fisher_with_convergence = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
         convergence_check=crit,
-        break_upon_convergence=False
+        break_upon_convergence=False,
+        deriv_routine='gw_signal_tools'
     )
 
     plt.close()
@@ -338,18 +151,20 @@ def test_optimize(conv_crit):
 
     # For diagonal values, optimization must yield same result (up to
     # differences in the routines)
-    fisher_non_opt = fisher_matrix_gw_signal_tools(
+    fisher_non_opt = fisher_matrix(
         wf_params,
         params_to_vary,
         wf_generator,
-        convergence_check=conv_crit
+        convergence_check=conv_crit,
+        deriv_routine='gw_signal_tools'
     )
-    fisher_opt = fisher_matrix_gw_signal_tools(
+    fisher_opt = fisher_matrix(
         wf_params,
         params_to_vary,
         wf_generator,
         optimize_time_and_phase=True,
-        convergence_check=conv_crit
+        convergence_check=conv_crit,
+        deriv_routine='gw_signal_tools'
     )
     
     assert_allclose_MatrixWithUnits(
@@ -359,30 +174,22 @@ def test_optimize(conv_crit):
     )
 
 def test_start_step_size():
-    fisher_1 = fisher_matrix_gw_signal_tools(
+    fisher_1 = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
-        start_step_size=1e-1
+        start_step_size=1e-1,
+        deriv_routine='gw_signal_tools'
     )
     
-    fisher_2 = fisher_matrix_gw_signal_tools(
+    fisher_2 = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
-        start_step_size=1e-2
+        start_step_size=1e-2,
+        deriv_routine='gw_signal_tools'
     )
 
     assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=1e-7)
     # Idea: they should converge at similar step size because 1e-1 is very
     # large, no good results will be produced there
-
-class ErrorRaising(unittest.TestCase):
-    def test_wrong_conv_check(self):
-        with self.assertRaises(ValueError):
-            get_waveform_derivative_1D_with_convergence(
-                wf_params,
-                'total_mass',
-                wf_generator,
-                convergence_check=''
-            )

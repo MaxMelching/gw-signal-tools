@@ -4,7 +4,7 @@ import pytest
 
 # ----- Local Package Imports -----
 from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
-from gw_signal_tools.waveform.utils import get_wf_generator
+from gw_signal_tools.waveform import get_wf_generator, norm
 from gw_signal_tools.types import Detector
 from gw_signal_tools.PSDs import psd_no_noise
 
@@ -179,7 +179,6 @@ def test_sys_error(params):
     dict(df=2**-2, min_dt_prec=1e-5*u.s)
 ])
 def test_snr(inner_prod_kwargs):
-    from gw_signal_tools.inner_product import norm
     snr = 0.
     for det in [hanford, livingston]:
         snr += norm(phenomx_generator(wf_params | {'det': det.name}),

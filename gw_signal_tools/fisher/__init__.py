@@ -1,8 +1,6 @@
 # -- Make all important functions/classes from module available here
 from .fisher_utils import (  # noqa: F401
-    num_diff, get_waveform_derivative_1D,
-    get_waveform_derivative_1D_with_convergence, fisher_matrix,
-    fisher_matrix_gw_signal_tools, fisher_matrix_numdifftools
+    num_diff, fisher_matrix
 )
 from .fisher import FisherMatrix  # noqa: F401
 from .fisher_network import FisherMatrixNetwork  # noqa: F401

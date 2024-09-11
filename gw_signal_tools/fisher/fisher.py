@@ -12,23 +12,20 @@ import astropy.units as u
 # ----- Local Package Imports -----
 from ..units import preferred_unit_system
 from ..logging import logger
-from ..waveform.inner_product import (
-    inner_product, norm, optimize_overlap, get_default_opt_params,
-    _INNER_PROD_ARGS
+from ..waveform import (
+    get_wf_generator, inner_product, norm, optimize_overlap,
+    get_default_opt_params, _INNER_PROD_ARGS, WaveformDerivativeGWSignaltools
 )
-from ..waveform.utils import get_wf_generator
 from ..types import MatrixWithUnits
-from .fisher_utils import (
-    get_waveform_derivative_1D_with_convergence,
-    get_waveform_derivative_1D_numdifftools, fisher_matrix
-)
+from .fisher_utils import fisher_matrix
 
 
 __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
 
-
+# TODO: remove return_info option. Should always be true, makes
+# calculations faster and easier to ensure consistency with used derivs
 class FisherMatrix:
     r"""
     A data type tailored to Fisher matrices. It stores the Fisher matrix
@@ -777,26 +774,25 @@ class FisherMatrix:
             # to determine return. For error, parameters that are not in
             # in params still play a role and have to be accounted for.
             _metadata = opt_fisher.metadata.copy()
+            _metadata.pop('return_info', None)
 
             if _metadata.pop('deriv_routine') == 'gw_signal_tools':
                 derivs = [
-                    get_waveform_derivative_1D_with_convergence(
+                    WaveformDerivativeGWSignaltools(
                         opt_fisher.wf_params_at_point,
                         param_to_vary,
                         opt_fisher.wf_generator,
                         **_metadata
-                    ) for param_to_vary in opt_fisher.params_to_vary
+                    ).deriv for param_to_vary in opt_fisher.params_to_vary
                 ]
             else:
-                _metadata.pop('return_info', None)
-                # Now all arguments not accepted are removed
                 derivs = [
-                    get_waveform_derivative_1D_numdifftools(
+                    WaveformDerivativeGWSignaltools(
                         opt_fisher.wf_params_at_point,
                         param_to_vary,
                         opt_fisher.wf_generator,
                         **_metadata
-                    ) for param_to_vary in opt_fisher.params_to_vary
+                    ).deriv for param_to_vary in opt_fisher.params_to_vary
                 ]
         
         if (opt_is_bool and optimize) or isinstance(optimize, list):

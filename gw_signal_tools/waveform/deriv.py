@@ -27,6 +27,7 @@ Module for the `WaveformDerivativeGWSignaltools` and
 class WaveformDerivative():
     """
     Wrapper class for different numerical derivative implementations.
+    -> or call constructor class?
 
     -> to select between available routines, pass keyword 'deriv_routine'
     with string value of 'gw_signal_tools', 'numdifftools',
@@ -55,7 +56,7 @@ class WaveformDerivative():
             case 'amplitude_phase':
                 return WaveformDerivativeAmplitudePhase(*args, **kw_args)
             case _:
-                raise ValueError(f"Invalid deriv_routine '{deriv_routine}'")
+                raise ValueError(f"Invalid deriv_routine '{deriv_routine}'.")
 
 
 # class Derivative():  # TODO: find better name, kind of interferes with numdifftools one

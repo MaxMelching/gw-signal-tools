@@ -83,6 +83,8 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         principle, be either FrequencySeries or TimeSeries, but we only
         rely on Series properties being defined and so it could also be
         just a regular GWpy Series
+
+        information gathered during calculation is stored in self.deriv_info
         """
         # -- Check if analytical derivative has already been calculated
         if hasattr(self, '_ana_deriv'):
@@ -108,7 +110,9 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             }
             return deriv
         
-        deriv = super().__call__(x, *args, **kwds)
+        self.full_output = True
+        deriv, info = super().__call__(x, *args, **kwds)
+        self.deriv_info = info._asdict()
 
         # TODO: use test_point function in case of Input domain error
         # -> could maybe adjust base_step and also the deriv routine
@@ -184,3 +188,27 @@ class WaveformDerivativeAmplitudePhase():
     something like overall final_step_size from the ones for amplitude
     and phase, so class structure and attributes are very different
     """
+    # def abs_wrapper(param_val):
+    #     _wf_params_at_point = wf_params_at_point |{
+    #         param_to_vary: param_val * param_center_unit
+    #     }
+    #     return np.abs(wf_generator(_wf_params_at_point).value)
+
+    # def phase_wrapper(param_val):
+    #     _wf_params_at_point = wf_params_at_point |{
+    #         param_to_vary: param_val * param_center_unit
+    #     }
+    #     return np.unwrap(np.angle(wf_generator(_wf_params_at_point).value))
+    
+    # deriv_abs = nd.Derivative(abs_wrapper, **_deriv_kwargs)
+    # deriv_phase = nd.Derivative(phase_wrapper, **_deriv_kwargs)
+
+    # amp = np.abs(_wf_at_point).value
+    # pha = np.unwrap(np.angle(_wf_at_point)).value
+
+    # return FrequencySeries(
+    #     (deriv_abs(param_center_val)
+    #      + 1.j*amp*deriv_phase(param_center_val)) * np.exp(1j*pha),
+    #     frequencies=_wf_at_point.frequencies,
+    #     unit=_wf_at_point.unit/param_center_unit  # TODO: compose this?
+    # )

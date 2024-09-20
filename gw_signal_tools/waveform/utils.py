@@ -10,14 +10,8 @@ from lalsimulation.gwsignal import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
-<<<<<<< HEAD:gw_signal_tools/waveform_utils.py
 from ..logging import logger
 from ..test_utils import allclose_quantity
-=======
-from ..logging import logger
-from ..caching import cache_func
-from ..test_utils import allclose_quantity
->>>>>>> 9e37970 (Big re-organization or repo. Creating a dedicated waveform module where utils and inner_product are moved. Derivatives now also live there. Adding separate test files for Derivative classes.):gw_signal_tools/waveform/utils.py
 
 
 __doc__ = """

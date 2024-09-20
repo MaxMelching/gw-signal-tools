@@ -22,6 +22,14 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
     Note: for a time domain model, you have to make sure that output
     always has the same size (and is defined on same times)!!!
     Otherwise the required operations do not work
+
+    Note that most attributes here are immutable!
+
+
+    Arbitrary function that is used for waveform generation. The
+    required signature means that it has one non-optional argument,
+    which is expected to accept the input provided in
+    :code:`self.wf_params_at_point`.
     """
     def __init__(
         self,
@@ -56,28 +64,23 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             return None
         
         self._param_center_val = wf_params_at_point[param_to_vary]
-        param_unit = self._param_center_val.unit
+        param_unit = self.param_center_val.unit
         self._wf_generator = wf_generator
         self._wf_params_at_point = wf_params_at_point
         self._param_to_vary = param_to_vary
 
         if 'base_step' not in kwds:
-                kwds['base_step'] = 1e-2*self._param_center_val.value
+                kwds['base_step'] = 1e-2*self.param_center_val.value
 
         def fun(x):
-            return wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+            return self.wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+        # -- Next line stores this function in self.fun
         
-        
-        # super().__init__(fun, step, method, order, n, **options)
         super().__init__(fun, *args, **kwds)
     
-    def __call__(self, x=None, *args, **kwds) -> Any:
+    def __call__(self, x=None) -> Any:
         """
         Get derivative at parameter value x.
-
-        Note that derivative options cannot be passed here anymore! All
-        args and kwds are passed to the function, i.e. the waveform
-        generator!
 
         Return has same type as return of wf_generator. Should, in
         principle, be either FrequencySeries or TimeSeries, but we only
@@ -92,14 +95,19 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         
         # -- Check selected arguments
         if x is None:
-            x = self._param_center_val.value
+            x = self.param_center_val.value
+        elif isinstance(x, u.Quantity):
+            x = x.to_value(self.param_center_val.unit)
+        
+        # TODO: handle case where x is a Quantity
+        # -> convert to unit that param_center_val has and then use its value?
         
 
         # -- Check if parameter has analytical derivative (cannot be in
         # -- previous check because dependent on point)
-        if self._param_to_vary == 'distance':
-            dist_val = x*self._param_center_val.unit
-            wf = self._wf_generator(self._wf_params_at_point | {'distance': dist_val})
+        if self.param_to_vary == 'distance':
+            dist_val = x*self.param_center_val.unit
+            wf = self.wf_generator(self.wf_params_at_point | {'distance': dist_val})
             deriv = (-1./dist_val) * wf
 
             # derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
@@ -111,7 +119,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             return deriv
         
         self.full_output = True
-        deriv, info = super().__call__(x, *args, **kwds)
+        deriv, info = super().__call__(x)
         self.deriv_info = info._asdict()
 
         # TODO: use test_point function in case of Input domain error
@@ -119,28 +127,70 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         # -> works like this: self.fd_rule.method = 'central'
 
 
-        param_unit = self._param_center_val.unit
+        param_unit = self.param_center_val.unit
 
-        wf = self._wf_generator(self._wf_params_at_point)
+        # wf = self._wf_generator(self._wf_params_at_point)
+        # TODO: use x as value for param_to_vary?
+        # -> most natural thing to do is using following call
+        wf = self.fun(x)
         # Idea: use type that wf_generator returns to have flexibility
         # with respect to whether TimeSeries/FrequencySeries is passed
         out = type(wf)(
-        # out = NDFrequencySeries(
             data=deriv,
-            xindex=wf.frequencies,
+            xindex=wf.xindex,
             unit=wf.unit / param_unit
         )
 
         return out
     
+    # -- In case calling seems unintiutive, create attribute
     @property
     def deriv(self) -> Any:
         """Alias for calling with no arguments."""
         return self.__call__()
+    
+    # -- Define certain properties. These have NO setters, on purpose!
+    @property
+    def param_to_vary(self) -> str:
+        """
+        Parameter that derivative is taken with respect to.
+
+        :type: `str`
+        """
+        return self._param_to_vary
+    
+    @property
+    def param_center_val(self) -> u.Quantity:
+        """
+        Value of `self.param_to_vary` at which derivative is taken by
+        default.
+
+        :type: `~astropy.units.Quantity`
+        """
+        return self._param_center_val
+    
+    @property
+    def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]:
+        """
+        Generator for waveform model that is differentiated.
+
+        :type: `Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries | ~gwpy.timeseries.TimeSeries]`
+        """
+        return self._wf_generator
+    
+    @property
+    def wf_params_at_point(self) -> dict[str, u.Quantity]:
+        """
+        Point in parameter space at which waveform is differentiated,
+        encoded as key-value pairs representing parameter-value pairs.
+
+        :type: `dict[str, ~astropy.units.Quantity]`
+        """
+        return self._wf_params_at_point
 
 
-# -- Now: fix bug in nd.Derivative, complex input will throw error. This
-# -- is due to some numpy changes that were not accounted for by nd
+# -- Now: fix bug in nd.Derivative, complex input throws error. This is
+# -- due to numpy changes that were not (yet) addressed by numdifftools
 from numdifftools.limits import _Limit
 import numpy as np
 import warnings
@@ -179,7 +229,6 @@ def _add_error_to_outliers_fixed(der, trim_fact=10):
 _Limit._add_error_to_outliers = staticmethod(_add_error_to_outliers_fixed)
 
 
-# class AmplitudePhaseDerivative():
 class WaveformDerivativeAmplitudePhase():
     """
     Calculate numerical derivative using chain rule. Behaves potentially
@@ -187,28 +236,204 @@ class WaveformDerivativeAmplitudePhase():
     difference to other derivatives: no straightforward way to get
     something like overall final_step_size from the ones for amplitude
     and phase, so class structure and attributes are very different
+
+    disadvantage: has double the calls to waveforms. But in case other
+    routines fail, it might be worth a try. Moreover, if we have
+    waveform caching, this issue should disappear
     """
-    # def abs_wrapper(param_val):
-    #     _wf_params_at_point = wf_params_at_point |{
-    #         param_to_vary: param_val * param_center_unit
-    #     }
-    #     return np.abs(wf_generator(_wf_params_at_point).value)
+    def __init__(
+        self,
+        wf_params_at_point: dict[str, u.Quantity],
+        param_to_vary: str,
+        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
+        *args,
+        **kwds
+    ) -> None:
+        # -- Check if parameter has analytical derivative
+        if (param_to_vary == 'time' or param_to_vary == 'tc'):
+            wf = wf_generator(wf_params_at_point)
+            deriv = wf * (-1.j * 2. * np.pi * wf.frequencies)
 
-    # def phase_wrapper(param_val):
-    #     _wf_params_at_point = wf_params_at_point |{
-    #         param_to_vary: param_val * param_center_unit
-    #     }
-    #     return np.unwrap(np.angle(wf_generator(_wf_params_at_point).value))
+            self.deriv_info = {
+                'description': 'This derivative is exact.'
+            }
+            self._ana_deriv = deriv
+            return None
+        elif (param_to_vary == 'phase' or param_to_vary == 'psi'):
+            wf = wf_generator(wf_params_at_point)
+            
+            if param_to_vary == 'phase':
+                deriv = wf * 1.j / u.rad
+            else:
+                deriv = wf * 2.j / u.rad
+
+            self.deriv_info = {
+                'description': 'This derivative is exact.'
+            }
+            self._ana_deriv = deriv
+            return None
+        
+        self._param_center_val = wf_params_at_point[param_to_vary]
+        param_unit = self.param_center_val.unit
+        self._wf_generator = wf_generator
+        self._wf_params_at_point = wf_params_at_point
+        self._param_to_vary = param_to_vary
+
+        if 'base_step' not in kwds:
+                kwds['base_step'] = 1e-2*self.param_center_val.value
+        
+        # def abs_wrapper(x):
+        #     _wf_params_at_point = wf_params_at_point |{
+        #         param_to_vary: x * param_unit
+        #     }
+        #     return np.abs(wf_generator(_wf_params_at_point).value)
+
+        # def phase_wrapper(x):
+        #     _wf_params_at_point = wf_params_at_point |{
+        #         param_to_vary: x * param_unit
+        #     }
+        #     return np.unwrap(np.angle(wf_generator(_wf_params_at_point).value))
+
+        # -- Defining fun turns out to be useful later on
+        # TODO: decide if calling it in abs_wrapper, phase_wrapper makes sense
+        # -> it does make nice code. And one additional call with single argument should not be too bad
+        def fun(x):
+            return self.wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+        self.fun = fun
+
+        def abs_wrapper(x):
+            return np.abs(self.fun(x).value)
+
+        def phase_wrapper(x):
+            return np.unwrap(np.angle(self.fun(x).value))
+        
+        self._abs_deriv = nd.Derivative(abs_wrapper, *args, **kwds)
+        self._phase_deriv = nd.Derivative(phase_wrapper, *args, **kwds)
     
-    # deriv_abs = nd.Derivative(abs_wrapper, **_deriv_kwargs)
-    # deriv_phase = nd.Derivative(phase_wrapper, **_deriv_kwargs)
+    def __call__(self, x=None, *args, **kwds) -> Any:
+        """
+        Get derivative at parameter value x.
 
-    # amp = np.abs(_wf_at_point).value
-    # pha = np.unwrap(np.angle(_wf_at_point)).value
+        Note that derivative options cannot be passed here anymore! All
+        args and kwds are passed to the function, i.e. the waveform
+        generator!
 
-    # return FrequencySeries(
-    #     (deriv_abs(param_center_val)
-    #      + 1.j*amp*deriv_phase(param_center_val)) * np.exp(1j*pha),
-    #     frequencies=_wf_at_point.frequencies,
-    #     unit=_wf_at_point.unit/param_center_unit  # TODO: compose this?
-    # )
+        Return has same type as return of wf_generator. Should, in
+        principle, be either FrequencySeries or TimeSeries, but we only
+        rely on Series properties being defined and so it could also be
+        just a regular GWpy Series
+
+        information gathered during calculation is stored in self.deriv_info
+        """
+        # -- Check if analytical derivative has already been calculated
+        if hasattr(self, '_ana_deriv'):
+            return self._ana_deriv
+        
+        # -- Check selected arguments
+        if x is None:
+            x = self.param_center_val.value
+        elif isinstance(x, u.Quantity):
+            x = x.to_value(self.param_center_val.unit)
+        
+        # TODO: handle case where x is a Quantity
+        # -> convert to unit that param_center_val has and then use its value?
+        
+
+        # -- Check if parameter has analytical derivative (cannot be in
+        # -- previous check because dependent on point)
+        if self.param_to_vary == 'distance':
+            dist_val = x*self.param_center_val.unit
+            wf = self.wf_generator(self.wf_params_at_point | {'distance': dist_val})
+            deriv = (-1./dist_val) * wf
+
+            # derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
+
+            self.deriv_info = {
+                # 'norm_squared': derivative_norm,
+                'description': 'This derivative is exact.'
+            }
+            return deriv
+        
+
+        self.abs_deriv.full_output = True
+        abs_deriv, abs_info = self.abs_deriv(x, *args, **kwds)
+
+        self.phase_deriv.full_output = True
+        phase_deriv, phase_info = self.phase_deriv(x, *args, **kwds)
+
+        self.deriv_info = {'abs': abs_info._asdict(),
+                           'phase': phase_info._asdict()}
+
+        # TODO: use test_point function in case of Input domain error
+        # -> could maybe adjust base_step and also the deriv routine
+        # -> works like this: self.fd_rule.method = 'central'
+
+
+        param_unit = self.param_center_val.unit
+
+        wf = self.fun(x)
+        ampl = np.abs(wf).value
+        phase = np.unwrap(np.angle(wf)).value
+        # -- Following would be more future proof I think... But involves
+        # -- more calls to function... So should we do it?
+        # ampl = self.abs_fun(x)
+        # phase = self.phase_fun(x)
+
+        deriv = (abs_deriv + 1.j*ampl*phase_deriv) * np.exp(1j*phase)
+
+        # Idea: use type that wf_generator returns to have flexibility
+        # with respect to whether TimeSeries/FrequencySeries is passed
+        out = type(wf)(
+            data=deriv,
+            xindex=wf.frequencies,
+            unit=wf.unit / param_unit
+        )
+
+        return out
+    
+    @property
+    def deriv(self) -> Any:
+        """Alias for calling with no arguments."""
+        return self.__call__()
+    
+    # -- Define certain properties. These have NO setters, on purpose!
+    param_to_vary = property(WaveformDerivativeNumdifftools.param_to_vary)
+    param_center_val = property(WaveformDerivativeNumdifftools.param_center_val)
+    wf_generator = property(WaveformDerivativeNumdifftools.wf_generator)
+    wf_params_at_point = property(WaveformDerivativeNumdifftools.wf_params_at_point)
+
+    @property
+    def abs_deriv(self) -> nd.Derivative:
+        """
+        Wrapper that calculates derivative of waveform amplitude.
+
+        :type: `~numdifftools.core.Derivative`
+        """
+        return self._abs_deriv
+    
+    @property
+    def abs_fun(self) -> Callable[[float], np.ndarray]:
+        """
+        Function that calculates the waveform amplitude.
+
+        :type: `~Callable[[float], ~numpy.ndarray]`
+        """
+        return self.abs_deriv.fun
+    
+    @property
+    def phase_deriv(self) -> nd.Derivative:
+        """
+        Wrapper that calculates derivative of waveform phase.
+
+        :type: `~numdifftools.core.Derivative`
+        """
+        return self._phase_deriv
+    
+    @property
+    def phase_fun(self) -> Callable[[float], np.ndarray]:
+        """
+        Function that calculates the waveform phase.
+
+        :type: `~Callable[[float], ~numpy.ndarray]`
+        """
+        return self.phase_deriv.fun

@@ -41,15 +41,15 @@ import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
-# test_param = 'total_mass'
-test_param = 'mass_ratio'
-# test_param = 'distance'
+# test_param = 'total_mass'  # Differences between routines are 1e-4 smaller than actual values. Good agreement
+test_param = 'mass_ratio'  # Differences between routines are 1e-4 smaller than actual values. Great agreement
+# test_param = 'distance'  # Perfectly equal, as expected
 test = WaveformDerivativeNumdifftools(
     wf_params,
     test_param,
     wf_generator,
     # base_step=1e-2
-    base_step=1e-2*wf_params[test_param].value,
+    # base_step=1e-2*wf_params[test_param].value,
     # method='forward'
     # method='complex'  # Does not work for complex input
 )
@@ -61,28 +61,58 @@ print(WaveformDerivativeNumdifftools.__dict__)
 # print('five_point' in WaveformDerivativeGWSignaltools.__dict__)
 
 
-test_deriv_object = WaveformDerivativeGWSignaltools(
+test_2 = WaveformDerivativeGWSignaltools(
     wf_params_at_point=wf_params,
     param_to_vary=test_param,
     wf_generator=wf_generator
 )
 
-test_deriv = test_deriv_object.deriv
-
-# test_deriv_3 = WaveformDerivativeAmplitudePhase(
-#     wf_params_at_point=wf_params,
-#     param_to_vary=test_param,
-#     wf_generator=wf_generator,
-# )
+test_3 = WaveformDerivativeAmplitudePhase(
+    wf_params_at_point=wf_params,
+    param_to_vary=test_param,
+    wf_generator=wf_generator,
+)
 
 
-# plt.plot(test())
-plt.plot(test.deriv)
-plt.plot(test_deriv, '--')
-# plt.plot(test_deriv_3, ':')
+fig, [ax1, ax2] = plt.subplots(figsize=(18, 6), ncols=2)
 
+# ax1.plot(test.deriv, '-', label='Numdifftools')
+# ax1.plot(test_2.deriv, '--', label='GWSignaltools')
+# ax1.plot(test_3.deriv, ':', label='AmplitudePhase')
+
+# eval_point = wf_params[test_param]
+eval_point = wf_params[test_param]*0.9
+# eval_point = wf_params[test_param]*1.2
+# ax1.plot(test(eval_point), '-', label='Numdifftools')
+# # ax1.plot(test_2(wf_params | {test_param: eval_point}), '--', label='GWSignaltools')
+# ax1.plot(test_2(eval_point), '--', label='GWSignaltools')
+# ax1.plot(test_3(eval_point), ':', label='AmplitudePhase')
+
+test_deriv = test(eval_point)
+test_2_deriv = test_2(eval_point)
+test_3_deriv = test_3(eval_point)
+ax1.plot(test(eval_point), '-', label='Numdifftools')
+# ax1.plot(test_2(wf_params | {test_param: eval_point}), '--', label='GWSignaltools')
+ax1.plot(test_2(eval_point), '--', label='GWSignaltools')
+ax1.plot(test_3(eval_point), ':', label='AmplitudePhase')
+
+ax1.legend()
+
+# ax2.plot(test.deriv - test_2.deriv, '-', label='Numdifftools - GWSignaltools')
+# ax2.plot(test.deriv - test_3.deriv, '--', label='Numdifftools - AmplitudePhase')
+# ax2.plot(test_2.deriv - test_3.deriv, ':', label='GWSignaltools - AmplitudePhase')
+# ax2.plot((test.deriv - test_2.deriv).abs(), '-', label='Numdifftools - GWSignaltools')
+# ax2.plot((test.deriv - test_3.deriv).abs(), '--', label='Numdifftools - AmplitudePhase')
+# ax2.plot((test_2.deriv - test_3.deriv).abs(), ':', label='GWSignaltools - AmplitudePhase')
+
+ax2.plot((test_deriv - test_2_deriv).abs(), '-', label='Numdifftools - GWSignaltools')
+ax2.plot((test_deriv - test_3_deriv).abs(), '--', label='Numdifftools - AmplitudePhase')
+ax2.plot((test_2_deriv - test_3_deriv).abs(), ':', label='GWSignaltools - AmplitudePhase')
+
+ax2.legend()
 
 plt.show()
+
 
 
 # -- Testing n-dim output
@@ -104,41 +134,42 @@ plt.show()
 
 
 # -- Multi-function Testing
-import numpy as np
-import numdifftools as nd
+# import numpy as np
+# import numdifftools as nd
 
 
-func1_counter = 0
-func2_counter = 0
+# func1_counter = 0
+# func2_counter = 0
 
-def func1(x):
-    global func1_counter
-    func1_counter += 1
-    # return x**2
-    return np.sin(x)
+# def func1(x):
+#     global func1_counter
+#     func1_counter += 1
+#     # return x**2
+#     return np.sin(x)
 
-def func2(x):
-    global func2_counter
-    func2_counter += 1
-    return np.exp(x)
+# def func2(x):
+#     global func2_counter
+#     func2_counter += 1
+#     return np.exp(x)
 
-def func(x):
-    return np.stack([func1(x), func2(x)])
+# def func(x):
+#     return np.stack([func1(x), func2(x)])
 
-func_deriv = nd.Derivative(
-    func,
-    base_step=1,  # To provoke slower convergence, test if there is difference
-    full_output=True
-)
+# func_deriv = nd.Derivative(
+#     func,
+#     base_step=1,  # To provoke slower convergence, test if there is difference
+#     full_output=True
+# )
 
-# point = 3
-point = np.linspace(0, 2, num=5)
-num_deriv, info = func_deriv(point)
-print(np.vstack([np.cos(point), np.exp(point)]))
-print(num_deriv)
+# # point = 3
+# point = np.linspace(0, 2, num=5)
+# num_deriv, info = func_deriv(point)
+# print(np.vstack([np.cos(point), np.exp(point)]))
+# print(num_deriv)
 
-print(func1_counter, func2_counter)
-print(info.final_step)
+# print(func1_counter, func2_counter)
+# print(info.final_step)
+
 # Ok, so both counters are equal, which of course makes sense because
 # they are called simultaneously. final_step is more important and it
 # indeed shows that every entry is handled separately (i.e. each row is,

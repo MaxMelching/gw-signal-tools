@@ -11,7 +11,6 @@ import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
 from .logging import logger
-from .caching import cache_func
 from .test_utils import allclose_quantity
 
 
@@ -803,6 +802,7 @@ def get_strain(
 def get_wf_generator(
     approximant: str,
     domain: Literal['frequency', 'time'] = 'frequency',
+    cache: Optional[bool] = None,
     *args, **kwargs
 ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
     """
@@ -823,6 +823,13 @@ def get_wf_generator(
         String representing the domain where the Fisher matrix is
         computed. Accepted values are :code:`'frequency'` and
         :code:`'time'`.
+    cache : boolean, optional, default = None
+        Parameter that controls whether or not the returned function is
+        capable of waveform caching. If None, the current setting from
+        the `~gw_signal_tools.caching` module is taken. If true, caching
+        is enabled, else it is not.
+    args, kwargs :
+        All other arguments are passed on to `get_strain`.
 
     Returns
     -------
@@ -846,11 +853,18 @@ def get_wf_generator(
     """
     generator = gwsignal_get_waveform_generator(approximant)
 
-    @cache_func
     def wf_generator(wf_params):
         return get_strain(wf_params, domain, generator, *args, **kwargs)
-
-    return wf_generator
+    
+    if cache is None:
+        # -- Do whatever current default is
+        from .caching import cache_func
+        return cache_func(wf_generator)
+    elif cache:
+        from .caching import cache
+        return cache(wf_generator)
+    else:
+        return wf_generator
 
 
 # ---------- Mass Rescaling ----------

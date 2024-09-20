@@ -59,8 +59,6 @@ class WaveformDerivative():
                 raise ValueError(f"Invalid deriv_routine '{deriv_routine}'.")
 
 
-# class Derivative():  # TODO: find better name, kind of interferes with numdifftools one
-# class DerivativeFast():
 class WaveformDerivativeGWSignaltools():
     r"""
     Calculate the derivative of an arbitrary waveform with respect to
@@ -226,6 +224,12 @@ class WaveformDerivativeGWSignaltools():
     # -- Properties that are set based on input
     @property
     def wf_params_at_point(self) -> dict[str, u.Quantity]:
+        """
+        Point in parameter space at which waveform is differentiated,
+        encoded as key-value pairs representing parameter-value pairs.
+
+        :type: `dict[str, ~astropy.units.Quantity]`
+        """
         return self._wf_params_at_point
     
     @wf_params_at_point.setter
@@ -243,6 +247,11 @@ class WaveformDerivativeGWSignaltools():
 
     @property
     def param_to_vary(self):
+        """
+        Parameter that derivative is taken with respect to.
+
+        :type: `str`
+        """
         return self._param_to_vary
     
     @param_to_vary.setter
@@ -262,6 +271,11 @@ class WaveformDerivativeGWSignaltools():
 
     @property
     def wf_generator(self):
+        """
+        Generator for waveform model that is differentiated.
+
+        :type: `Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries | ~gwpy.timeseries.TimeSeries]`
+        """
         return self._wf_generator
     
     @wf_generator.setter
@@ -353,6 +367,12 @@ class WaveformDerivativeGWSignaltools():
     # -- Internally used properties
     @property
     def param_center_val(self):
+        """
+        Value of `self.param_to_vary` at which derivative is taken by
+        default.
+
+        :type: `~astropy.units.Quantity`
+        """
         return self.wf_params_at_point[self.param_to_vary]
     # TODO: is this required? -> yup, fairly frequently accessed
 
@@ -620,7 +640,10 @@ class WaveformDerivativeGWSignaltools():
     # is not possible. 
     def __call__(self, new_point: Optional[dict[str, u.Quantity]] = None) -> FrequencySeries | TimeSeries:
         if new_point is not None:
-            self.wf_params_at_point = new_point
+            if isinstance(new_point, u.Quantity):
+                self.wf_params_at_point[self.param_to_vary] = new_point
+            else:
+                self.wf_params_at_point[self.param_to_vary] = new_point*self.param_center_val.unit
         return self.deriv
     
 

@@ -397,10 +397,10 @@ class WaveformDerivativeAmplitudePhase():
         return self.__call__()
     
     # -- Define certain properties. These have NO setters, on purpose!
-    param_to_vary = property(WaveformDerivativeNumdifftools.param_to_vary)
-    param_center_val = property(WaveformDerivativeNumdifftools.param_center_val)
-    wf_generator = property(WaveformDerivativeNumdifftools.wf_generator)
-    wf_params_at_point = property(WaveformDerivativeNumdifftools.wf_params_at_point)
+    param_to_vary = WaveformDerivativeNumdifftools.param_to_vary
+    param_center_val = WaveformDerivativeNumdifftools.param_center_val
+    wf_generator = WaveformDerivativeNumdifftools.wf_generator
+    wf_params_at_point = WaveformDerivativeNumdifftools.wf_params_at_point
 
     @property
     def abs_deriv(self) -> nd.Derivative:

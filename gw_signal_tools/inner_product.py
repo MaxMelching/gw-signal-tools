@@ -1,8 +1,8 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from typing import Optional, Callable, Literal, Final
 from inspect import signature
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from scipy.integrate import simpson
 from scipy.optimize import minimize
@@ -10,7 +10,7 @@ from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from .units import preferred_unit_system
 from .logging import logger
 from .waveform_utils import (
@@ -36,8 +36,11 @@ def inner_product(
     optimize_phase: bool = False,
     min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False
-) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
-    'peak_time'], u.Quantity | TimeSeries]]:
+) -> u.Quantity | tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'],
+         u.Quantity | TimeSeries]
+]:
     r"""
     Calculates the noise-weighted inner product
 
@@ -134,7 +137,7 @@ def inner_product(
     transform of the involved signals. An indicator this might be
     necessary is a shape mismatch error.
     """
-    # ----- Handling of units -----
+    # -- Handling of units
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
     elif isinstance(signal1, TimeSeries):
@@ -155,14 +158,14 @@ def inner_product(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
     
-    # ----- Handling PSD -----
+    # -- Handling PSD
     if psd is None:
         from .PSDs import psd_no_noise
 
         psd = psd_no_noise.copy()
 
-        # Make sure units are consistent with input. PSD is always a density,
-        # i.e. strain per frequency
+        # -- Make sure units are consistent with input. PSD is always a
+        # -- density, i.e. strain per frequency
         psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
         if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
             psd.frequencies *= (frequ_unit / psd_frequ_unit)
@@ -177,35 +180,35 @@ def inner_product(
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
-    # ----- Handling df argument -----
+    # -- Handling df argument
     if df is None:
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
     else:
         try:
             df = u.Quantity(df, unit=frequ_unit)
         except u.UnitConversionError:
-            # Conversion only fails if df is already Quantity and has
-            # non-matching unit, so we can assume that df.unit works
+            # -- Conversion only fails if df is already Quantity and has
+            # -- non-matching unit, so we can assume that df.unit works
             raise ValueError(
                 f'Need consistent frequency units for `df` ({df.unit}) and'
                 f' signals ({frequ_unit}).'
             )
 
-    # ----- If necessary, do fft (padding to ensure -----
-    # ----- sufficient resolution in frequency domain) -----
+    # -- If necessary, do fft (padding to ensure
+    # -- sufficient resolution in frequency domain)
     if isinstance(signal1, TimeSeries):
         signal1 = td_to_fd_waveform(pad_to_get_target_df(signal1, df))
 
     if isinstance(signal2, TimeSeries):
         signal2 = td_to_fd_waveform(pad_to_get_target_df(signal2, df))
         
-    # ----- Handling frequency range -----
+    # -- Handling frequency range
     f_lower, f_upper = [
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
         min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
     ]
 
-    # If bounds are given, check that they fit the input data
+    # -- If bounds are given, check that they fit the input data
     if f_range is not None:
         if len(f_range) != 2:
             raise ValueError(
@@ -214,13 +217,13 @@ def inner_product(
                 'have to be specified if `f_range` is given.'
             )
         
-        # Check if both lower and upper are given or one of them is None
+        # -- Check if both lower and upper are given or one of them is None
         if f_range[0] is not None:
             try:
                 f_lower_new = u.Quantity(f_range[0], unit=frequ_unit)
             except u.UnitConversionError:
-                # Conversion only fails if df is already Quantity and has
-                # non-matching unit, so we can assume that df.unit works
+                # -- Conversion only fails if df is already Quantity and has
+                # -- non-matching unit, so we can assume that df.unit works
                 raise ValueError(
                     'Need consistent frequency units for `f_range` members'
                     f' ({f_range[0].unit}) and signals ({frequ_unit}).'
@@ -232,8 +235,8 @@ def inner_product(
             try:
                 f_upper_new = u.Quantity(f_range[1], unit=frequ_unit)
             except u.UnitConversionError:
-                # Conversion only fails if df is already Quantity and has
-                # non-matching unit, so we can assume that df.unit works
+                # -- Conversion only fails if df is already Quantity and has
+                # -- non-matching unit, so we can assume that df.unit works
                 raise ValueError(
                     'Need consistent frequency units for `f_range` members'
                     f' ({f_range[1].unit}) and signals ({frequ_unit}).'
@@ -243,32 +246,32 @@ def inner_product(
         else:
             f_upper_new = f_upper
 
-        # New lower bound must be greater than current lower bound,
-        # otherwise no values for the range are available in signals
+        # -- New lower bound must be greater than current lower bound,
+        # -- otherwise no values for the range are available in signals
         if f_lower_new >= f_lower:
             f_lower = f_lower_new
         else:
-            # Leave lower bound at f_lower, no update
+            # -- Leave lower bound at f_lower, no update
             logger.info(
                 f'Given lower bound of {f_lower_new} is smaller than '
                 'values available from given signals. Taking a lower '
                 f'bound of {f_lower} instead.'
             )
 
-        # New upper bound must be smaller than current upper bound,
-        # otherwise no values for the range are available in signals
+        # -- New upper bound must be smaller than current upper bound,
+        # -- otherwise no values for the range are available in signals
         if f_upper_new <= f_upper:
             f_upper = f_upper_new
         else:
-            # Leave upper bound at f_upper, no update
+            # -- Leave upper bound at f_upper, no update
             logger.info(
                 f'Given upper bound of {f_upper_new} is larger than '
                 'values available from given signals. Taking an upper '
                 f'bound of {f_upper} instead.'
             )
 
-    # ----- Get signals to same frequencies, i.e. make df -----
-    # ----- equal (if necessary) and then restrict range -----
+    # -- Get signals to same frequencies, i.e. make df
+    # -- equal (if necessary) and then restrict range
     if not (optimize_time_and_phase or optimize_time or optimize_phase):
         target_range = np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value) << frequ_unit
 
@@ -316,7 +319,7 @@ def inner_product(
         )
         
         if optimize_time_and_phase:
-            # Overwrite
+            # -- Overwrite
             optimize_time = True
             optimize_phase = True
 
@@ -331,8 +334,8 @@ def inner_product(
         )
 
 
-# The following would be called in every class instantiation and to
-# avoid these operations, we pre-compute outside of the class
+# -- The following is needed frequently in other files. Makes most sense
+# -- to calculate here already, can then be imported by other files.
 _INNER_PROD_ARGS: Final[list[str]] = list(signature(inner_product).parameters)
 
 
@@ -365,14 +368,14 @@ def inner_product_computation(
     --------
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
-    # ----- Assure same distance of samples -----
+    # -- Assure same distance of samples
     assert (allclose_quantity(signal1.df, psd.df, atol=0., rtol=1e-5)
             and allclose_quantity(signal2.df, psd.df, atol=0., rtol=1e-5)), \
         'Signals must have equal frequency spacing.'
     
-    # Second step: make sure frequencies are sufficiently equal.
-    # Maximum deviation allowed between the is given df, which
-    # determines accuracy the signals have been sampled with.
+    # -- Second step: make sure frequencies are sufficiently equal.
+    # -- Maximum deviation allowed between the is given df, which
+    # -- determines accuracy the signals have been sampled with.
     custom_error_msg = (
         'Frequency samples of input signals are not equal. This might be '
         'due to `df` being too large. If `df` is already small, consider '
@@ -386,9 +389,9 @@ def inner_product_computation(
                                   atol=0.5*signal1.df.value, rtol=0.)), \
             custom_error_msg
     except ValueError:
-        # Due to unequal sample size. Since this is automatically
-        # checked by numpy, we can be sure that signal1.size =
-        # signal2.size = psd.size if this error is not raised
+        # -- Due to unequal sample size. Since this is automatically
+        # -- checked by numpy, we can be sure that signal1.size =
+        # -- signal2.size = psd.size if this error is not raised
         raise ValueError(custom_error_msg)
     
     output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
@@ -397,9 +400,9 @@ def inner_product_computation(
         output_unit = output_unit.compose(units=preferred_unit_system)[0]
     except u.UnitsError:
         output_unit = output_unit.si
-        # Resets scale only for units, not for value. Best we can do in that case
+        # -- Resets scale only for units, not for value. Best we can do
     
-    # To determine factor in front of integral, check if one-sided
+    # -- To determine factor in front of integral, check if one-sided
     one_sided = ((signal1.frequencies[0].value >= 0.0) or
                  (signal1.frequencies[-1].value <= 0.0))
     return (4.0 if one_sided else 2.) * np.real(
@@ -415,8 +418,11 @@ def optimized_inner_product(
     optimize_phase: bool,
     min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False
-) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
-    'peak_time'], u.Quantity | TimeSeries]]:
+) -> u.Quantity | tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'],
+         u.Quantity | TimeSeries]
+]:
     """
     Lower level function for inner product calculation. Only accepts
     signals at identical frequency ranges and then carries out the
@@ -488,12 +494,12 @@ def optimized_inner_product(
     """
     frequ_unit = signal1.frequencies.unit
 
-    # ----- First step: assure same distance of samples -----
+    # -- First step: assure same distance of samples
     assert (allclose_quantity(signal1.df, psd.df, atol=0.0, rtol=1e-5)
             and allclose_quantity(signal2.df, psd.df, atol=0.0, rtol=1e-5)), \
         'Signals must have equal frequency spacing.'
     
-    # ----- Second step: make sure all signals start at valid frequencies -----
+    # -- Second step: make sure all signals start at valid frequencies
     assert ((allclose_quantity(signal1.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
              and allclose_quantity(signal2.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
              and allclose_quantity(psd.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0))
@@ -509,9 +515,9 @@ def optimized_inner_product(
          'mentioned do not apply to the case of a starting frequency f=0, '
          'where both even and odd sample sizes are accepted.')
     
-    # ----- Third step: assure frequencies are sufficiently equal. -----
-    # ----- Maximum deviation allowed between the is given df, which -----
-    # ----- determines accuracy the signals have been sampled with. -----
+    # -- Third step: assure frequencies are sufficiently equal.
+    # -- Maximum deviation allowed between the is given df, which
+    # -- determines accuracy the signals have been sampled with.
     custom_error_msg = (
         'Frequency samples of input signals are not equal. This might be '
         'due to `df` being too large. If `df` is already small, consider '
@@ -524,9 +530,9 @@ def optimized_inner_product(
         assert_allclose_quantity(signal1.frequencies, psd.frequencies,
                                  atol=0.5*signal1.df.value, rtol=0.)
     except ValueError:
-        # Due to unequal sample size. Since this is automatically
-        # checked by numpy, we can be sure that signal1.size =
-        # signal2.size = psd.size if this error is not raised
+        # -- Due to unequal sample size. Since this is automatically
+        # -- checked by numpy, we can be sure that signal1.size =
+        # -- signal2.size = psd.size if this error is not raised
         raise ValueError(custom_error_msg)
     
     # ----- Fourth step: computations -----
@@ -536,16 +542,17 @@ def optimized_inner_product(
         try:
             min_dt_prec = u.Quantity(min_dt_prec, unit=1./frequ_unit)
         except u.UnitConversionError:
-            # Conversion only fails if min_dt_prec is already Quantity and has
-            # non-matching unit, so we can assume that min_dt_prec.unit works
+            # -- Conversion only fails if min_dt_prec is already
+            # -- Quantity and has non-matching unit, so we can assume
+            # -- that min_dt_prec.unit works
             raise ValueError(
                 f'Need consistent units for `min_dt_prec` ({min_dt_prec.unit})'
                 f' and inverse frequency unit of signals ({1./frequ_unit}).'
             )
 
-    # Append zeros or bring into correct format so that ifft can be used.
-    # The prefactor is added here already because it depends on the given
-    # frequency range
+    # -- Append zeros or bring into correct format so that ifft can be
+    # -- used. The prefactor is added here already because it depends on
+    # -- the given frequency range
     if np.isclose(0., dft_vals.f0.value, atol=0.5*dft_vals.df.value, rtol=0.):
         n_append = dft_vals.size - 1
         n_total = dft_vals.size + n_append
@@ -583,18 +590,18 @@ def optimized_inner_product(
         n_append = n_required - dft_vals.size
 
         if n_append % 2 == 0:  # Equivalent to dft_vals.size % 2 == 0
-            # Symmetric appending
+            # -- Symmetric appending
             n_append_lower = n_append_upper = n_append//2
         else:
-            # Via checks at beginning of function, we know that less
-            # values at positive frequencies
+            # -- Via checks at beginning of function, we know that less
+            # -- values at positive frequencies
             n_append_lower = n_append//2 + 1
             n_append_upper = n_append//2
         
         n_split = dft_vals.size//2
-        # Should actually work for all cases. For odd, this rounds down
-        # and thus takes only until f=0 and for even, the positive ones
-        # are expected to be one less than in number than negative
+        # -- Should actually work for all cases. For odd, rounds down
+        # -- and thus takes only until f=0. For even, the positive ones
+        # -- are expected to be one less than in number than negative
 
         full_dft_vals = 2.*np.concatenate(
             (dft_vals.value[n_split:], np.zeros(n_append_upper),
@@ -610,12 +617,12 @@ def optimized_inner_product(
     except u.UnitsError:
         dt = dt.value * dt.unit.si
 
-    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit    
+    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
     try:
         output_unit = output_unit.compose(units=preferred_unit_system)[0]
     except u.UnitsError:
         output_unit = output_unit.si
-        # Resets scale only for units, not for value. Best we can do
+        # -- Resets scale only for units, not for value. Best we can do
 
     match_series = TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
@@ -624,7 +631,7 @@ def optimized_inner_product(
         dt=dt
     )
 
-    # Handle wrap-around of signal
+    # -- Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
     match_series = np.roll(match_series, shift=number_to_roll)
     match_series.shift(-match_series.times[number_to_roll])
@@ -639,7 +646,7 @@ def optimized_inner_product(
         match_result = _match_series[peak_index]
         peak_time = _match_series.times[peak_index]
     else:
-        # Evaluation at t0=0 corresponds to usual inner product
+        # -- Evaluation at t0=0 corresponds to usual inner product
         peak_time = 0.*match_series.times.unit
         peak_index = np.searchsorted(match_series.xindex.value,
                                      peak_time.value, side="left")
@@ -664,8 +671,11 @@ def norm(
     signal: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
-    'peak_time'], u.Quantity | TimeSeries]]:
+) -> u.Quantity | tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'],
+         u.Quantity | TimeSeries]
+]:
     """
     Wrapper function for calculation of the norm of the given
     :code:`signal` (i.e. square root of inner product between
@@ -708,8 +718,11 @@ def overlap(
     signal2: TimeSeries | FrequencySeries,
     *args,
     **kwargs
-) -> u.Quantity | tuple[u.Quantity, dict[Literal['match_series', 'peak_phase',
-    'peak_time'], u.Quantity | TimeSeries]]:
+) -> u.Quantity | tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'],
+         u.Quantity | TimeSeries]
+]:
     """
     Wrapper for calculation of the overlap of two given signals as
     measured by the noise-weighted inner product implemented in
@@ -763,7 +776,7 @@ def overlap(
         return out[0] / normalization, out[1]
 
 
-# ---------- Optimization of Inner Product over Arbitrary Parameters ----------
+# -- Optimization of Inner Product over Arbitrary Parameters ------------------
 # TODO: put this into waveform_utils?
 def test_hm(
     wf_params: dict[str, u.Quantity],
@@ -797,7 +810,8 @@ def test_hm(
     wf_phinonzero = wf_generator(wf_params | {'phi_ref': phi_val})
     
     if overlap(wf_phizero_shifted, wf_phinonzero) > 0.999:
-        # Arbitrary value, but should be sufficient to assess influence of HMs
+        # -- Arbitrary value, but should be sufficient to assess
+        # -- influence of HMs
         return False
     else:
         return True
@@ -831,13 +845,13 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
     """
     # TODO: maybe test for valid spin config?
     for i in [1, 2]:
-        # Check for cartesian components first
+        # -- Check for cartesian components first
         for index in ['x', 'y']:
             try:
                 # if wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled:
                 if (wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled
                     and wf_params[f'spin{i}z'] != 0.*u.dimensionless_unscaled):
-                    # Spins are not parallel to L and not in orbital plane
+                    # -- Spins are not parallel to L and not in orbital plane
                     return True
             except KeyError:
                 pass
@@ -846,7 +860,8 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
         # and in that case, no precession!!!
         # -> but that also depends on mass, very specific... Just neglect?
     
-        # No precession in cartesian components, but spherical ones might be given
+        # -- No precession in cartesian components, but spherical ones
+        # -- might be given
         try:
             if wf_params[f'spin{i}_tilt'] % (np.pi*u.rad) != 0.*u.rad:
                 return True
@@ -881,12 +896,12 @@ def get_default_opt_params(
     """
     default_opt_params = ['time', 'phase']
 
-    if (use_phi_ref_and_phi_jl := test_precessing(wf_params)):
+    if test_precessing(wf_params):
         default_opt_params += ['phi_ref', 'phi_jl']
         # TODO: find good definition of phi_jl. Bilby seems to use it, but in
         # "wrong order": https://git.ligo.org/lscsoft/bilby/-/blob/master/bilby/gw/source.py#L649
-    elif (use_phi_ref := test_hm(wf_params, wf_generator)):
-        # Higher modes might still be relevant for non-precessing
+    elif test_hm(wf_params, wf_generator):
+        # -- Higher modes still be relevant for non-precessing
         default_opt_params += ['phi_ref']
     
     return default_opt_params
@@ -996,34 +1011,34 @@ def optimize_overlap(
     else:
         _opt_params = np.array(opt_params)
 
-        # time and phase indices are accessed frequently, thus store
+        # -- time and phase indices are accessed frequently, thus store
         if 'tc' in _opt_params:
-            time_index = np.argwhere(_opt_params == 'tc')[0,0]
+            time_index = np.argwhere(_opt_params == 'tc')[0, 0]
             inner_prod_kwargs['optimize_time'] = True
 
             if 'time' in _opt_params:
                 raise ValueError('Providing both `\'tc\'` and `\'time\'` is '
                                  'not permitted.')
         elif 'time' in _opt_params:
-            time_index = np.argwhere(_opt_params == 'time')[0,0]
+            time_index = np.argwhere(_opt_params == 'time')[0, 0]
             inner_prod_kwargs['optimize_time'] = True
         else:
             time_index = None
         
         if 'psi' in _opt_params:
-            phase_index = np.argwhere(_opt_params == 'psi')[0,0]
+            phase_index = np.argwhere(_opt_params == 'psi')[0, 0]
             inner_prod_kwargs['optimize_phase'] = True
 
             if 'phase' in _opt_params:
                 raise ValueError('Providing both `\'psi\'` and `\'phase\'` is '
                                  'not permitted.')
         elif 'phase' in _opt_params:
-            phase_index = np.argwhere(_opt_params == 'phase')[0,0]
+            phase_index = np.argwhere(_opt_params == 'phase')[0, 0]
             inner_prod_kwargs['optimize_phase'] = True
         else:
             phase_index = None
         
-        # If only time and/or phase shall be optimized, we can take shortcut
+        # -- If only time and/or phase shall be optimized, we can take shortcut
         if ((len(_opt_params) == 2 and time_index is not None and
              phase_index is not None)
             or (len(_opt_params) == 1 and (time_index is not None or
@@ -1042,13 +1057,13 @@ def optimize_overlap(
 
             if (time_index is not None and
                 (time_param := opt_params[time_index]) == 'time'):
-                # Either time was given or optimization was turned on
-                # with no corresponding parameter in opt_params
+                # -- Either time was given or optimization was turned on
+                # -- with no corresponding parameter in opt_params
                 opt_params_results['time'] = tc
             elif time_index is not None and time_param == 'tc':
                 opt_params_results['tc'] = tc
             else:
-                # No time optimization was carried out
+                # -- No time optimization was carried out
                 pass
 
             if (phase_index is not None and
@@ -1057,15 +1072,15 @@ def optimize_overlap(
             elif phase_index is not None and phase_param == 'psi':
                 opt_params_results['psi'] = 0.5*phic
             else:
-                # No phase optimization was carried out
+                # -- No phase optimization was carried out
                 pass
 
             wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
 
             return wf1, wf2, opt_params_results
         
-        # Check if optimization in inner product is carried out
-        # (can be given as equivalent input to )
+        # -- Check if optimization in inner product is carried out
+        # -- (can be given as equivalent input to )
         if inner_prod_kwargs.get('optimize_time_and_phase', False) \
             or inner_prod_kwargs.get('optimize_time', False) \
             or inner_prod_kwargs.get('optimize_phase', False):
@@ -1083,15 +1098,15 @@ def optimize_overlap(
         else:
             _inner_prod_is_optimized = False
     
-    # We only get to this point if opt_params is list of parameters
+    # -- We only get to this point if opt_params is list of parameters
     def wf2_shifted(args):
         wf_args = wf_params | {param: args[i]*wf_params[param].unit
                                for i, param in enumerate(_opt_params)}
         return vary_wf_generator(wf_args)
 
     inner_prod_kwargs['return_opt_info'] = False
-    # This setting ensures overlap returns a number, which allows for a
-    # more convenient loss definition
+    # -- This setting ensures overlap returns a number, which allows for
+    # -- a more convenient loss definition
     def loss(args):
         _match = overlap(wf1, wf2_shifted(args), **inner_prod_kwargs)
         return 1.-_match
@@ -1100,15 +1115,14 @@ def optimize_overlap(
     
     bounds = len(_opt_params)*[(None, None)]
     if 'phi_ref' in _opt_params:
-        bounds[np.argwhere(_opt_params == 'phi_ref')[0,0]] = (-np.pi, np.pi)
-        # Not 2pi because phi_ref enters as 2*phi_ref in phase, so these
-        # bounds already capture whole range of possible phase values
+        bounds[np.argwhere(_opt_params == 'phi_ref')[0, 0]] = (-np.pi, np.pi)
+        # -- Not 2*pi because phi_ref enters as 2*phi_ref in phase
 
     # TODO: maybe also set bounds for f_ref for example?
     
     result = minimize(fun=loss, x0=init_guess, bounds=bounds,
                       method='Nelder-Mead')
-    # If possible, will find parameters so that mismatch <= 1e-5
+    # -- If possible, will find parameters so that mismatch <= 1e-5
     
     opt_params_results = {param: result.x[i]
                           for i, param in enumerate(_opt_params)}
@@ -1122,33 +1136,28 @@ def optimize_overlap(
     wf2 = wf2_shifted(result.x)
 
     if _inner_prod_is_optimized:
-        # For return of optimized waveform, time and phase have to be
-        # evaluated in values of optimized inner product result
+        # -- For return of optimized waveform, time and phase have to be
+        # -- evaluated in values of optimized inner product result
         _, opt_info = inner_product(wf1, wf2, **(inner_prod_kwargs
                                                  | {'return_opt_info': True}))
         tc = opt_info['peak_time']
         phic = opt_info['peak_phase']
 
-        if (time_index is not None and
-            (time_param := opt_params[time_index]) == 'time'):
-            # Either time was given or optimization was turned on with
-            # no corresponding parameter in opt_params
-            opt_params_results['time'] = tc
-        elif time_index is not None and time_param == 'tc':
-            opt_params_results['tc'] = tc
+        if time_index is not None:            
+            opt_params_results[opt_params[time_index]] = tc
         else:
-            # No time optimization was carried out
+            # -- No time optimization was carried out
             pass
 
-        if (phase_index is not None and
-            (phase_param := opt_params[phase_index]) == 'phase'):
-            # Either phase was given or optimization was turned on with
-            # no corresponding parameter in opt_params
-            opt_params_results['phase'] = phic
-        elif phase_index is not None and phase_param == 'psi':
-            opt_params_results['psi'] = 0.5*phic
+        if phase_index is not None:
+            if opt_params[phase_index] == 'phase':
+                # -- Either phase was given or optimization was turned
+                # -- on with no corresponding parameter in opt_params
+                opt_params_results['phase'] = phic
+            else:
+                opt_params_results['psi'] = 0.5*phic
         else:
-            # No phase optimization was carried out
+            # -- No phase optimization was carried out
             pass
 
         wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)

@@ -857,9 +857,28 @@ class WaveformDerivativeGWSignaltools():
     
 
     def convergence_plot(self) -> mpl.axes.Axes:
+        """
+        Plot estimates for the different step sizes that have been
+        calculated.
+
+        Returns
+        -------
+        matplotlib.axes.Axes
+            Matplotlib axis with the plot.
+
+        Raises
+        ------
+        RuntimeError
+            If no derivates have been calculated.
+        """
         from ..plotting import latexparams
-        # TODO: maybe make sure derivative has been calculated? Maybe
-        # check length of self._derivative_vals
+        # -- Note: importing here is nice because then, custom additions
+        # -- will not cause an error
+
+        if len(self._derivative_vals) == 0:
+            raise RuntimeError('No derivative was calculated. '
+                               'Cannot generate plot.')
+
         fig = plt.figure()
         ax = fig.subplots(nrows=2, sharex=True)
 
@@ -867,11 +886,9 @@ class WaveformDerivativeGWSignaltools():
             ax[0].plot(
                 deriv_val.real,
                 '--',
-                label=f'{self.step_sizes[self.refine_numb][i]:.3e}'
+                label=f'{self.step_sizes[i]:.3e}'
             )
             ax[1].plot(deriv_val.imag, '--')
-            # No label for second because otherwise, everything shows up
-            # twice in figure legend
 
         fig.legend(
             title='Step Sizes',
@@ -882,8 +899,9 @@ class WaveformDerivativeGWSignaltools():
         fig.suptitle(f'Parameter: {latexparams.get(self.param_to_vary, self.param_to_vary)}')
         if isinstance(deriv_val, TimeSeries):
             ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
-        else:
+        elif isinstance(deriv_val, FrequencySeries):
             ax[1].set_xlabel(rf'$f$ [{deriv_val.xindex.unit:latex}]')
+        # -- else we do not know what xindex is, no label
 
         ax[0].set_ylabel('Derivative Re')
         ax[1].set_ylabel('Derivative Im')

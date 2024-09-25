@@ -98,10 +98,6 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             x = self.param_center_val.value
         elif isinstance(x, u.Quantity):
             x = x.to_value(self.param_center_val.unit)
-        
-        # TODO: handle case where x is a Quantity
-        # -> convert to unit that param_center_val has and then use its value?
-        
 
         # -- Check if parameter has analytical derivative (cannot be in
         # -- previous check because dependent on point)
@@ -110,10 +106,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             wf = self.wf_generator(self.wf_params_at_point | {'distance': dist_val})
             deriv = (-1./dist_val) * wf
 
-            # derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
-
             self.deriv_info = {
-                # 'norm_squared': derivative_norm,
                 'description': 'This derivative is exact.'
             }
             return deriv
@@ -129,9 +122,6 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
 
         param_unit = self.param_center_val.unit
 
-        # wf = self._wf_generator(self._wf_params_at_point)
-        # TODO: use x as value for param_to_vary?
-        # -> most natural thing to do is using following call
         wf = self.fun(x)
         # Idea: use type that wf_generator returns to have flexibility
         # with respect to whether TimeSeries/FrequencySeries is passed
@@ -140,6 +130,13 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             xindex=wf.xindex,
             unit=wf.unit / param_unit
         )
+
+        self.error_estimate = type(wf)(
+            data=info.error_estimate,
+            xindex=wf.xindex,
+            unit=wf.unit / param_unit
+        )
+        self.deriv_info['error_estimate'] = self.error_estimate
 
         return out
     
@@ -310,7 +307,7 @@ class WaveformDerivativeAmplitudePhase():
         self._abs_deriv = nd.Derivative(abs_wrapper, *args, **kwds)
         self._phase_deriv = nd.Derivative(phase_wrapper, *args, **kwds)
     
-    def __call__(self, x=None, *args, **kwds) -> Any:
+    def __call__(self, x=None) -> Any:
         """
         Get derivative at parameter value x.
 
@@ -333,11 +330,7 @@ class WaveformDerivativeAmplitudePhase():
         if x is None:
             x = self.param_center_val.value
         elif isinstance(x, u.Quantity):
-            x = x.to_value(self.param_center_val.unit)
-        
-        # TODO: handle case where x is a Quantity
-        # -> convert to unit that param_center_val has and then use its value?
-        
+            x = x.to_value(self.param_center_val.unit)        
 
         # -- Check if parameter has analytical derivative (cannot be in
         # -- previous check because dependent on point)
@@ -346,20 +339,17 @@ class WaveformDerivativeAmplitudePhase():
             wf = self.wf_generator(self.wf_params_at_point | {'distance': dist_val})
             deriv = (-1./dist_val) * wf
 
-            # derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
-
             self.deriv_info = {
-                # 'norm_squared': derivative_norm,
                 'description': 'This derivative is exact.'
             }
             return deriv
         
 
         self.abs_deriv.full_output = True
-        abs_deriv, abs_info = self.abs_deriv(x, *args, **kwds)
+        abs_deriv, abs_info = self.abs_deriv(x)
 
         self.phase_deriv.full_output = True
-        phase_deriv, phase_info = self.phase_deriv(x, *args, **kwds)
+        phase_deriv, phase_info = self.phase_deriv(x)
 
         self.deriv_info = {'abs': abs_info._asdict(),
                            'phase': phase_info._asdict()}

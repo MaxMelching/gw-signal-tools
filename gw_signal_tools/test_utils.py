@@ -1,10 +1,10 @@
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from numpy.testing import assert_allclose
 import astropy.units as u
 from gwpy.types import Series
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from .types import MatrixWithUnits
 
 
@@ -12,8 +12,14 @@ __doc__ = """
 Convenient wrappers to test closeness or equality of various types.
 """
 
+__all__ = (
+    'allclose_quantity', 'assert_allclose_quantity',
+    'assert_allclose_MatrixWithUnits', 'assert_allequal_MatrixWithUnits',
+    'assert_allclose_series', 'assert_allequal_series'
+)
 
-# ----- Quantity equalities -----
+
+# -- Quantity equalities
 def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
                       **kwargs) -> bool:
     """
@@ -86,7 +92,7 @@ def assert_allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args,
     assert_allclose(arr1.value, arr2.value, *args, **kwargs)
 
 
-# ----- MatrixWithUnits equalities -----
+# -- MatrixWithUnits equalities
 def assert_allclose_MatrixWithUnits(
     matr1: MatrixWithUnits,
     matr2: MatrixWithUnits,
@@ -144,7 +150,7 @@ def assert_allequal_MatrixWithUnits(
     assert np.all(matr1 == matr2)  # Uses np.equal already, this is sufficient
 
 
-# ----- GWPy type equalities -----
+# -- GWpy type equalities
 def assert_allclose_series(
     series1: Series,
     series2: Series,

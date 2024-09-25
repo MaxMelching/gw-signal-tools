@@ -15,6 +15,13 @@ from .fisher import FisherMatrix
 from ..types import MatrixWithUnits, Detector
 
 
+__doc__ = """
+Module for the ``FisherMatrixNetwork`` class.
+"""
+
+__all__ = ('FisherMatrixNetwork')
+
+
 class FisherMatrixNetwork(FisherMatrix):
     r"""
     Extension of the ``FisherMatrix`` class to a network of

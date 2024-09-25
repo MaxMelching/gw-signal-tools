@@ -1,7 +1,7 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from typing import Any
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 from gwpy.frequencyseries import FrequencySeries
 
 
@@ -10,6 +10,8 @@ Module for the ``Detector`` class that is intended to provide a simple
 representation of gravitational wave detectors, with all information
 needed by functions in `gw_signal_tools`.
 """
+
+__all__ = ('Detector')
 
 
 class Detector:

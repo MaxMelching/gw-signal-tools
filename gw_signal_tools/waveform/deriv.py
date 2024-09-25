@@ -23,6 +23,8 @@ Module for the `WaveformDerivativeGWSignaltools` and
 `WaveformDerivative` classes.
 """
 
+__all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')
+
 
 class WaveformDerivative():
     """

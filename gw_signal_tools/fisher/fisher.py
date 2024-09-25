@@ -1,20 +1,19 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any, Literal, Callable
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from ..units import preferred_unit_system
 from ..logging import logger
 from ..waveform import (
     get_wf_generator, inner_product, norm, optimize_overlap,
-    get_default_opt_params, _INNER_PROD_ARGS, WaveformDerivativeGWSignaltools
+    get_default_opt_params, _INNER_PROD_ARGS
 )
 from ..types import MatrixWithUnits
 from .fisher_utils import fisher_matrix
@@ -23,6 +22,8 @@ from .fisher_utils import fisher_matrix
 __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
+
+__all__ = ('FisherMatrix')
 
 
 class FisherMatrix:

@@ -24,6 +24,8 @@ Module that contains functions to calculate numerical derivatives of
 gravitational waveforms and also a wrapper to calculate a Fisher matrix.
 """
 
+__all__ = ('num_diff', 'fisher_matrix')
+
 
 def num_diff(  # TODO: move this to deriv file?
     signal: Series | np.ndarray,

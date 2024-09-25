@@ -13,6 +13,8 @@ Module for `WaveformDerivativeNumdifftools` and
 `WaveformDerivativeAmplitudePhase` classes.
 """
 
+__all__ = ('WaveformDerivativeNumdifftools', 'WaveformDerivativeAmplitudePhase')
+
 
 class WaveformDerivativeNumdifftools(nd.Derivative):
     """

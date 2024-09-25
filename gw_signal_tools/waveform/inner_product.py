@@ -24,6 +24,9 @@ Implementation of noise-weighted inner product that is
 common in GW data analysis and helpers for computation.
 """
 
+__all__ = ('inner_product', 'inner_product_computation',
+           'optimized_inner_product', 'optimize_overlap')
+
 
 def inner_product(
     signal1: TimeSeries | FrequencySeries,

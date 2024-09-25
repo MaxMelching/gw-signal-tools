@@ -17,6 +17,8 @@ Module that allows convenient calculation of various distances that can
 be defined on signal manifolds in gravitational wave data analysis.
 """
 
+__all__ = ('distance', 'linearized_distance')
+
 
 def distance(
     param_to_vary: str,

@@ -1,6 +1,9 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from types import UnionType
 from typing import Any
+
+
+__all__ = ('HashableDict')
 
 
 class HashableDict(dict):

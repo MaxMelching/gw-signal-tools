@@ -92,3 +92,12 @@ __all__ += [n for n, v in _ns.items() if isinstance(v, u.UnitBase)]
 __doc__ += '\n\n'
 from astropy.units.utils import generate_unit_summary as _generate_unit_summary
 __doc__ += _generate_unit_summary(globals())
+
+
+# -- Cleanup
+del u
+del def_unit
+del _si
+del _const_si
+del _astrophys
+del gwpy.detector.units

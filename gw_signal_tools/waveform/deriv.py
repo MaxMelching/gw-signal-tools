@@ -28,25 +28,43 @@ __all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')
 
 class WaveformDerivative():
     """
-    Wrapper class for different numerical derivative implementations.
-    -> or call constructor class?
+    Constructor class for numerical derivative of waveforms. This class
+    allows to choose between different implementations by passing the
+    .code:`deriv_routine` argument. All other arguments are passed on to
+    the selected derivative class.
 
-    -> to select between available routines, pass keyword 'deriv_routine'
-    with string value of 'gw_signal_tools', 'numdifftools',
-    'amplitude_phase'
+    Parameters
+    ----------
+    deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase']
+        Available routines.
     
-    
-    advantage custom one: usually faster than others; can lack accuracy
-    for certain configurations though
-    
-    advantage numdiff: is adaptive, refinement only where needed; means
-    will be more accurate sometimes, but also slower
-    
-    advantage amplitudephase: may be benefitial is usual strain
-    oscillates fast and thus has steep derivative (convergence tough);
-    is slowest though, two derivatives have to be calculated
+    Returns
+    -------
+    Instance of requested class.
+
+    Notes
+    -----
+    Here we compare the different available derivative routines.
+
+        - 'gw_signal_tools': usually the fastest method, but can can
+        lack accuracy for certain configurations (since it only refines
+        estimate for whole frequency range, not parts of it)
+
+        - 'numdifftools': can do adaptive refinement only for certain
+        frequencies where convergence is slower, making it potentially
+        more reliable than the previous routine. However, this also
+        requires more waveform calls, making the calculation slower.
+        
+        - 'amplitude_phase': may be beneficial for accuracy in case
+        strain oscillates fast and thus has steep derivative. Then,
+        looking at amplitude and phase separately should yield much more
+        well-posed functions. For usual applications though, it may be
+        significantly slower than the other routines. After all, two
+        derivatives have to be calculated, which means it involves the
+        waveform calls. But in case other routines fail, it might be
+        worth a try. Moreover, this issue depends on whether waveform
+        caching is activated or not.
     """
-    # def __new__(cls, deriv_routine: Optional[str] = 'gw_signal_tools', *args, **kw_args):
     def __new__(cls, *args, **kw_args):
         deriv_routine = kw_args.pop('deriv_routine', 'gw_signal_tools')
 
@@ -67,10 +85,6 @@ class WaveformDerivativeGWSignaltools():
     an arbitrary input parameter in frequency domain, using a selection
     of finite difference methods and a variable criterion to check the
     "quality" of approximation.
-
-    TODO: mention that, in principle, time domain also works. but then
-    one has to make sure manually that signal is always given on same
-    times
 
     Parameters
     ----------
@@ -164,11 +178,6 @@ class WaveformDerivativeGWSignaltools():
         Derivative in frequency space with respect to
         :code:`param_to_vary`. If :code:`return_info = True`, also a
         dictionary with information about the result.
-    
-    See Also
-    --------
-    gw_signal_tools.inner_product.norm :
-        Function used to create the involved inner products.
 
     Raises
     ------
@@ -176,6 +185,18 @@ class WaveformDerivativeGWSignaltools():
         If an invalid value for convergence_check is provided.
     AssertionError
         If an invalid :code:`params_to_vary` is provided.
+    
+    See Also
+    --------
+    gw_signal_tools.inner_product.norm :
+        Function used to create the involved inner products.
+
+    Notes
+    -----
+    In principle, one can also pass a time domain generator as
+    `wf_generator`, but then one might encounter errors due to signal
+    lengths that change when waveforms for multiple parameter values are
+    generated. In that case, the required operations are not possible.
     """
     def __init__(
         self,
@@ -608,6 +629,7 @@ class WaveformDerivativeGWSignaltools():
             self._check_converged()
 
             if self.is_converged and self.break_upon_convergence:
+                # -- Update best fit
                 self.min_dev_index = i  # Then it can also be used to access step_sizes
                 break
 

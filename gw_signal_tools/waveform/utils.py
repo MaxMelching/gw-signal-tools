@@ -1,12 +1,14 @@
 # ----- Standard Lib Imports -----
-from typing import Optional, Literal, Any, Callable
+from typing import Optional, Literal, Callable
 
 # ----- Third Party Imports -----
 import numpy as np
 import astropy.units as u
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
-from lalsimulation.gwsignal import gwsignal_get_waveform_generator
+from lalsimulation.gwsignal import (
+    gwsignal_get_waveform_generator, GravitationalWaveGenerator
+)
 import lalsimulation.gwsignal.core.waveform as wfm
 
 # ----- Local Package Imports -----
@@ -691,7 +693,7 @@ def get_signal_at_target_frequs(
 def get_strain(
     params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
-    generator: Any,
+    generator: GravitationalWaveGenerator,
     mode: Optional[Literal['plus', 'cross', 'mixed']] = None
 ) -> FrequencySeries | TimeSeries:
     """
@@ -714,10 +716,10 @@ def get_strain(
         on the given :code:`mode`.
     domain : Literal['time', 'frequency']
         Determines domain that waveform is generated in.
-    generator : Any
+    generator : lalsimulation.gwsignal.core.waveform.GravitationalWaveGenerator
         Instance of :code:`~lalsimulation.gwsignal.core.waveform.
-        LALCompactBinaryCoalescenceGenerator` class that is used for
-        waveform generation.
+        GravitationalWaveGenerator` class (or a subclass thereof) that
+        can be called for waveform generation.
     mode : Literal['plus', 'cross', 'mixed'], optional, default = None
         If output is not projected on a detector, this argument
         determines which strain is returned. Can be :code:`'plus'` (only
@@ -873,7 +875,7 @@ def get_wf_generator(
 def get_mass_scaled_wf(
     wf_params: dict[str, u.Quantity | float | int],
     domain: Literal['time', 'frequency'],
-    gen: Any,
+    gen: GravitationalWaveGenerator,
     target_unit_sys: Optional[Literal['SI', 'cosmo', 'geom']] = None
 ) -> FrequencySeries | TimeSeries:  # pragma: no cover
     """

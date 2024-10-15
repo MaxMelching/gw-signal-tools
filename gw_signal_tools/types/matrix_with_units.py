@@ -74,9 +74,9 @@ class MatrixWithUnits:
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
     >>> np.all(matrix.value == value_matrix)
-    True
+    np.True_
     >>> np.all(matrix.unit == unit_matrix)
-    True
+    np.True_
 
     Alternatively, one can extract the values by converting to an array,
     which is supposed to simplify usage and provide an easy way to

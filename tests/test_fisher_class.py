@@ -36,9 +36,13 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
-phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross', cache=True)
-phenomd_generator = get_wf_generator('IMRPhenomD', cache=True)
+from gw_signal_tools import enable_caching, disable_caching
+# enable_caching()
+disable_caching()
+
+phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

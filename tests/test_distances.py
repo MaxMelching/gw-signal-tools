@@ -40,7 +40,11 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-wf_gen = get_wf_generator('IMRPhenomXPHM', cache=True)
+from gw_signal_tools import enable_caching, disable_caching
+# enable_caching()
+disable_caching()
+
+wf_gen = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

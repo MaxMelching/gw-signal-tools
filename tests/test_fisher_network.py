@@ -35,9 +35,17 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
-phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross', cache=True)
-phenomd_generator = get_wf_generator('IMRPhenomD', cache=True)
+from gw_signal_tools import enable_caching, disable_caching
+# enable_caching()
+disable_caching()
+# -- Very strange: stuff works with maxsize=5
+
+
+phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+phenomd_generator = get_wf_generator('IMRPhenomD')
+# -- Caching turned off because it produces an error I currently do not
+# -- understand. Only in a single test, but not good
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
@@ -58,6 +66,7 @@ fisher_tot_mass = FisherMatrixNetwork(
 
 #%% -- Simple consistency tests -----------------------------------------------
 def test_single_det_consistency():
+    # phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
     fisher_v1 = FisherMatrixNetwork(
         wf_params,
         'total_mass',
@@ -65,6 +74,10 @@ def test_single_det_consistency():
         [hanford]
     )
 
+    # phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
+    # -- Crazy, uncomment this line and error disappears
+    # print(phenomx_generator.cache_info())
+    # phenomx_generator.cache_clear()  # Does NOT help... So does something happen to params or what?
     fisher_v2 = FisherMatrix(
         wf_params | {'det': 'H1'},
         'total_mass',
@@ -75,7 +88,8 @@ def test_single_det_consistency():
     assert fisher_v1.fisher == fisher_v2.fisher
     assert fisher_v1.snr() == fisher_v2.snr()
 
-    for opt in [False, True]:
+    # for opt in [False, ['time', 'phase']]:  # phi_ref chosen otherwise, but does not help
+    for opt in [False, True]:  # True here is not reason for error (weird choice of params or so)
         sys_error_1 = fisher_v1.systematic_error(
             phenomd_generator,
             optimize=opt,
@@ -93,7 +107,9 @@ def test_single_det_consistency():
         # -- -> vanishes when caching is turned off. Could be due to way
         # --    things are saved during caching, is this something to be
         # --    concerned with?
-
+# test_single_det_consistency()
+# print(hash(wf_params), hash(wf_params | {'phi_ref': 0.*u.rad}))
+# print(hash(wf_params), hash({'phi_ref': 0.*u.rad} | wf_params))
 
 #%% -- Feature tests ----------------------------------------------------------
 @pytest.mark.parametrize('params', [

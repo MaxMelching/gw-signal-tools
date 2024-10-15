@@ -33,9 +33,12 @@ wf_params = HashableDict({
 
 test_params = ['total_mass', 'mass_ratio']
 
+from gw_signal_tools import enable_caching, disable_caching
+# enable_caching()
+disable_caching()
 
 approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant, cache=True)#, mode='mixed')
+wf_generator = get_wf_generator(approximant)#, mode='mixed')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

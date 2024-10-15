@@ -12,7 +12,7 @@ import astropy.units as u
 from ..units import preferred_unit_system
 from ..logging import logger
 from ..waveform import (
-    get_wf_generator, inner_product, norm, optimize_overlap,
+    get_wf_generator, inner_product, norm, overlap, optimize_overlap,
     get_default_opt_params, _INNER_PROD_ARGS
 )
 from ..types import MatrixWithUnits
@@ -675,8 +675,8 @@ class FisherMatrix:
                 **inner_prod_kwargs
             )
             delta_h = opt_wf_1 - opt_wf_2
-            # delta_h = reference_wf_generator(self.wf_params_at_point) \
-            #     - self.wf_generator(self.wf_params_at_point)
+
+            optimization_info['remaining_mismatch'] = 1. - overlap(opt_wf_1, opt_wf_2, **inner_prod_kwargs)
 
             opt_wf_params = self.wf_params_at_point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
@@ -725,8 +725,11 @@ class FisherMatrix:
             # logger.info(f'The optimized Fisher matrix is:\n{opt_fisher}')
             optimization_info['opt_fisher'] = opt_fisher
         elif isinstance(optimize, bool) and not optimize:
-            delta_h = reference_wf_generator(self.wf_params_at_point) \
-                - self.wf_generator(self.wf_params_at_point)
+            wf_1 = reference_wf_generator(self.wf_params_at_point)
+            wf_2 = self.wf_generator(self.wf_params_at_point)
+            delta_h = wf_1 - wf_2
+
+            optimization_info['remaining_mismatch'] = 1. - overlap(wf_1, wf_2, **inner_prod_kwargs)
 
             if optimize_fisher is not None:
                 opt_fisher = self.project_fisher(optimize_fisher)

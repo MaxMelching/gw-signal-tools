@@ -352,10 +352,10 @@ class WaveformDerivativeAmplitudePhase():
     routines provided by the :code:`numdifftools` package. The major
     difference is that we express :math:`h = A \cdot e^{i \cdot \phi}`
     and then calculate the derivatives :math:`\partial_{\theta^\mu} A`,
-    :match:`\partial_{\theta^\mu} \phi` (:math:`\theta^\mu` is some
+    :math:`\partial_{\theta^\mu} \phi` (:math:`\theta^\mu` is some
     arbitrary parameter). This is sufficient as the chain rule yields
-    :math:`\partial^{\theta^\mu} h = (\partial^{\theta^\mu} A + i \cdot
-    \partial^{\theta^\mu} \phi) e^{i \cdot \phi}`.
+    :math:`\partial_{\theta^\mu} h = (\partial_{\theta^\mu} A + i \cdot
+    \partial_{\theta^\mu} \phi) e^{i \cdot \phi}`.
 
     This behaves potentially better mathematically, but also introduces
     some changes from a code perspective compared to the other
@@ -491,8 +491,6 @@ class WaveformDerivativeAmplitudePhase():
         )
 
         return out
-    
-    __call__.__doc__ = WaveformDerivativeNumdifftools.__doc__
     
     @property
     def deriv(self) -> Any:

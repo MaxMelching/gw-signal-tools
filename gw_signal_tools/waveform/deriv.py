@@ -407,6 +407,12 @@ class WaveformDerivativeGWSignaltools():
     # -> maybe out own custom cacher would help here. But not used for now
     @property
     def wf(self) -> FrequencySeries | TimeSeries:
+        """
+        The waveform produced by `self.wf_generator` at
+        `self.wf_params_at_point`.
+
+        :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
+        """
         return self._wf
     
     @wf.setter
@@ -415,6 +421,11 @@ class WaveformDerivativeGWSignaltools():
 
     @property
     def deriv(self):
+        """
+        The derivative at the selected point.
+
+        :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
+        """
         if hasattr(self, '_deriv'):
             # -- Derivative was already computed, just return. We make
             # -- sure that all relevant settings remained the same in

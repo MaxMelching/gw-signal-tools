@@ -637,6 +637,13 @@ def optimized_inner_product(
 
     # -- Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
+    # TODO: can we do better with rolling? The "starting time" of IFT signal
+    # is usually chosen to be the epoch. So couldn't we use that epoch of
+    # h1*conj(h2) should be h1.epoch-h2.epoch? Would then also have to adjust
+    # starting time when setting match series, be consistent there
+    # -> or maybe it does not play role because we can argue via periodicity
+    #    in signal length? Starting time zero should remain
+
     match_series = np.roll(match_series, shift=number_to_roll)
     match_series.shift(-match_series.times[number_to_roll])
 

@@ -9,8 +9,8 @@ from gwpy.timeseries import TimeSeries
 
 
 __doc__ = """
-Module for `WaveformDerivativeNumdifftools` and
-`WaveformDerivativeAmplitudePhase` classes.
+Module for ``WaveformDerivativeNumdifftools`` and
+``WaveformDerivativeAmplitudePhase`` classes.
 """
 
 __all__ = ('WaveformDerivativeNumdifftools', 'WaveformDerivativeAmplitudePhase')

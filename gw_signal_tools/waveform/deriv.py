@@ -19,8 +19,8 @@ from .nd_deriv import (
 
 
 __doc__ = """
-Module for the `WaveformDerivativeGWSignaltools` and
-`WaveformDerivative` classes.
+Module for the ``WaveformDerivative`` and
+``WaveformDerivativeGWSignaltools`` classes.
 """
 
 __all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')

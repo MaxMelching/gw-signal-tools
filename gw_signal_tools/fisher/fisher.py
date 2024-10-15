@@ -23,7 +23,7 @@ __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
 
-__all__ = ('FisherMatrix')
+__all__ = ('FisherMatrix', )
 
 
 class FisherMatrix:
@@ -43,9 +43,7 @@ class FisherMatrix:
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
         Must be compatible with :code:`param_to_vary` input to the
-        function :code:`~gw_signal_tools.fisher.fisher_utils.
-        get_waveform_derivative_1D_with_convergence`, i.e. either
-        :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
+        function :code:`~gw_signal_tools.fisher.fisher_utils.opt_vals
         (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a key
         in :code:`wf_params_at_point`.
         

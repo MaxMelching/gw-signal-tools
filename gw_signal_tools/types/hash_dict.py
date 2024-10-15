@@ -3,7 +3,7 @@ from types import UnionType
 from typing import Any
 
 
-__all__ = ('HashableDict')
+__all__ = ('HashableDict', )
 
 
 class HashableDict(dict):

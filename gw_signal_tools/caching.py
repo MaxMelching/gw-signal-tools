@@ -6,7 +6,7 @@ from typing import Callable
 from gw_signal_tools import logger
 
 
-__all__ = ('disable_caching', 'enable_caching', 'cache')
+__all__ = ('disable_caching', 'enable_caching', 'cache_func', 'use_caching')
 
 
 def _dummy_cache(func):

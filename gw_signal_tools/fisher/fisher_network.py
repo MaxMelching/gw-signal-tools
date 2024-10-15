@@ -19,7 +19,7 @@ __doc__ = """
 Module for the ``FisherMatrixNetwork`` class.
 """
 
-__all__ = ('FisherMatrixNetwork')
+__all__ = ('FisherMatrixNetwork', )
 
 
 class FisherMatrixNetwork(FisherMatrix):

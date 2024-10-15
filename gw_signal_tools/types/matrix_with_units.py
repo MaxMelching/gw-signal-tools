@@ -13,7 +13,7 @@ Module for the ``MatrixWithUnits`` class that is intended to enable the
 use of astropy units with matrices.
 """
 
-_all__ = ('MatrixWithUnits')
+_all__ = ('MatrixWithUnits', )
 
 
 class MatrixWithUnits:

@@ -11,7 +11,7 @@ representation of gravitational wave detectors, with all information
 needed by functions in `gw_signal_tools`.
 """
 
-__all__ = ('Detector')
+__all__ = ('Detector', )
 
 
 class Detector:

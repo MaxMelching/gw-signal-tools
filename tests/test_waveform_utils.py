@@ -1,7 +1,7 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import unittest
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from numpy.testing import assert_allclose
 import astropy.units as u
@@ -11,7 +11,7 @@ from gwpy.testing.utils import assert_quantity_equal
 from gwpy.frequencyseries import FrequencySeries
 import pytest
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.waveform.utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
@@ -24,7 +24,7 @@ from gw_signal_tools.test_utils import (
 )
 
 
-# We will perform tests with a GW150914-like signal
+#%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
@@ -44,8 +44,14 @@ wf_params = {
     'condition': 0
 }
 
+# -- Make sure mass1 and mass2 are not in default_dict
+import lalsimulation.gwsignal.core.parameter_conventions as pc
+pc.default_dict.pop('mass1', None);
+pc.default_dict.pop('mass2', None);
+
 approximant = 'IMRPhenomXPHM'
 gen = gwsignal_get_waveform_generator(approximant)
+
 def td_wf_gen(wf_params):
     return wfm.GenerateTDWaveform(wf_params, gen)
 
@@ -68,7 +74,7 @@ hc_f_coarse.override_unit(u.s)
 # lal, not because of error in gw_signal_tools code
 
 
-#%% ---------- Testing transformation into one domain and back ----------
+#%% -- Testing transformation into one domain and back ------------------------
 def test_ifft_fft_consistency():
     f_min_comp, f_max_comp = 20.0 * u.Hz, 512.0 * u.Hz  # Restrict to interesting region, elsewhere only values close to zero and thus numerical errors might occur
 
@@ -125,7 +131,7 @@ def test_fft_ifft_consistency():
     # assert_quantity_equal(hp_t_cropped, hp_t_fft_ifft_fine_cropped)
 
 
-#%% ---------- Testing transformations with generated signals from different domain ----------
+#%% -- Testing transformations with generated signals from different domain ---
 def test_fd_td_consistency():
     # NOTE: we have to apply different thresholds for certain frequency regions here.
     # For f_min_comp close to f_min from the parameter dictionary above, the threshold
@@ -158,7 +164,6 @@ def test_fd_td_consistency():
     # assert_quantity_equal(hp_f_fine_cropped, hp_t_f_fine_cropped)
 
 
-
     f_min_comp, f_max_comp = 25.0 * u.Hz, 512.0 * u.Hz  # Restrict to interesting region, elsewhere only values close to zero and thus numerical errors might occur
     
     hp_t_f_coarse = td_to_fd_waveform(hp_t)
@@ -178,7 +183,7 @@ def test_fd_td_consistency():
     assert_allclose(hp_f_fine_cropped, hp_t_f_fine_cropped, atol=0.0, rtol=0.01)
 
 
-#%% ---------- Verification of complex transformation ----------
+#%% -- Verification of complex transformation ---------------------------------
 def test_complex_fft_ifft_consistency():
     h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
     # Padding hp_t to make sure resolution is sufficient and to avoid
@@ -188,6 +193,7 @@ def test_complex_fft_ifft_consistency():
     t_min, t_max = max(hp_t.times[0], h_symm_t.times[0]), min(hp_t.times[-1], h_symm_t.times[-1])
     assert_allclose(hp_t.crop(t_min, t_max).times, h_symm_t.crop(t_min, t_max).times, atol=5e-12, rtol=0)
     assert_allclose(hp_t.crop(t_min, t_max).value, h_symm_t.crop(t_min, t_max).value, atol=5e-27, rtol=0)
+
 
 def test_complex_ifft_fft_consistency():
     h_symm = FrequencySeries(
@@ -209,6 +215,7 @@ def test_complex_ifft_fft_consistency():
     # f_min_comp, f_max_comp = 25.0 * u.Hz, 512.0 * u.Hz  # Restrict to interesting region, elsewhere only values close to zero and thus numerical errors might occur
     # assert_allclose_series(h_symm.crop(start=f_min_comp, end=f_max_comp), h_symm_f.crop(start=f_min_comp, end=f_max_comp), atol=0., rtol=0.)
 
+
 def test_complex_and_real_fft_consistency():
     h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
     # Padding hp_t to make sure resolution is sufficient and to avoid
@@ -222,6 +229,7 @@ def test_complex_and_real_fft_consistency():
     # Note: as https://en.wikipedia.org/wiki/Fourier_transform#Conjugation
     # shows, real signals have the following property: real part of Fourier
     # spectrum is symmetric around f=0, while imaginary part is antisymmetric.
+
 
 def test_complex_and_real_ifft_consistency():
     h_symm = FrequencySeries(
@@ -237,7 +245,7 @@ def test_complex_and_real_ifft_consistency():
     assert_allclose_quantity(h_t, h_symm_t[:-1], atol=2e-24, rtol=0)  # Context: peaks are at roughly 1e-21
 
 
-#%% ---------- Testing helper functions for frequency region stuff ----------
+#%% -- Testing helper functions for frequency region stuff --------------------
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])
 # These input values are powers of two, have to be reproduced exactly
 def test_pad_to_target_df_exact(df):
@@ -707,7 +715,7 @@ def test_fill_f_range(fill_val):
 
 
 
- #%% ---------- Testing get_strain function ----------
+ #%% -- Testing get_strain function -------------------------------------------
 # Goal is essentially just to make sure code works
 def test_get_strain_no_extrinsic():
     # Not sure we can capture this in parametrize, problem is how to
@@ -768,7 +776,8 @@ class ErrorRaising(unittest.TestCase):
         with self.assertRaises(ValueError):
             get_strain(wf_params | {'psi': 0.5*u.rad}, 'time', generator=gen)
 
-#%% ---------- Testing mass rescaling ----------
+
+#%% -- Testing mass rescaling -------------------------------------------------
 
 # TODO: get this to work
 

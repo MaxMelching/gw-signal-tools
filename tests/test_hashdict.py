@@ -1,10 +1,12 @@
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.types import HashableDict
+
 
 def test_hashing():
     hash_dict = HashableDict(a=2)
 
     hash_dict.__hash__()
+
 
 def test_hashdict_union():
     dict_no_hash = dict(a=1)

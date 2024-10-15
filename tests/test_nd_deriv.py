@@ -1,19 +1,20 @@
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import astropy.units as u
 import matplotlib.pyplot as plt
 
-# ----- Local Package Imports -----
-from gw_signal_tools.waveform.utils import get_wf_generator
+# -- Local Package Imports
 from gw_signal_tools.waveform import (
     WaveformDerivativeGWSignaltools, WaveformDerivativeNumdifftools,
-    WaveformDerivativeAmplitudePhase, WaveformDerivative
+    WaveformDerivativeAmplitudePhase, WaveformDerivative, get_wf_generator
 )
+from gw_signal_tools.types import HashableDict
 
 
+#%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -28,15 +29,15 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
 test_params = ['total_mass', 'mass_ratio']
 
 
 approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)#, mode='mixed')
+wf_generator = get_wf_generator(approximant, cache=True)#, mode='mixed')
 
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+# -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
@@ -55,10 +56,10 @@ nd_deriv = WaveformDerivativeNumdifftools(
 )
 
 
-# -- Comparison with custom Derivative class
-print(WaveformDerivativeGWSignaltools.__dict__)
-print(WaveformDerivativeNumdifftools.__dict__)
-# print('five_point' in WaveformDerivativeGWSignaltools.__dict__)
+#%% -- Comparison with custom Derivative class --------------------------------
+# print(WaveformDerivativeGWSignaltools.__dict__)
+# print(WaveformDerivativeNumdifftools.__dict__)
+# -- To check that docstring is transferred
 
 
 gwsignal_deriv = WaveformDerivativeGWSignaltools(

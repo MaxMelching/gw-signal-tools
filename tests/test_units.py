@@ -1,8 +1,8 @@
-# ----- Third party imports -----
+# -- Third party imports
 import pytest
 import astropy.units as u
 
-# ----- Local package imports -----
+# -- Local package imports
 from gw_signal_tools.units import gw_signal_tools_units
 # Do NOT import preferred_unit_system here, want to test the one from package
 
@@ -18,6 +18,7 @@ def test_pure_base_units(unit):
         assert unit.compose(units=gw_signal_tools_units)[0] == unit
     
     unit.si  # Is fallback option, access must work
+
 
 def test_composite_units():
     test_unit = u.Hz**2 * u.s
@@ -64,6 +65,7 @@ def test_composite_units():
     assert test_unit_converted1 == test_unit_converted1
     assert test_unit_converted1 == (42 * u.Gpc * u.Msun)
 
+
 def test_strain_definition():
     strain1 = u.Unit('strain')  # Same as u.strain
 
@@ -76,6 +78,7 @@ def test_strain_definition():
     assert strain2.compose(units=gw_signal_tools_units)[0] != u.dimensionless_unscaled
 
     assert u.dimensionless_unscaled.compose(units=gw_signal_tools_units)[0] == u.dimensionless_unscaled
+
 
 def test_docstring():
     assert gw_signal_tools_units.__doc__ is not None

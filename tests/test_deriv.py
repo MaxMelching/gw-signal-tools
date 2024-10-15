@@ -15,13 +15,14 @@ from gw_signal_tools.waveform import (
     get_wf_generator, norm, WaveformDerivativeGWSignaltools,
     WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
 )
+from gw_signal_tools.types import HashableDict
 
 
 #%% -- Initializing commonly used variables for Fisher tests ------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -36,14 +37,14 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
 test_params = ['total_mass', 'mass_ratio']
 
 approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)
+wf_generator = get_wf_generator(approximant, cache=True)
 
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+# -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
@@ -69,14 +70,13 @@ def test_step_size(param, q_val, break_conv):
         step_sizes=deriv_info['final_step_size']
     ).deriv
 
-    # These must be equal (not just close)
+    # -- These must be equal (not just close)
     if break_conv:
         assert_allclose_series(deriv, deriv_fixed_step_size, atol=0.0, rtol=0.0)
     else:
         deriv.crop(end=256 * u.Hz, copy=False)
         deriv_fixed_step_size.crop(end=256 * u.Hz, copy=False)
 
-        # assert_allclose_frequseries(deriv, deriv_fixed_step_size, atol=2e-24, rtol=6e-4)
         if param != 'total_mass':
             assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-24, rtol=2e-3)
         else:
@@ -124,6 +124,7 @@ def test_step_size(param, q_val, break_conv):
     # plt.legend()
     # plt.show()
 
+
 @pytest.mark.parametrize('param', test_params)
 def test_custom_convergence(param):
     deriv_1 = WaveformDerivativeGWSignaltools(
@@ -137,10 +138,11 @@ def test_custom_convergence(param):
         param,
         wf_generator,
         step_sizes=[1.5e-2, 1e-2]
-        # Force convergence testing -> now need two, otherwise no refinement
+        # -- Force convergence testing (need two step sizes for that)
     ).deriv
 
     assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
+
 
 def test_invalid_step_size():
     param = 'mass_ratio'
@@ -153,7 +155,8 @@ def test_invalid_step_size():
         max_refine_numb=1,
         deriv_formula='forward'
     ).deriv
-    # Idea: provoke error for complete coverage, then use same step size as below
+    # -- Idea: provoke error for complete coverage, then use same step
+    # -- size as below
 
     deriv_2 = WaveformDerivativeGWSignaltools(
         wf_params | {'mass_ratio': param_val},
@@ -162,9 +165,8 @@ def test_invalid_step_size():
         step_sizes=[1e-2],
         deriv_formula='forward'
     ).deriv
-
-    # We cannot expect equality anymore, because of error handling
-    # -> ah, can pass same formula
+    # -- Important: have to pass same formula that is used after
+    # -- adjustment in previous call
 
     assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
 
@@ -194,23 +196,24 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
     mask = deriv.frequencies <= 256.0 * u.Hz
 
     assert_allclose(deriv[mask], nd_deriv[mask], atol=0.0, rtol=0.06)
-    # Once again, the problems seem to occur mostly around zeros, which is
-    # also the reason why we exclude values where derivative is close to zero
+    # -- Once again, the problems seem to occur mostly around zeros,
+    # -- which is also the reason why we exclude values where derivative
+    # -- is close to zero
 
 
-    # Check Fisher values
+    # -- Check Fisher values
     assert_allclose_quantity(
         norm(deriv),
         norm(nd_deriv),
         atol=0.0,
         rtol=5e-4
     )
-    # Very good agreement, supports claim above that most severe relative
-    # differences occur around zeros, where impact is not very high.
-    # Note that no frequency regions are excluded here
+    # -- Very good agreement, supports claim above that most severe
+    # -- relative differences occur around zeros, where impact is not
+    # -- very high. Note that no frequency regions are excluded here
     
 
-    # Eye test: here are plots of the derivatives
+    # -- Eye test: here are plots of the derivatives
     # plt.plot(deriv.real)
     # plt.plot(deriv.imag)
     # plt.plot(deriv.frequencies, nd_deriv.real, '--')
@@ -218,6 +221,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
 
     # plt.title(param_to_vary)
     # plt.show()
+
 
 # TODO: test how things behave with smaller df!!!
 

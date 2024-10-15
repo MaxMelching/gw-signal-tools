@@ -7,7 +7,6 @@ from numpy.testing import assert_allclose
 import matplotlib.pyplot as plt
 import astropy.units as u
 from gwpy.types import Series
-from gwpy.frequencyseries import FrequencySeries
 import pytest
 
 # -- Local Package Imports
@@ -16,6 +15,7 @@ from gw_signal_tools.test_utils import (
 )
 from gw_signal_tools.waveform import get_wf_generator
 from gw_signal_tools.fisher import num_diff, fisher_matrix
+from gw_signal_tools.types import HashableDict
 
 
 #%% -- Testing Derivative Methods ---------------------------------------------
@@ -31,10 +31,12 @@ def test_num_diff():
     derivative_vals = num_diff(func_vals, h=step_size)
 
     assert_allclose(derivative_vals[2 : -2], x_vals[2 : -2], atol=0.0, rtol=0.01)
-    assert_allclose(derivative_vals[1:2], x_vals[1:2], atol=0.0, rtol=0.01)  # First correct value is zero, thus relative deviation is always 1
+    assert_allclose(derivative_vals[1:2], x_vals[1:2], atol=0.0, rtol=0.01)
     assert_allclose(derivative_vals[-2:], x_vals[-2:], atol=0.0, rtol=0.01)
-    # NOTE: for values at border of interval, rule is not applicable.
-    # Thus we make separate checks, methods could be less accurate there
+    # -- Note: for values at border of interval, rule is not applicable.
+    # -- Thus we make separate checks, methods could be less accurate
+    # -- there. For example, the first correct value is zero, thus the
+    # -- relative deviation is always 1
 
     func_vals = np.sin(x_vals)
 
@@ -43,6 +45,7 @@ def test_num_diff():
     assert_allclose(derivative_vals[2 : -2], np.cos(x_vals)[2 : -2], atol=0.0, rtol=0.01)
     assert_allclose(derivative_vals[:2], np.cos(x_vals)[:2], atol=0.0, rtol=0.01)
     assert_allclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02)
+
 
 @pytest.mark.parametrize('h', [None, 1e-2, 1e-2*u.s])
 def test_num_diff_input(h):
@@ -60,7 +63,7 @@ def test_num_diff_input(h):
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -75,15 +78,15 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
 test_params = ['total_mass', 'mass_ratio']
 
 
 approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)
+wf_generator = get_wf_generator(approximant, cache=True)
 
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+# -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
@@ -100,7 +103,6 @@ def test_convergence_check(break_conv):
         break_upon_convergence=break_conv,
         deriv_routine='gw_signal_tools'
     )
-    plt.close()
     
     fisher_mismatch = fisher_matrix(
         wf_params,
@@ -110,7 +112,6 @@ def test_convergence_check(break_conv):
         break_upon_convergence=break_conv,
         deriv_routine='gw_signal_tools'
     )
-    plt.close()
 
     if break_conv:
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
@@ -118,6 +119,7 @@ def test_convergence_check(break_conv):
     else:
         assert_allclose_MatrixWithUnits(fisher_diff_norm, fisher_mismatch,
                                         atol=0.0, rtol=3e-6)
+
 
 @pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
 def test_break_upon_convergence(crit):
@@ -142,15 +144,17 @@ def test_break_upon_convergence(crit):
     plt.close()
 
     assert_allclose_MatrixWithUnits(fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=2e-3)
-    # Small deviations are expected, different final step sizes might be selected
-    # -> total mass has largest deviations, otherwise rtol=1e-3 would work
+    # --  Small deviations are expected, different final step sizes
+    # -- might be selected -> total mass has largest deviations,
+    # -- otherwise rtol=1e-3 would work
+
 
 @pytest.mark.parametrize('conv_crit', ['diff_norm', 'mismatch'])
 def test_optimize(conv_crit):
     params_to_vary = ['total_mass', 'time', 'phase']
 
-    # For diagonal values, optimization must yield same result (up to
-    # differences in the routines)
+    # -- For diagonal values, optimization must yield same result (up to
+    # -- differences in the routines)
     fisher_non_opt = fisher_matrix(
         wf_params,
         params_to_vary,
@@ -173,6 +177,7 @@ def test_optimize(conv_crit):
         atol=0.0, rtol=0.005
     )
 
+
 def test_start_step_size():
     fisher_1 = fisher_matrix(
         wf_params,
@@ -191,5 +196,5 @@ def test_start_step_size():
     )
 
     assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=1e-7)
-    # Idea: they should converge at similar step size because 1e-1 is very
-    # large, no good results will be produced there
+    # -- Idea: they should converge at similar step size because 1e-1 is
+    # -- very large, no good results will be produced there

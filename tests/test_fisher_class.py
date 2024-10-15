@@ -1,12 +1,12 @@
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 import astropy.units as u
 import matplotlib.pyplot as plt
 import pytest
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.waveform import get_wf_generator, norm
-from gw_signal_tools.types import MatrixWithUnits
+from gw_signal_tools.types import MatrixWithUnits, HashableDict
 from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
@@ -16,11 +16,11 @@ from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)
 
 
-#%% Initializing commonly used variables
+#%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -34,13 +34,13 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
-approximant = 'IMRPhenomXPHM'
-phenomx_generator = get_wf_generator(approximant)
-phenomx_cross_generator = get_wf_generator(approximant, mode='cross')
+phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
+phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross', cache=True)
+phenomd_generator = get_wf_generator('IMRPhenomD', cache=True)
 
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+# -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
@@ -53,12 +53,13 @@ fisher_tot_mass = FisherMatrix(
 )
 
 
-#%% ----- Simple consistency tests -----
+#%% -- Simple consistency tests -----------------------------------------------
 def test_unit():
-    # All ways of accessing must work
+    # -- All ways of accessing must work
     assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
     assert fisher_tot_mass.fisher.unit[0, 0] == 1/u.solMass**2
     assert fisher_tot_mass.unit[0, 0] == 1/u.solMass**2
+
 
 def test_inverse():
     assert np.all(np.equal(np.linalg.inv(fisher_tot_mass.fisher.value),
@@ -66,7 +67,8 @@ def test_inverse():
     
     assert np.all(np.equal(fisher_tot_mass.fisher.unit**-1,
                            fisher_tot_mass.fisher_inverse.unit))
-    
+
+
 def test_fisher_calc():
     fisher_tot_mass_2 = fisher_matrix(
         wf_params,
@@ -75,6 +77,7 @@ def test_fisher_calc():
         deriv_routine='gw_signal_tools'
     )
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
+
 
 def test_criterion_consistency():
     fisher_tot_mass_2 = fisher_matrix(
@@ -88,9 +91,10 @@ def test_criterion_consistency():
     assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
                                     atol=0.0, rtol=5e-5)
 
+
 def test_time_and_phase_shift_consistency():
-    # Idea: time and phase shift in the waveform should not have effect
-    # on Fisher matrix entries, cancel out in inner product
+    # -- Idea: time and phase shift in the waveform should not have
+    # -- effect on Fisher matrix entries, cancel out in inner product
     t_shift = 1e-3 * u.s
     phase_shift = 1e-2 * u.rad
 
@@ -119,6 +123,7 @@ def test_time_and_phase_shift_consistency():
     # below all diagonal values (which means it is of the order of
     # 1e-50). This deviation can certainly be tolerated.
 
+
 def test_deriv_routine_consistency():
     calc_params = ['total_mass', 'distance', 'time', 'phase']
 
@@ -138,8 +143,9 @@ def test_deriv_routine_consistency():
 
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
                                     atol=1.42e-39, rtol=0.)
-    # Comparing values manually, this absolute deviation indicates that
-    # impact of different routines on Fisher is not really siginificant
+    # -- Comparing values manually, this absolute deviation indicates
+    # -- that impact of different routines on is not really siginificant
+
 
 def test_base_step_consistency():
     calc_params = ['total_mass', 'distance', 'time', 'phase']
@@ -161,12 +167,13 @@ def test_base_step_consistency():
 
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
                                     atol=6.2e-40, rtol=0.)
-    # Really good agreement upon manual inspection
+    # -- Really good agreement upon manual inspection
 
 
-#%% ----- Feature tests -----
+#%% -- Feature tests ----------------------------------------------------------
 def test_covmat():
     fisher_tot_mass.covariance_matrix
+
 
 def test_get_indices():
     test_params = ['total_mass', 'time', 'phase']
@@ -183,7 +190,6 @@ def test_get_indices():
     assert np.all(indices_1 == np.array([1, 2]))
     assert np.all(indices_2 == np.array([2, 1]))
 
-
     grid_1 = fisher.get_sub_matrix_indices(['time', 'phase'])
     sub_matr_1 = [[fisher.fisher[1, 1], fisher.fisher[1, 2]],
                   [fisher.fisher[2, 1], fisher.fisher[2, 2]]]
@@ -192,9 +198,6 @@ def test_get_indices():
     sub_matr_2 = [[fisher.fisher[2, 2], fisher.fisher[2, 1]],
                   [fisher.fisher[1, 2], fisher.fisher[1, 1]]]
 
-
-    # assert np.all(fisher.fisher[grid_1] == np.array(sub_matr_1))
-    # assert np.all(fisher.fisher[grid_2] == np.array(sub_matr_2))
     for index in np.ndindex((2, 2)):
         i, j = index
         assert fisher.fisher[grid_1][i, j] == sub_matr_1[i][j]
@@ -202,6 +205,7 @@ def test_get_indices():
     
     with pytest.raises(ValueError):
         fisher.get_param_indices('mass_ratio')
+
 
 @pytest.mark.parametrize('inner_prod_kwargs', [
     dict(f_range=[f_min, f_max]),
@@ -217,6 +221,7 @@ def test_inner_prod_kwargs(inner_prod_kwargs):
         **inner_prod_kwargs
     )
     assert fisher._inner_prod_kwargs == inner_prod_kwargs
+
 
 def test_attribute_getting():
     fisher = FisherMatrix(
@@ -255,8 +260,10 @@ def test_attribute_getting():
     )
     fisher._deriv_info
 
+
 def test_repr():
     print(fisher_tot_mass)
+
 
 def test_project():
     test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
@@ -274,13 +281,14 @@ def test_project():
     assert np.all(np.equal(fisher_projected.params_to_vary,
                            ['total_mass', 'mass_ratio', 'phase', 'distance']))
 
+
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
 def test_stat_error(params):
     fisher_tot_mass.statistical_error(params)
 
+
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass', 'time', 'phase']])
 def test_sys_error(params):
-    phenomd_generator = FisherMatrix.get_wf_generator('IMRPhenomD')
     fisher = FisherMatrix(
         wf_params,
         ['total_mass', 'time', 'phase'],
@@ -315,6 +323,7 @@ def test_sys_error(params):
     
     fisher.systematic_error(phenomd_generator, optimize='psi')
 
+
 @pytest.mark.parametrize('inner_prod_kwargs', [
     {},
     dict(f_range=[20.*u.Hz, 42.*u.Hz]),
@@ -323,6 +332,7 @@ def test_sys_error(params):
 def test_snr(inner_prod_kwargs):
     snr = norm(phenomx_generator(wf_params), **inner_prod_kwargs)
     assert snr == fisher_tot_mass.snr(**inner_prod_kwargs)
+
 
 def test_plot():
     MatrixWithUnits.plot(fisher_tot_mass.fisher)
@@ -342,6 +352,7 @@ def test_plot():
 
     fisher_tot_mass.plot(only_fisher_inverse=True)
     plt.close()
+
 
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
@@ -370,6 +381,7 @@ def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
         assert fisher_tot_mass_v2.wf_generator == new_wf_generator
     assert fisher_tot_mass_v2.metadata == (fisher_tot_mass.metadata | new_metadata)
 
+
 def test_copy():
     fisher_copy = fisher_tot_mass.copy()
     
@@ -388,9 +400,9 @@ def test_copy():
     assert fisher_tot_mass.is_projected == False
 
 
-#%% Confirm that certain errors are raised
+#%% -- Confirm that certain errors are raised ---------------------------------
 def test_immutable():
-    # Setting Fisher matrix related attributes should throw error
+    # -- Setting Fisher matrix related attributes should throw error
     with pytest.raises(AttributeError):
         fisher_tot_mass.fisher = 42
 

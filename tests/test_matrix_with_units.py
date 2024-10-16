@@ -518,6 +518,13 @@ def test_array_conversion():
 
 
 @pytest.mark.parametrize('units', [example_units, u.s])
+def test_len(units):
+    matrix = MatrixWithUnits(example_values, units)
+
+    assert len(matrix) == 2
+
+
+@pytest.mark.parametrize('units', [example_units, u.s])
 def test_size(units):
     matrix = MatrixWithUnits(example_values, units)
 
@@ -714,6 +721,16 @@ def test_plot(given_ax):
     plt.close()
 
     # Main goal is to make sure there are no errors
+
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_to_row_to_col(units):
+    matrix = MatrixWithUnits(example_values, units)
+
+    row = matrix.to_row()
+    assert row.shape == (1, 4)
+
+    col = matrix.to_col()
+    assert col.shape == (4, 1)
 
 
 #%% -- Test error raising -----------------------------------------------------

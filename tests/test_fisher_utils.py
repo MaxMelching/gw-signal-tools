@@ -1,10 +1,6 @@
-# -- Standard Lib Imports
-import unittest
-
 # -- Third Party Imports
 import numpy as np
 from numpy.testing import assert_allclose
-import matplotlib.pyplot as plt
 import astropy.units as u
 from gwpy.types import Series
 import pytest
@@ -26,14 +22,18 @@ def test_num_diff():
 
     derivative_vals = num_diff(x_vals, h=step_size)
 
-    assert_allclose(derivative_vals, np.ones(derivative_vals.size), atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals, np.ones(derivative_vals.size),
+                    atol=0.0, rtol=0.01)
 
     func_vals = 0.5 * x_vals**2
     derivative_vals = num_diff(func_vals, h=step_size)
 
-    assert_allclose(derivative_vals[2 : -2], x_vals[2 : -2], atol=0.0, rtol=0.01)
-    assert_allclose(derivative_vals[1:2], x_vals[1:2], atol=0.0, rtol=0.01)
-    assert_allclose(derivative_vals[-2:], x_vals[-2:], atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals[2 : -2], x_vals[2 : -2],
+                    atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals[1:2], x_vals[1:2],
+                    atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals[-2:], x_vals[-2:],
+                    atol=0.0, rtol=0.01)
     # -- Note: for values at border of interval, rule is not applicable.
     # -- Thus we make separate checks, methods could be less accurate
     # -- there. For example, the first correct value is zero, thus the
@@ -43,9 +43,12 @@ def test_num_diff():
 
     derivative_vals = num_diff(func_vals, h=step_size)
 
-    assert_allclose(derivative_vals[2 : -2], np.cos(x_vals)[2 : -2], atol=0.0, rtol=0.01)
-    assert_allclose(derivative_vals[:2], np.cos(x_vals)[:2], atol=0.0, rtol=0.01)
-    assert_allclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02)
+    assert_allclose(derivative_vals[2 : -2], np.cos(x_vals)[2 : -2],
+                    atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals[:2], np.cos(x_vals)[:2],
+                    atol=0.0, rtol=0.01)
+    assert_allclose(derivative_vals[-2:], np.cos(x_vals)[-2:],
+                    atol=0.0, rtol=0.02)
 
 
 @pytest.mark.parametrize('h', [None, 1e-2, 1e-2*u.s])
@@ -57,7 +60,7 @@ def test_num_diff_input(h):
 
     func_vals = Series(func_vals, xindex=x_vals*u.s)
     num_diff(func_vals, h)
-    # No need to compare something, is just to test that h is accepted
+    # -- No need to compare something, is just to test that h is accepted
 
 
 #%% -- Initializing commonly used variables for Fisher tests ------------------
@@ -144,10 +147,10 @@ def test_break_upon_convergence(crit):
         deriv_routine='gw_signal_tools'
     )
 
-    plt.close()
-
-    assert_allclose_MatrixWithUnits(fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=2e-3)
-    # --  Small deviations are expected, different final step sizes
+    assert_allclose_MatrixWithUnits(
+        fisher_without_convergence, fisher_with_convergence,
+        atol=0.0, rtol=2e-3)
+    # -- Small deviations are expected, different final step sizes
     # -- might be selected -> total mass has largest deviations,
     # -- otherwise rtol=1e-3 would work
 
@@ -165,6 +168,7 @@ def test_optimize(conv_crit):
         convergence_check=conv_crit,
         deriv_routine='gw_signal_tools'
     )
+
     fisher_opt = fisher_matrix(
         wf_params,
         params_to_vary,
@@ -198,6 +202,29 @@ def test_start_step_size():
         deriv_routine='gw_signal_tools'
     )
 
-    assert_allclose_MatrixWithUnits(fisher_1, fisher_2, atol=0.0, rtol=1e-7)
+    assert_allclose_MatrixWithUnits(fisher_1, fisher_2,
+                                    atol=0.0, rtol=1e-7)
     # -- Idea: they should converge at similar step size because 1e-1 is
     # -- very large, no good results will be produced there
+
+
+def test_deriv_routine():
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        globals()[f'fisher_{routine}'] = fisher_matrix(
+            wf_params,
+            test_params,
+            wf_generator,
+            deriv_routine=routine
+        )
+    
+    # -- Ensure mutual consistency
+    assert_allclose_MatrixWithUnits(
+        fisher_gw_signal_tools, fisher_numdifftools, atol=0., rtol=3e-4)
+    assert_allclose_MatrixWithUnits(
+        fisher_gw_signal_tools, fisher_amplitude_phase, atol=0., rtol=4e-4)
+    assert_allclose_MatrixWithUnits(
+        fisher_numdifftools, fisher_amplitude_phase, atol=0., rtol=4e-5)
+
+    # -- Remove variables from global scope
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        del globals()[f'fisher_{routine}']

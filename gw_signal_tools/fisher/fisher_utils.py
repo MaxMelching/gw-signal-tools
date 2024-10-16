@@ -66,10 +66,10 @@ def num_diff(  # TODO: move this to deriv file?
                 'Given `h` does not coincide with `signal.dx`.'
             )
     else:
-        # Make sure signal is array, we utilize numpy operations
+        # -- Make sure signal is array, we utilize numpy operations
         signal = np.asarray(signal)
 
-        # Check if h is set
+        # -- Check if h is set
         if h is None:
             h = 1.
         else:
@@ -186,7 +186,7 @@ def fisher_matrix(
         else:
             _deriv_kw_args[key] = value
     _inner_prod_kwargs['return_opt_info'] = False
-    # Ensure float output of inner_product
+    # -- Ensures float output of inner_product
 
     if isinstance(params_to_vary, str):
         params_to_vary = [params_to_vary]
@@ -229,7 +229,16 @@ def fisher_matrix(
                 info['deriv'] = deriv
                 fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
             case 'amplitude_phase':
-                full_deriv = WaveformDerivativeAmplitudePhase
+                full_deriv = WaveformDerivativeAmplitudePhase(
+                    wf_params_at_point=wf_params_at_point,
+                    param_to_vary=param,
+                    wf_generator=wf_generator,
+                    **_deriv_kw_args
+                )
+
+                deriv, info = full_deriv.deriv, full_deriv.deriv_info
+                info['deriv'] = deriv
+                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
             case _:  # pragma: no cover
                 raise ValueError('Invalid `deriv_routine`.')
 
@@ -241,7 +250,7 @@ def fisher_matrix(
         for j, param_j in enumerate(params_to_vary):
 
             if i == j:
-                # Was already set in previous loop
+                # -- Was already set in previous loop
                 continue
             else:
                 fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(

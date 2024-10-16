@@ -73,10 +73,10 @@ class MatrixWithUnits:
     >>> print(matrix)
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
-    >>> np.all(matrix.value == value_matrix)
-    np.True_
-    >>> np.all(matrix.unit == unit_matrix)
-    np.True_
+    >>> print(np.all(matrix.value == value_matrix))
+    True
+    >>> print(np.all(matrix.unit == unit_matrix))
+    True
 
     Alternatively, one can extract the values by converting to an array,
     which is supposed to simplify usage and provide an easy way to
@@ -542,8 +542,9 @@ class MatrixWithUnits:
     # TODO: implement iadd, isub, imul etc. for inplace operations
     
     # ----- Deal with selected useful numpy functions/attributes -----
-    def __array__(self) -> np.ndarray:
-        return self.value
+    def __array__(self, copy: Optional[bool] = None,
+                  dtype: Optional[bool] = None) -> np.ndarray:
+        return np.asarray(self.value, copy=copy, dtype=dtype)
 
     @property
     def T(self):

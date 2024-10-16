@@ -51,10 +51,9 @@ pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
 fisher_tot_mass = FisherMatrix(
-    wf_params,
-    'total_mass',
-    wf_generator=phenomx_generator,
-    return_info=True
+    wf_params_at_point=wf_params,
+    params_to_vary='total_mass',
+    wf_generator=phenomx_generator
 )
 
 
@@ -357,6 +356,10 @@ def test_plot():
 
     fisher_tot_mass.plot(only_fisher_inverse=True)
     plt.close()
+
+
+def test_get_wf_generator():
+    fisher_tot_mass.get_wf_generator('IMRPhenomXPHM')
 
 
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])

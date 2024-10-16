@@ -16,6 +16,7 @@ from gw_signal_tools.test_utils import (
 from gw_signal_tools.waveform import get_wf_generator
 from gw_signal_tools.fisher import num_diff, fisher_matrix
 from gw_signal_tools.types import HashableDict
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
 
 
 #%% -- Testing Derivative Methods ---------------------------------------------
@@ -82,12 +83,11 @@ wf_params = HashableDict({
 
 test_params = ['total_mass', 'mass_ratio']
 
-from gw_signal_tools import enable_caching, disable_caching
-# enable_caching()
-disable_caching()
 
-approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    wf_generator = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

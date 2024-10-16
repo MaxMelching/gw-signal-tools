@@ -8,6 +8,7 @@ from gw_signal_tools.waveform import (
     WaveformDerivativeAmplitudePhase, WaveformDerivative, get_wf_generator
 )
 from gw_signal_tools.types import HashableDict
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
 
 
 #%% -- Initializing commonly used variables -----------------------------------
@@ -33,12 +34,11 @@ wf_params = HashableDict({
 
 test_params = ['total_mass', 'mass_ratio']
 
-from gw_signal_tools import enable_caching, disable_caching
-# enable_caching()
-disable_caching()
 
-approximant = 'IMRPhenomXPHM'
-wf_generator = get_wf_generator(approximant)#, mode='mixed')
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    wf_generator = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

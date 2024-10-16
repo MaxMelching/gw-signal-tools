@@ -7,7 +7,7 @@ from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
 from gw_signal_tools.waveform import get_wf_generator, norm
 from gw_signal_tools.types import Detector, HashableDict
 from gw_signal_tools.PSDs import psd_no_noise
-from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
 
 
 #%% -- Initializing commonly used variables -----------------------------------
@@ -35,17 +35,13 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-from gw_signal_tools import enable_caching, disable_caching
-# enable_caching()
-disable_caching()
-# -- Very strange: stuff works with maxsize=5
 
-
-phenomx_generator = get_wf_generator('IMRPhenomXPHM')
-phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
-phenomd_generator = get_wf_generator('IMRPhenomD')
-# -- Caching turned off because it produces an error I currently do not
-# -- understand. Only in a single test, but not good
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+    phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
@@ -66,7 +62,6 @@ fisher_tot_mass = FisherMatrixNetwork(
 
 #%% -- Simple consistency tests -----------------------------------------------
 def test_single_det_consistency():
-    # phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
     fisher_v1 = FisherMatrixNetwork(
         wf_params,
         'total_mass',
@@ -74,10 +69,6 @@ def test_single_det_consistency():
         [hanford]
     )
 
-    # phenomx_generator = get_wf_generator('IMRPhenomXPHM', cache=True)
-    # -- Crazy, uncomment this line and error disappears
-    # print(phenomx_generator.cache_info())
-    # phenomx_generator.cache_clear()  # Does NOT help... So does something happen to params or what?
     fisher_v2 = FisherMatrix(
         wf_params | {'det': 'H1'},
         'total_mass',
@@ -88,8 +79,7 @@ def test_single_det_consistency():
     assert fisher_v1.fisher == fisher_v2.fisher
     assert fisher_v1.snr() == fisher_v2.snr()
 
-    # for opt in [False, ['time', 'phase']]:  # phi_ref chosen otherwise, but does not help
-    for opt in [False, True]:  # True here is not reason for error (weird choice of params or so)
+    for opt in [False, True]:
         sys_error_1 = fisher_v1.systematic_error(
             phenomd_generator,
             optimize=opt,
@@ -102,14 +92,8 @@ def test_single_det_consistency():
             return_opt_info=False
         )
 
-        assert_allclose_MatrixWithUnits(sys_error_1, sys_error_2, atol=0.0, rtol=3e-15)
-        # -- Propagated error on machine precision level, most likely
-        # -- -> vanishes when caching is turned off. Could be due to way
-        # --    things are saved during caching, is this something to be
-        # --    concerned with?
-# test_single_det_consistency()
-# print(hash(wf_params), hash(wf_params | {'phi_ref': 0.*u.rad}))
-# print(hash(wf_params), hash({'phi_ref': 0.*u.rad} | wf_params))
+        assert sys_error_1 == sys_error_2
+
 
 #%% -- Feature tests ----------------------------------------------------------
 @pytest.mark.parametrize('params', [

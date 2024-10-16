@@ -11,6 +11,7 @@ from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
 )
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
 
 from gw_signal_tools import PLOT_STYLE_SHEET
 plt.style.use(PLOT_STYLE_SHEET)
@@ -36,13 +37,13 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-from gw_signal_tools import enable_caching, disable_caching
-# enable_caching()
-disable_caching()
 
-phenomx_generator = get_wf_generator('IMRPhenomXPHM')
-phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
-phenomd_generator = get_wf_generator('IMRPhenomD')
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+    phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

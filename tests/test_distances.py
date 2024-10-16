@@ -16,7 +16,7 @@ from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allclose_series
 )
 from gw_signal_tools.types import HashableDict
-from gw_signal_tools import PLOT_STYLE_SHEET
+from gw_signal_tools import PLOT_STYLE_SHEET, enable_caching_locally, disable_caching_locally
 plt.style.use(PLOT_STYLE_SHEET)
 
 
@@ -40,11 +40,11 @@ wf_params = HashableDict({
     'condition': 0
 })
 
-from gw_signal_tools import enable_caching, disable_caching
-# enable_caching()
-disable_caching()
 
-wf_gen = get_wf_generator('IMRPhenomXPHM')
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    wf_gen = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc

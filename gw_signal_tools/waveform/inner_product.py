@@ -812,14 +812,14 @@ def test_hm(
     Returns
     -------
     boolean
-        Whether or not higher modes have a significant impact for the
-        selected configuration.
+        Whether higher modes have a significant impact for the selected
+        configuration.
     """
     phi_val = 0.76*u.rad  # Some arbitrary shift
     wf_phizero_shifted = wf_generator(wf_params | {'phi_ref': 0.*u.rad}
                                       ) * np.exp(1.j*2*phi_val)
     wf_phinonzero = wf_generator(wf_params | {'phi_ref': phi_val})
-    
+
     if overlap(wf_phizero_shifted, wf_phinonzero) > 0.999:
         # -- Arbitrary value, but should be sufficient to assess
         # -- influence of HMs
@@ -852,7 +852,7 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
     Returns
     -------
     boolean
-        Whether or not the system is precessing.
+        Whether the system is precessing.
     """
     # TODO: maybe test for valid spin config?
     for i in [1, 2]:
@@ -1086,9 +1086,11 @@ def optimize_overlap(
                 # -- No phase optimization was carried out
                 pass
 
-            wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
-
-            return wf1, wf2, opt_params_results
+            return wf1, wf2 * np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic), opt_params_results
+            # -- Note: redefining wf2 with the phase factor using *=
+            # -- is a very bad idea. That is because the result of the
+            # -- call is potentially already cached, and in that case
+            # -- the cached result would be overwritten (bad)
         
         # -- Check if optimization in inner product is carried out
         # -- (can be given as equivalent input to )
@@ -1171,6 +1173,9 @@ def optimize_overlap(
             # -- No phase optimization was carried out
             pass
 
-        wf2 *= np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
+        wf2 = wf2 * np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
+        # -- Using *= here would be bad because the result of the call
+        # -- is potentially already cached, and in that case the cached
+        # -- result would be overwritten (bad)
 
     return wf1, wf2, opt_params_results

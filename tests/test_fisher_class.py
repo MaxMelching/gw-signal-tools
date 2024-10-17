@@ -27,6 +27,7 @@ wf_params = HashableDict({
     'deltaT': 1./2048.*u.s,
     'f22_start': f_min,
     'f_max': f_max,
+    'deltaF': 2**-5*u.Hz,
     'f22_ref': 20.*u.Hz,
     'phi_ref': 0.*u.rad,
     'distance': 1.*u.Mpc,
@@ -129,26 +130,34 @@ def test_time_and_phase_shift_consistency():
 
 
 def test_deriv_routine_consistency():
-    calc_params = ['total_mass', 'distance', 'time', 'phase']
+    calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
-    fisher_v1 = FisherMatrix(
-        wf_params,
-        calc_params,
-        phenomx_generator,
-        deriv_routine='gw_signal_tools'
-    )
+    global fisher_gw_signal_tools, fisher_numdifftools, fisher_amplitude_phase
 
-    fisher_v2 = FisherMatrix(
-        wf_params,
-        calc_params,
-        phenomx_generator,
-        deriv_routine='numdifftools'
-    )
-
-    assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
-                                    atol=1.42e-39, rtol=0.)
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        globals()[f'fisher_{routine}'] = FisherMatrix(
+            wf_params,
+            calc_params,
+            phenomx_generator,
+            deriv_routine=routine
+        )
+    
+    # -- Ensure mutual consistency
+    assert_allclose_MatrixWithUnits(
+        fisher_gw_signal_tools.fisher, fisher_numdifftools.fisher,
+        atol=0., rtol=8e-4)
+    assert_allclose_MatrixWithUnits(
+        fisher_gw_signal_tools.fisher, fisher_amplitude_phase.fisher,
+        atol=0., rtol=7e-4)
+    assert_allclose_MatrixWithUnits(
+        fisher_numdifftools.fisher, fisher_amplitude_phase.fisher,
+        atol=0., rtol=2e-4)
     # -- Comparing values manually, this absolute deviation indicates
     # -- that impact of different routines on is not really siginificant
+
+    # -- Remove variables from global scope
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        del globals()[f'fisher_{routine}']
 
 
 def test_base_step_consistency():

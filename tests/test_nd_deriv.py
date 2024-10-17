@@ -1,5 +1,6 @@
 # -- Third Party Imports
 import astropy.units as u
+import pytest
 import matplotlib.pyplot as plt
 
 # -- Local Package Imports
@@ -9,6 +10,7 @@ from gw_signal_tools.waveform import (
 )
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally
+from gw_signal_tools.test_utils import assert_allclose_series
 
 
 #%% -- Initializing commonly used variables -----------------------------------
@@ -45,6 +47,35 @@ import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
+
+#%% -- Class Tests ------------------------------------------------------------
+@pytest.mark.parametrize('param', ['total_mass', 'distance'])
+@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
+def test_point_calls(param, routine):
+    nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
+                                  deriv_routine=routine)
+    
+    point = wf_params[param]
+    deriv_scalar = nd_deriv(point.value)
+    deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
+
+    avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
+    
+    assert_allclose_series(deriv_scalar, deriv_quantity,
+                           atol=2e-4*avg_peak_height, rtol=1.1e-15)
+    # -- atol for total_mass. Not sure where it comes from, maybe from
+    # -- little error in conversions. Sub-percent maximal relative
+    # -- deviation (measuring on scale of peak) is still fine, though.
+    # -- rtol for distance, just numerical errors. Presumably from
+    # -- conversions that translate into derivatives.
+
+
+#%% -- Comparison with custom Derivative class --------------------------------
+# print(WaveformDerivativeGWSignaltools.__dict__)
+# print(WaveformDerivativeNumdifftools.__dict__)
+# -- To check that docstring is transferred
+
+
 # test_param = 'total_mass'  # Differences between routines are 1e-4 smaller than actual values. Good agreement
 test_param = 'mass_ratio'  # Differences between routines are 1e-4 smaller than actual values. Great agreement
 # test_param = 'distance'  # Perfectly equal, as expected
@@ -57,13 +88,6 @@ nd_deriv = WaveformDerivativeNumdifftools(
     # method='forward'
     # method='complex'  # Does not work for complex input
 )
-
-
-#%% -- Comparison with custom Derivative class --------------------------------
-# print(WaveformDerivativeGWSignaltools.__dict__)
-# print(WaveformDerivativeNumdifftools.__dict__)
-# -- To check that docstring is transferred
-
 
 gwsignal_deriv = WaveformDerivativeGWSignaltools(
     wf_params_at_point=wf_params,

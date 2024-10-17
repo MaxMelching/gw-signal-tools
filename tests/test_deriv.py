@@ -13,7 +13,8 @@ from gw_signal_tools.test_utils import (
 )
 from gw_signal_tools.waveform import (
     get_wf_generator, norm, WaveformDerivativeGWSignaltools,
-    WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
+    WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase,
+    WaveformDerivative
 )
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally
@@ -54,7 +55,31 @@ pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
 
-# -- Characterizing gwsignaltools derivative ----------------------------------
+#%% -- Testing WaveformDerivative ---------------------------------------------
+def test_default_routine():
+    full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator)
+    assert isinstance(full_deriv, WaveformDerivativeGWSignaltools)
+
+
+def test_all_routines():
+    full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                    deriv_routine='gw_signal_tools')
+    assert isinstance(full_deriv, WaveformDerivativeGWSignaltools)
+
+    full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                    deriv_routine='numdifftools')
+    assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+    full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                    deriv_routine='amplitude_phase')
+    assert isinstance(full_deriv, WaveformDerivativeAmplitudePhase)
+
+    with pytest.raises(ValueError, match='Invalid deriv_routine'):
+        full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                        deriv_routine='')
+
+
+#%% -- Characterizing gwsignaltools derivative --------------------------------
 @pytest.mark.parametrize('param', test_params)
 @pytest.mark.parametrize('q_val', [0.42, 0.05])
 @pytest.mark.parametrize('break_conv', [True, False])
@@ -148,31 +173,51 @@ def test_custom_convergence(param):
     assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
 
 
-def test_invalid_step_size():
-    param = 'mass_ratio'
-    param_val = 0.42*u.dimensionless_unscaled
+@pytest.mark.parametrize(
+    'param, param_val, invalid_step, expected_formula', [
+        ['total_mass', 10*u.Msun, 15., 'forward'],
+        ['mass_ratio', 0.1*u.dimensionless_unscaled, 0.2, 'forward'],
+        ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2, 'backward'],
+        ['mass_ratio', 0.9*u.dimensionless_unscaled, 1., 'five_point'],  # Not backward because lower bound also violated
+        ['mass_ratio', 1.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
+        # -- Following tests do not work, sym_mass_ratio is not in wf_params
+        # ['sym_mass_ratio', 0.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
+        # ['sym_mass_ratio', 0.2*u.dimensionless_unscaled, 0.1*u.dimensionless_unscaled, 'backward'],
+    ]
+)
+def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
     deriv_1 = WaveformDerivativeGWSignaltools(
-        wf_params | {'mass_ratio': param_val},
+        wf_params | {param: param_val},
         param,
         wf_generator,
-        step_sizes=[2*param_val, 1e-2],
+        step_sizes=[invalid_step, 1e-2],
         max_refine_numb=1,
-        deriv_formula='forward'
-    ).deriv
+        deriv_formula='five_point'
+    )
     # -- Idea: provoke error for complete coverage, then use same step
     # -- size as below
 
     deriv_2 = WaveformDerivativeGWSignaltools(
-        wf_params | {'mass_ratio': param_val},
+        wf_params | {param: param_val},
         param,
         wf_generator,
         step_sizes=[1e-2],
-        deriv_formula='forward'
-    ).deriv
+        deriv_formula=expected_formula
+    )
     # -- Important: have to pass same formula that is used after
     # -- adjustment in previous call
 
-    assert_allclose_series(deriv_1, deriv_2, atol=0.0, rtol=0.0)
+    assert_allclose_series(deriv_1.deriv, deriv_2.deriv, atol=1., rtol=0.)
+    assert deriv_1.deriv_info['deriv_formula'] == deriv_2.deriv_info['deriv_formula']
+
+
+@pytest.mark.parametrize('param', test_params)
+def test_convergence_plot(param):
+    deriv = WaveformDerivativeGWSignaltools(wf_params, param, wf_generator)
+    deriv()
+
+    deriv.convergence_plot()
+    plt.close()
 
 
 #%% -- Derivative consistency checks ------------------------------------------

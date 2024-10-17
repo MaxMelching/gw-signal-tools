@@ -1,5 +1,5 @@
 # -- Standard Lib Imports
-from functools import cache
+from functools import cache, lru_cache
 from typing import Callable
 import contextlib
 import logging
@@ -43,7 +43,8 @@ def enable_caching():
         logger.info('Enabling caching')
 
     global cache_func
-    cache_func = cache
+    # cache_func = cache
+    cache_func = lru_cache(maxsize=128, typed=True)
     # TODO: should we use lru_cache with typed=True? Right now, I do not
     # see why, but I might be missing something
 

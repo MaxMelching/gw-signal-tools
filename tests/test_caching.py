@@ -1,6 +1,6 @@
 def test_enable_disable_calls():
     from gw_signal_tools.caching import (
-        use_caching, cache_func, cache, _dummy_cache, enable_caching,
+        use_caching, cache_func, lru_cache, _dummy_cache, enable_caching,
         disable_caching
     )
 
@@ -13,7 +13,7 @@ def test_enable_disable_calls():
     from gw_signal_tools.caching import use_caching, cache_func
 
     assert use_caching == True
-    assert cache_func == cache
+    assert cache_func == lru_cache(maxsize=128, typed=True)
 
     # -- Check disabling
     disable_caching()

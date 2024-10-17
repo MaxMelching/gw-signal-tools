@@ -17,7 +17,7 @@ __all__ = ('WaveformDerivativeNumdifftools', 'WaveformDerivativeAmplitudePhase')
 
 
 class WaveformDerivativeNumdifftools(nd.Derivative):
-    """
+    r"""
     Wrapper around :code:`numdifftools.Derivative` class specifically
     for waveform callers from new LAL interface.
 
@@ -124,7 +124,10 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         if 'base_step' not in kwds:
             _par_val = self.param_center_val.value
             kwds['base_step'] = 1e-2*(_par_val if _par_val != 0. else 1.)
+            # kwds['base_step'] = self.base_step = 1e-2*(_par_val if _par_val != 0. else 1.)
             # -- Otherwise potentially zero step size
+
+            # kwds['base_step'] = 'invalid'
 
         def fun(x):
             return self.wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
@@ -179,6 +182,9 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             }
             return deriv
         
+        # -- Test for valid point, potentially adjusting method
+        self.test_point()
+
         self.full_output = True
         deriv, info = super().__call__(x)
         self.deriv_info = info._asdict()
@@ -186,7 +192,6 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         # TODO: use test_point function in case of Input domain error
         # -> could maybe adjust base_step and also the deriv routine
         # -> works like this: self.fd_rule.method = 'central'
-
 
         param_unit = self.param_center_val.unit
 
@@ -207,6 +212,57 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         self.deriv_info['error_estimate'] = self.error_estimate
 
         return out
+    
+    def test_point(self) -> None:
+        """
+        Check if `self.wf_params_at_point` contains potentially tricky
+        values, e.g. mass ratios close to 1. If yes, a subsequent
+        adjustment takes place.
+        """
+        lower_violation = False
+        upper_violation = False
+
+        if self.param_to_vary in ['total_mass', 'mass1', 'mass2', 'distance']:
+            # -- Most common boundaries
+            lower_bound, upper_bound = 0., np.inf
+        elif self.param_to_vary == 'mass_ratio':
+            # -- There are two conventions for q, account check for that
+            if self.param_center_val <= 1.:
+                lower_bound, upper_bound = 0., 1.
+            else:
+                lower_bound, upper_bound = 1., np.inf
+        elif self.param_to_vary == 'sym_mass_ratio':
+            lower_bound, upper_bound = 0., 0.25
+        elif self.param_to_vary == 'inclination':
+            lower_bound, upper_bound = 0., 2.*np.pi  # TODO: should this be pi?
+        else:
+            lower_bound, upper_bound = -np.inf, np.inf
+        
+        # TODO: what other parameters are relevant in this regard?
+        # Maybe spins?
+        
+        _base_step = self.step.base_step
+        # if isinstance(_base_step, u.Quantity):
+        #     _base_step = _base_step.to_value(self.param_center_val.unit)
+        # lower_violation = self.param_center_val.value - _base_step <= lower_bound
+        # upper_violation = self.param_center_val.value + _base_step >= upper_bound
+        
+        if not isinstance(_base_step, u.Quantity):
+            _base_step = _base_step * self.param_center_val.unit
+        lower_violation = self.param_center_val - _base_step <= lower_bound*self.param_center_val.unit
+        upper_violation = self.param_center_val + _base_step >= upper_bound*self.param_center_val.unit
+
+        if lower_violation and upper_violation:
+            # -- Recursively decrease step size until it works
+            self.step.base_step = _base_step / 2.
+            # TODO: or use difference between center_val and bound?
+            self.test_point()
+        elif lower_violation and not upper_violation:
+            self.method = 'forward'
+            # self.fd_rule = self._fd_rule(n=self.n, method='forward', order=self.order)
+        elif not lower_violation and upper_violation:
+            self.method = 'backward'
+            # self.fd_rule = self._fd_rule(n=self.n, method='backward', order=self.order)
     
     # -- In case calling seems unintiutive, create attribute
     @property
@@ -255,12 +311,12 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
 
 
 # -- Now: fix bug in nd.Derivative, complex input throws error. This is
-# -- due to numpy changes that were not (yet) addressed by numdifftools
+# -- due to numpy changes that were not (yet?) addressed by numdifftools
 from numdifftools.limits import _Limit
 import numpy as np
 import warnings
 
-def _add_error_to_outliers_fixed(der, trim_fact=10):
+def _add_error_to_outliers_fixed(der, trim_fact=10):  # pragma: no cover
     """
     discard any estimate that differs wildly from the
     median of all estimates. A factor of 10 to 1 in either

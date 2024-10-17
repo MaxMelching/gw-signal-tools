@@ -27,7 +27,7 @@ __all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')
 
 
 class WaveformDerivative():
-    """
+    r"""
     Constructor class for numerical derivative of waveforms. This class
     allows to choose between different implementations by passing the
     .code:`deriv_routine` argument. All other arguments are passed on to
@@ -470,6 +470,10 @@ class WaveformDerivativeGWSignaltools():
         # TODO: automatically adjust deriv_formula here if needed
         # -> of course with logger.info output
 
+        # -- Test for valid point
+        self.test_point(0.)
+        logger.info(self.deriv_formula)
+
         self.is_converged = False
         self.refine_numb = 0
 
@@ -501,6 +505,12 @@ class WaveformDerivativeGWSignaltools():
 
                 if self.refine_numb < (self.max_refine_numb - 1):
                     self._update_step_sizes()
+
+                    try:
+                        if self._step_size_too_small:
+                            break
+                    except AttributeError:
+                        pass
             else:
                 break
 
@@ -569,30 +579,18 @@ class WaveformDerivativeGWSignaltools():
         # Cut steps made around step size with best criterion value in half
         # compared to current steps (we take average step size in case
         # difference to left and right is unequal)
-        current_steps = self.step_sizes
-        current_center_step = self.step_sizes[self.min_dev_index]
+        current_best_step = self.step_sizes[self.min_dev_index]
 
-        # TODO: account for new definition of min_dev_index
-        if self.min_dev_index < (len(current_steps) - 1):
-            left_step = (current_steps[self.min_dev_index - 1]
-                         - current_center_step) / 4.
-            right_step = (current_steps[self.min_dev_index + 1]
-                          - current_center_step) / 4.
-            # -- 4. due to factor of two in step_sizes below
-
-            self.step_sizes = current_center_step + np.array(
-                [2.*left_step, 1.*left_step, 1.*right_step, 2.*right_step]
-            )
-            # TODO: also include 0.0 here? I.e. the optimal one, as of now?
+        if self.abs_or_rel_step_size(current_best_step).value < 1e-8:
+            logger.info('Step size became too small, no convergence can be reached.')
+            # self.step_sizes = []
+            # self.max_refine_numb = self.refine_numb
+            self._step_size_too_small = True
         else:
-            # Smallest convergence value at smallest step size, so
-            # min_dev_index + 1 is invalid index. Instead of zooming in,
-            # smaller step sizes are explored
-
             # Refine in same way that we do with start_step_size
             self.step_sizes = np.reshape(
                 np.outer(
-                    [current_center_step/10**i for i in range(4)],
+                    [current_best_step/10**i for i in range(4)],
                     [5, 1]
                 ),
                 -1
@@ -606,6 +604,8 @@ class WaveformDerivativeGWSignaltools():
         """
         # for i, step_size in enumerate(self.step_sizes[-1]):
         for i, step_size in enumerate(self.step_sizes):
+            self.test_point(step_size)
+
             try:
                 deriv_param = self.deriv_routine(step_size)
             except ValueError as err:
@@ -617,10 +617,6 @@ class WaveformDerivativeGWSignaltools():
                         f' value of {self.param_center_val}. '
                         'Skipping this step size.'
                     )
-
-                    # TODO: call test_point here, where new deriv_routine is
-                    # set. Then maybe call deriv_routine again (?)
-                    self.test_point(step_size)
 
                     # Still have to append something to lists, otherwise
                     # indices become inconsistent with step_sizes
@@ -682,7 +678,7 @@ class WaveformDerivativeGWSignaltools():
         return self.deriv
     
 
-    def test_point(self, step_size: float):
+    def test_point(self, step_size: float) -> None:
         """
         Check if `self.wf_params_at_point` contains potentially tricky
         values, e.g. mass ratios close to 1. If yes, a subsequent
@@ -697,50 +693,62 @@ class WaveformDerivativeGWSignaltools():
         # -- This is important, determines step size that is actually
         # -- used by the routine (also adds proper unit)
 
+        lower_violation = False
+        upper_violation = False
+
+
         # TODO: maybe store self.param_center_val in param_val? Would
         # make lots of stuff shorter and would make central access to value easier
 
-        # TODO: check if we need checks whether or not certain formula
-        # is used at the moment
 
-        # TODO: I think we should rather check for 2.*step_size, right?
-        # Because no failure for 1.* could still mean failure for 2.*
-        # -> but maybe this would be resolved in next iteration...
-        if self.param_to_vary == 'mass_ratio':
-            # if self.param_center_val <= 1. and (self.param_center_val + step_size > 1.):
-            #     self.deriv_formula = self.backward
-            # elif self.param_center_val > 1. and (self.param_center_val - step_size < 1.):
-            #     self.deriv_formula = self.forward
-            # elif self.param_center_val > 0. and (self.param_center_val - step_size < 0.):
-            #     self.deriv_formula = self.forward
-
+        if self.param_to_vary in ['total_mass', 'mass1', 'mass2', 'distance']:
+            # -- Most common boundaries
+            lower_bound, upper_bound = 0., np.inf
+            # TODO: add units here?
+        elif self.param_to_vary == 'mass_ratio':
+            # -- There are two conventions for q, account check for that
             if self.param_center_val <= 1.:
-                # -- q <= 1, but adding step_size makes > 1
-                if ((self.param_center_val + 2.*step_size > 1.)
-                    or (self.param_center_val + step_size > 1.)):
-                    self.deriv_formula = 'backward'
+                lower_bound, upper_bound = 0., 1.
             else:
-                if ((self.param_center_val - 2.*step_size < 1.)
-                    or (self.param_center_val - step_size < 1.)):
-                    # -- q > 1, but subtracting step_size makes < 1
-                    self.deriv_formula = 'forward'
-                elif ((self.param_center_val - 2.*step_size < 0.)
-                      or (self.param_center_val - step_size < 0.)):
-                    # -- q close to 0, subtracting step_size makes < 0
-                    self.deriv_formula = 'forward'
+                lower_bound, upper_bound = 1., np.inf
         elif self.param_to_vary == 'sym_mass_ratio':
-            if ((self.param_center_val + 2.*step_size > 0.25)
-                or (self.param_center_val + step_size > 0.25)):
-                # -- nu close to 0.25, adding step_size makes > 0.25
-                self.deriv_formula = 'backward'
-            elif ((self.param_center_val - 2.*step_size < 0.)
-                  or (self.param_center_val - step_size < 0.)):
-                # -- nu close to 0, subtracting step_size makes < 0
-                self.deriv_formula = 'forward'
-
+            lower_bound, upper_bound = 0., 0.25
+        elif self.param_to_vary == 'inclination':
+            lower_bound, upper_bound = 0., 2.*np.pi  # TODO: should this be pi?
+        else:
+            lower_bound, upper_bound = -np.inf, np.inf
+        
         # TODO: what other parameters are relevant in this regard?
-        # Maybe spins? Inclination probably?
+        # Maybe spins?
+        
+        lower_violation = self._lower_point_checker(step_size, lower_bound)
+        upper_violation = self._upper_point_checker(step_size, upper_bound)
+
+        logger.info((step_size, lower_violation, upper_violation))
+        
+        if lower_violation and upper_violation:
+            # -- Step size simply too large, no need to change
+            # -- deriv_routine here, we just wait for next iteration
+            pass
+        elif lower_violation and not upper_violation:
+            self.deriv_formula = 'forward'
+        elif not lower_violation and upper_violation:
+            self.deriv_formula = 'backward'
     
+    def _lower_point_checker(self, step_size: float, boundary: float) -> bool:
+        # TODO: maybe use value of step size here?
+        if self.deriv_formula == 'five_point':
+            return ((self.param_center_val - 2.*step_size <= boundary)
+                    or (self.param_center_val - step_size <= boundary))
+        else:
+            return self.param_center_val - step_size <= boundary
+
+    def _upper_point_checker(self, step_size: float, boundary: float) -> bool:
+        if self.deriv_formula == 'five_point':
+            return ((self.param_center_val + 2.*step_size >= boundary)
+                    or (self.param_center_val + step_size >= boundary))
+        else:
+            return self.param_center_val + step_size >= boundary
 
     @property
     def deriv_formula(self) -> str:
@@ -779,7 +787,7 @@ class WaveformDerivativeGWSignaltools():
         # return self.__getattribute__(self.deriv_formula).__call__(self, *args, **kw_args)
         return self.__getattribute__(self.deriv_formula).__call__(*args, **kw_args)
 
-    def abs_or_rel_step_size(self, step_size):
+    def abs_or_rel_step_size(self, step_size) -> u.Quantity:
         """
         Choose relative or absolute step size, based on
         `self.param_center_val` (the value of `self.param_to_vary` in
@@ -890,7 +898,6 @@ class WaveformDerivativeGWSignaltools():
         
         self._deriv_info = info
     
-
     def convergence_plot(self) -> mpl.axes.Axes:
         """
         Plot estimates for the different step sizes that have been

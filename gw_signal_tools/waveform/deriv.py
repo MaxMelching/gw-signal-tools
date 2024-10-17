@@ -677,6 +677,11 @@ class WaveformDerivativeGWSignaltools():
                 self.wf_params_at_point[self.param_to_vary] = new_point*self.param_center_val.unit
         return self.deriv
     
+    _param_bound_storage = WaveformDerivativeNumdifftools._param_bound_storage
+    param_bounds = WaveformDerivativeNumdifftools.param_bounds
+
+    # TODO: what other parameters are relevant in this regard?
+    # Maybe spins?
 
     def test_point(self, step_size: float) -> None:
         """
@@ -693,33 +698,14 @@ class WaveformDerivativeGWSignaltools():
         # -- This is important, determines step size that is actually
         # -- used by the routine (also adds proper unit)
 
-        lower_violation = False
-        upper_violation = False
-
-
-        # TODO: maybe store self.param_center_val in param_val? Would
-        # make lots of stuff shorter and would make central access to value easier
-
-
-        if self.param_to_vary in ['total_mass', 'mass1', 'mass2', 'distance']:
-            # -- Most common boundaries
-            lower_bound, upper_bound = 0., np.inf
-            # TODO: add units here?
-        elif self.param_to_vary == 'mass_ratio':
-            # -- There are two conventions for q, account check for that
-            if self.param_center_val <= 1.:
-                lower_bound, upper_bound = 0., 1.
-            else:
-                lower_bound, upper_bound = 1., np.inf
-        elif self.param_to_vary == 'sym_mass_ratio':
-            lower_bound, upper_bound = 0., 0.25
-        elif self.param_to_vary == 'inclination':
-            lower_bound, upper_bound = 0., 2.*np.pi  # TODO: should this be pi?
-        else:
-            lower_bound, upper_bound = -np.inf, np.inf
-        
-        # TODO: what other parameters are relevant in this regard?
-        # Maybe spins?
+        default_bounds = (-np.inf, np.inf)
+        lower_bound, upper_bound = self._param_bound_storage.get(
+            self.param_to_vary, default_bounds)
+        if self.param_to_vary == 'mass_ratio':
+            # -- Depending on chosen convention, bounds might have to be corrected
+            if self.param_center_val > 1:
+                lower_bound, upper_bound = self._param_bound_storage.get(
+                    self.param_to_vary, default_bounds)
         
         lower_violation = self._lower_point_checker(step_size, lower_bound)
         upper_violation = self._upper_point_checker(step_size, upper_bound)

@@ -4,6 +4,7 @@ from typing import Callable, Any
 # -- Third Party Imports
 import numdifftools as nd
 import astropy.units as u
+import numpy as np
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 
@@ -213,33 +214,53 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
 
         return out
     
+    _param_bound_storage = {
+        'total_mass': (0, np.inf),
+        'mass1': (0., np.inf),
+        'mass2': (0., np.inf),
+        'distance': (0., np.inf),
+        'mass_ratio': (0., 1.),
+        'inverse_mass_ratio': (1., np.inf),
+        'sym_mass_ratio': (0., 0.25),
+        'inclination': (0., 2.*np.pi),  # TODO: should this be np.pi?
+    }
+    # TODO: what other parameters are relevant in this regard?
+    # Maybe spins?
+    
+    @property
+    def param_bounds(self, param: str) -> tuple[float, float]:
+        return self._param_bound_storage[param]
+    
+    @param_bounds.setter
+    def param_bounds(self, param: str, bounds: list[float, float]) -> None:
+        """
+        Specify bounds for a parameter that does not have registered
+        bounds yet, or update parameter bounds.
+
+        Parameters
+        ----------
+        param : str
+            The parameter for which bounds shall be specified.
+        bounds : list[float, float]
+            Lower and upper bound.
+        """
+        assert len(bounds) == 2, 'Need exactly one lower and one upper bound.'
+        self._param_bound_storage[param] = bounds
+    
     def test_point(self) -> None:
         """
         Check if `self.wf_params_at_point` contains potentially tricky
         values, e.g. mass ratios close to 1. If yes, a subsequent
         adjustment takes place.
         """
-        lower_violation = False
-        upper_violation = False
-
-        if self.param_to_vary in ['total_mass', 'mass1', 'mass2', 'distance']:
-            # -- Most common boundaries
-            lower_bound, upper_bound = 0., np.inf
-        elif self.param_to_vary == 'mass_ratio':
-            # -- There are two conventions for q, account check for that
-            if self.param_center_val <= 1.:
-                lower_bound, upper_bound = 0., 1.
-            else:
-                lower_bound, upper_bound = 1., np.inf
-        elif self.param_to_vary == 'sym_mass_ratio':
-            lower_bound, upper_bound = 0., 0.25
-        elif self.param_to_vary == 'inclination':
-            lower_bound, upper_bound = 0., 2.*np.pi  # TODO: should this be pi?
-        else:
-            lower_bound, upper_bound = -np.inf, np.inf
-        
-        # TODO: what other parameters are relevant in this regard?
-        # Maybe spins?
+        default_bounds = (-np.inf, np.inf)
+        lower_bound, upper_bound = self._param_bound_storage.get(
+            self.param_to_vary, default_bounds)
+        if self.param_to_vary == 'mass_ratio':
+            # -- Depending on chosen convention, bounds might have to be corrected
+            if self.param_center_val > 1:
+                lower_bound, upper_bound = self._param_bound_storage.get(
+                    self.param_to_vary, default_bounds)
         
         _base_step = self.step.base_step
         # if isinstance(_base_step, u.Quantity):
@@ -511,6 +532,8 @@ class WaveformDerivativeAmplitudePhase():
             }
             return deriv
         
+        # -- Test for valid point, potentially adjusting method
+        self.test_point()        
 
         self.abs_deriv.full_output = True
         abs_deriv, abs_info = self.abs_deriv(x)
@@ -547,6 +570,44 @@ class WaveformDerivativeAmplitudePhase():
         )
 
         return out
+    
+    _param_bound_storage = WaveformDerivativeNumdifftools._param_bound_storage
+    param_bounds = WaveformDerivativeNumdifftools.param_bounds
+    
+    def test_point(self) -> None:
+        """
+        Check if `self.wf_params_at_point` contains potentially tricky
+        values, e.g. mass ratios close to 1. If yes, a subsequent
+        adjustment takes place.
+        """
+        default_bounds = (-np.inf, np.inf)
+        lower_bound, upper_bound = self._param_bound_storage.get(
+            self.param_to_vary, default_bounds)
+        if self.param_to_vary == 'mass_ratio':
+            # -- Depending on chosen convention, bounds might have to be corrected
+            if self.param_center_val > 1:
+                lower_bound, upper_bound = self._param_bound_storage.get(
+                    self.param_to_vary, default_bounds)
+        
+        _base_step = self.abs_deriv.step.base_step  # Same for phase_deriv
+        
+        if not isinstance(_base_step, u.Quantity):
+            _base_step = _base_step * self.param_center_val.unit
+        lower_violation = self.param_center_val - _base_step <= lower_bound*self.param_center_val.unit
+        upper_violation = self.param_center_val + _base_step >= upper_bound*self.param_center_val.unit
+
+        if lower_violation and upper_violation:
+            # -- Recursively decrease step size until it works
+            self.abs_deriv.step.base_step = _base_step / 2.
+            self.phase_deriv.step.base_step = _base_step / 2.
+            # TODO: or use difference between center_val and bound?
+            self.test_point()
+        elif lower_violation and not upper_violation:
+            self.abs_deriv.method = 'forward'
+            self.phase_deriv.method = 'forward'
+        elif not lower_violation and upper_violation:
+            self.abs_deriv.method = 'backward'
+            self.phase_deriv.method = 'backward'
     
     @property
     def deriv(self) -> Any:

@@ -17,6 +17,7 @@ from .utils import (
     td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
 )
 from ..test_utils import allclose_quantity, assert_allclose_quantity
+from ._error_helpers import _q_convert
 
 
 __doc__ = """
@@ -188,15 +189,7 @@ def inner_product(
     if df is None:
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
     else:
-        try:
-            df = u.Quantity(df, unit=frequ_unit)
-        except u.UnitConversionError:
-            # -- Conversion only fails if df is already Quantity and has
-            # -- non-matching unit, so we can assume that df.unit works
-            raise ValueError(
-                f'Need consistent frequency units for `df` ({df.unit}) and'
-                f' signals ({frequ_unit}).'
-            )
+        df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- If necessary, do fft (padding to ensure
     # -- sufficient resolution in frequency domain)
@@ -223,28 +216,14 @@ def inner_product(
         
         # -- Check if both lower and upper are given or one of them is None
         if f_range[0] is not None:
-            try:
-                f_lower_new = u.Quantity(f_range[0], unit=frequ_unit)
-            except u.UnitConversionError:
-                # -- Conversion only fails if df is already Quantity and has
-                # -- non-matching unit, so we can assume that df.unit works
-                raise ValueError(
-                    'Need consistent frequency units for `f_range` members'
-                    f' ({f_range[0].unit}) and signals ({frequ_unit}).'
-                )
+            f_lower_new = _q_convert(f_range[0], frequ_unit, 'f_range[0]',
+                                     'signal.frequencies')
         else:
             f_lower_new = f_lower
         
         if f_range[1] is not None:
-            try:
-                f_upper_new = u.Quantity(f_range[1], unit=frequ_unit)
-            except u.UnitConversionError:
-                # -- Conversion only fails if df is already Quantity and has
-                # -- non-matching unit, so we can assume that df.unit works
-                raise ValueError(
-                    'Need consistent frequency units for `f_range` members'
-                    f' ({f_range[1].unit}) and signals ({frequ_unit}).'
-                )
+            f_upper_new = _q_convert(f_range[1], frequ_unit, 'f_range[1]',
+                                     'signal.frequencies')
 
             # TODO: implement check of f_max with Nyquist of signals -> needed?
         else:
@@ -398,13 +377,9 @@ def inner_product_computation(
         # -- signal2.size = psd.size if this error is not raised
         raise ValueError(custom_error_msg)
     
-    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
-    try:
-        # output_unit = output_unit.to_system(preferred_unit_system)[0]
-        output_unit = output_unit.compose(units=preferred_unit_system)[0]
-    except u.UnitsError:
-        output_unit = output_unit.si
-        # -- Resets scale only for units, not for value. Best we can do
+    output_unit = ((signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
+                   .decompose(bases=preferred_unit_system.bases))
+    # -- Resets scale only for units, not for value. Best we can do
     
     # -- To determine factor in front of integral, check if one-sided
     one_sided = ((signal1.frequencies[0].value >= 0.0) or
@@ -527,7 +502,7 @@ def optimized_inner_product(
         'due to `df` being too large. If `df` is already small, consider '
         'choosing a (negative) power of two as these seem to work best.'
     )
-    # Is perhaps because interpolate uses fft, which works best with powers of two
+    # -- Is perhaps because interpolate uses fft, which works best with powers of two
     try:
         assert_allclose_quantity(signal1.frequencies, signal2.frequencies,
                                  atol=0.5*signal1.df.value, rtol=0.)
@@ -539,20 +514,18 @@ def optimized_inner_product(
         # -- signal2.size = psd.size if this error is not raised
         raise ValueError(custom_error_msg)
     
-    # ----- Fourth step: computations -----
+    # -- Fourth step: computations
     dft_vals = (signal1 * signal2.conjugate() / psd)
 
     if min_dt_prec is not None:
-        try:
-            min_dt_prec = u.Quantity(min_dt_prec, unit=1./frequ_unit)
-        except u.UnitConversionError:
-            # -- Conversion only fails if min_dt_prec is already
-            # -- Quantity and has non-matching unit, so we can assume
-            # -- that min_dt_prec.unit works
-            raise ValueError(
-                f'Need consistent units for `min_dt_prec` ({min_dt_prec.unit})'
-                f' and inverse frequency unit of signals ({1./frequ_unit}).'
-            )
+        min_dt_prec = _q_convert(
+            min_dt_prec,
+            1.0/frequ_unit,
+            'min_dt_prec',
+            'signal',
+            err_msg='Need consistent (i.e. convertible) units for `%s` (%s)'
+                    ' and inverse frequency unit of `%s` (%s).'
+        )
 
     # -- Append zeros or bring into correct format so that ifft can be
     # -- used. The prefactor is added here already because it depends on
@@ -615,19 +588,12 @@ def optimized_inner_product(
     assert next_power_of_two(full_dft_vals.size) == full_dft_vals.size, \
         'Consistency check, not your fault if it fails.'
 
-    dt = 1. / (full_dft_vals.size*signal1.df)   
-    try:
-        dt = dt.value * dt.unit.compose(units=preferred_unit_system)[0]
-    except u.UnitsError:
-        dt = dt.value * dt.unit.si
+    dt = (1. / (full_dft_vals.size*signal1.df)).decompose(bases=preferred_unit_system.bases)
 
-    output_unit = signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
-    try:
-        output_unit = output_unit.compose(units=preferred_unit_system)[0]
-    except u.UnitsError:
-        output_unit = output_unit.si
-        # -- Resets scale only for units, not for value. Best we can do
-
+    output_unit = ((signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
+                   .decompose(bases=preferred_unit_system.bases))
+    # -- Resets scale only for units, not for value. Best we can do
+    
     match_series = TimeSeries(
         np.fft.ifft(full_dft_vals / dt.value),  # Discrete -> continuous
         unit=output_unit,
@@ -768,17 +734,14 @@ def overlap(
     out = inner_product(signal1, signal2, *args, **kwargs)
 
     normalization = 1.0  # Default value
-
     if isinstance(norm1 := norm(signal1, *args, **kwargs), u.Quantity):
         normalization *= norm1
     else:
         normalization *= norm1[0]
-
     if isinstance(norm2 := norm(signal2, *args, **kwargs), u.Quantity):
         normalization *= norm2
     else:
         normalization *= norm2[0]
-
 
     if isinstance(out, u.Quantity):
         return out / normalization

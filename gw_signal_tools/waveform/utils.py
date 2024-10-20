@@ -293,7 +293,7 @@ def restrict_f_range(
 
     if f_range is None:
         f_range = [None, None]
-    elif len(f_range) != 2:
+    elif len(f_range) != 2:  # pragma: no cover
         raise ValueError(
             '`f_range` must be None or contain lower and upper frequency bounds.'
         )
@@ -356,7 +356,7 @@ def restrict_f_range(
     # -- Filling
     if fill_range is None:
         fill_range = f_range
-    elif len(fill_range) != 2:
+    elif len(fill_range) != 2:  # pragma: no cover
         raise ValueError(
             '`fill_range` must be None or contain lower and upper frequency bounds.'
         )
@@ -439,7 +439,7 @@ def fill_f_range(
     frequ_unit = signal.frequencies.unit
     f_lower, f_upper = signal.f0, signal.frequencies[-1]
 
-    if len(fill_bounds) != 2:
+    if len(fill_bounds) != 2:  # pragma: no cover
         raise ValueError(
             '`fill_bounds` must contain lower and upper frequency bounds.'
         )
@@ -620,6 +620,11 @@ def get_signal_at_target_frequs(
 
 
 # -- Wrapper functions for strain generation ----------------------------------
+_CORRECT_H_UNIT_TIME: u.Unit = u.strain
+_CORRECT_H_UNIT_FREQU: u.Unit = u.strain*u.s
+# -- Can be set to 1 for easy tests omitting units
+
+
 def get_strain(
     params: dict[str, float | u.Quantity],
     domain: Literal['time', 'frequency'],
@@ -662,12 +667,13 @@ def get_strain(
     ~gwpy.timeseries.TimeSeries or ~gwpy.frequencyseries.FrequencySeries
         Gravitational wave strain.
     """
+    # TODO: remove temp_factor once correct version is in lal release
     if domain == 'time':
         generator_func = wfm.GenerateTDWaveform
-        temp_factor = 1.  # TODO: change unit once lal gets it right
+        temp_factor = _CORRECT_H_UNIT_TIME
     elif domain == 'frequency':
         generator_func = wfm.GenerateFDWaveform
-        temp_factor = u.s  # TODO: change unit once lal gets it right
+        temp_factor = _CORRECT_H_UNIT_FREQU
     else:
         raise ValueError(
             'Invalid domain, select either `\'time\'` or `\'frequency\'`.'
@@ -704,13 +710,13 @@ def get_strain(
             )
 
     if return_detector_output:
-        return generator_func(intrinsic_params, generator).strain(**extrinsic_params) * temp_factor  # TODO: change unit once lal gets it right
+        return generator_func(intrinsic_params, generator).strain(**extrinsic_params) * temp_factor
     else:
         match mode:
             case 'plus':
-                return generator_func(intrinsic_params, generator)[0] * temp_factor  # TODO: change unit once lal gets it right
+                return generator_func(intrinsic_params, generator)[0] * temp_factor
             case 'cross':
-                return generator_func(intrinsic_params, generator)[1] * temp_factor  # TODO: change unit once lal gets it right
+                return generator_func(intrinsic_params, generator)[1] * temp_factor
             case 'mixed':
                 hp, hc = generator_func(intrinsic_params, generator)
 
@@ -719,14 +725,14 @@ def get_strain(
                 # -- according to h_+ - i * h_x
 
                 if domain == 'time':
-                    return hp + 1.j * hc
+                    return (hp + 1.j * hc) * temp_factor
                 else:
                     # -- Need negative Fourier components as well
                     return FrequencySeries(
                         np.flip((np.conjugate(hp) + 1.j * np.conjugate(hc))[1:]),
                         f0=-hp.frequencies[-1],
                         df=hp.df
-                    ).append(hp + 1.j * hc, inplace=True) * temp_factor  # TODO: change unit once lal gets it right
+                    ).append(hp + 1.j * hc, inplace=True) * temp_factor
             case _:
                 raise ValueError('Invalid `mode`.')
 
@@ -793,7 +799,7 @@ def get_wf_generator(
         from ..caching import cache_func
         return cache_func(wf_generator)
     elif cache:
-        from ..caching import cache
-        return cache(wf_generator)
+        from ..caching import _cache
+        return _cache(wf_generator)
     else:
         return wf_generator

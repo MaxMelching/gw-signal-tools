@@ -12,6 +12,11 @@ __all__ = ('disable_caching', 'enable_caching', 'cache_func', 'use_caching',
            'enable_caching_locally', 'disable_caching_locally')
 
 
+# _cache = cache
+_cache = lru_cache(maxsize=128, typed=True)
+# TODO: should we use lru_cache with typed=True? Right now, I do not
+# see why, but I might be missing something
+
 def _dummy_cache(func):
     """Wrapper returning the input function."""
     return func
@@ -43,10 +48,7 @@ def enable_caching():
         logger.info('Enabling caching')
 
     global cache_func
-    # cache_func = cache
-    cache_func = lru_cache(maxsize=128, typed=True)
-    # TODO: should we use lru_cache with typed=True? Right now, I do not
-    # see why, but I might be missing something
+    cache_func = _cache
 
     global use_caching
     use_caching = True

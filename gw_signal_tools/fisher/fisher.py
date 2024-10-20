@@ -101,7 +101,7 @@ class FisherMatrix:
     stored in ``FisherMatrix.fisher`` (for example array-conversion).
     """
     default_metadata = {
-        'deriv_routine': 'gw_signal_tools'
+        'deriv_routine': 'gw_signal_tools',
     }
 
     _preferred_units = preferred_unit_system
@@ -126,9 +126,10 @@ class FisherMatrix:
         self.wf_generator = wf_generator
         self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
-        self.metadata['return_info'] = True  # We rely on this
+        # -- We rely on return_info = True, thus set it now
+        self.metadata['return_info'] = True
 
-        if len(self.metadata) > len(self.default_metadata):
+        if len(self.metadata) > len(self.default_metadata)+1:  # +1 for return_info
             # -- Arguments for inner product may be given, extract
             self._inner_prod_kwargs = {}
             for key in _INNER_PROD_ARGS:

@@ -165,13 +165,10 @@ def distance(
             raise ValueError('Invalid `distance_kind` is given.')
 
         distances += [
-            distance_val
+            distance_val.value
         ]
 
-    return Series(
-        distances,
-        xindex=param_vals
-    )
+    return Series(distances, xindex=param_vals, unit=distance_val.unit)
 
 def linearized_distance(
     param_to_vary: str | list[str],

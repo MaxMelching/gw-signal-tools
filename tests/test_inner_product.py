@@ -403,7 +403,7 @@ def test_different_units():
 
 
 #%% -- Confirm that certain errors are raised ---------------------------------
-class ErrorRaising(unittest.TestCase):
+class InnProdErrorRaising(unittest.TestCase):
     def test_signal_type_checking(self):
         with self.assertRaises(TypeError):
             inner_product(np.array([42]), hp_f_fine)
@@ -429,11 +429,11 @@ class ErrorRaising(unittest.TestCase):
     
     def test_df_unit_testing(self):
         with self.assertRaises(ValueError):
-            norm(hp_f_fine, df=0.0625 * u.m)
-
-    # def test_optimize_requirements(self):
-    #     with self.assertRaises(ValueError):
-    #         ...  # Generate using get_strain, then remove certain components -> with behaviour from now, it is intended that no error should be raised!
+            norm(hp_f_fine, df=0.0625*u.m)
+    
+    def test_min_dt_prec_unit_testing(self):
+        with self.assertRaises(ValueError):
+            norm(hp_f_fine, min_dt_prec=1e-3*u.m, optimize_time_and_phase=True)
 
 
 #%% -- Confirming results with PyCBC match function ---------------------------

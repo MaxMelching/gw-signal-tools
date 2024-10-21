@@ -50,7 +50,7 @@ testing:
     - job: installation
       artifacts: true
   script:
-    - pip install .[dev]
+    - pip install --find-links=PIP_CACHE_DIR .[dev]
     - python -m setuptools_scm  # Print package version for debugging
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     # TODO: add -v at the end? Shows names of test that fail/pass during running

@@ -211,8 +211,6 @@ def pad_to_get_target_df(
     """
     # -- Handle units
     frequ_unit = 1.0 / signal.times.unit
-    # df = _convert(df, frequ_unit,
-    #               _UNIT_CONV_ERR % ('df', df.unit, 'signal', frequ_unit))
     df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- Check whether padding is required or current df is sufficient
@@ -301,21 +299,11 @@ def restrict_f_range(
     f_lower = f_range[0] if f_range[0] is not None else signal.frequencies[0]
     f_upper = f_range[1] if f_range[1] is not None else signal.frequencies[-1]
 
-    # f_lower = _convert(f_lower, frequ_unit, _UNIT_CONV_ERR % (
-    #     'f_lower', f_lower.unit, 'signal', frequ_unit
-    # ))
-    f_lower = _q_convert(f_lower, frequ_unit, 'f_lower', 'signal.frequencies')
-    
-    # f_upper = _convert(f_upper, frequ_unit, _UNIT_CONV_ERR % (
-    #     'f_upper', f_upper.unit, 'signal', frequ_unit
-    # ))
+    f_lower = _q_convert(f_lower, frequ_unit, 'f_lower', 'signal.frequencies')    
     f_upper = _q_convert(f_upper, frequ_unit, 'f_upper', 'signal.frequencies')
 
     # -- Handling fill_val
     signal_unit = signal.unit
-    # fill_val = _convert(fill_val, signal_unit, _UNIT_CONV_ERR % (
-    #     'fill_val', fill_val.unit, 'signal', signal_unit
-    # ))
     fill_val = _q_convert(fill_val, signal_unit, 'fill_val', 'signal')
 
     # -- Padding/trimming

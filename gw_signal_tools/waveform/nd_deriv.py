@@ -8,6 +8,9 @@ import numpy as np
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 
+# -- Local Package Imports
+from .inner_product import param_bounds
+
 
 __doc__ = """
 Module for ``WaveformDerivativeNumdifftools`` and
@@ -123,12 +126,11 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         self._param_to_vary = param_to_vary
 
         if 'base_step' not in kwds:
-            _par_val = self.param_center_val.value
-            kwds['base_step'] = 1e-2*(_par_val if _par_val != 0. else 1.)
-            # kwds['base_step'] = self.base_step = 1e-2*(_par_val if _par_val != 0. else 1.)
-            # -- Otherwise potentially zero step size
-
-            # kwds['base_step'] = 'invalid'
+            # -- Set maximum step size. To verify, one can print e.g.
+            # -- the steps in Derivative._derivative_nonzero_order
+            kwds['base_step'] = self._default_base_step
+        elif isinstance(_base_step := kwds['base_step'], u.Quantity):
+            kwds['base_step'] = _base_step.to_value(self.param_center_val.unit)
 
         def fun(x):
             return self.wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
@@ -184,15 +186,11 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
             return deriv
         
         # -- Test for valid point, potentially adjusting method
-        self.test_point()
+        self.test_base_step()
 
         self.full_output = True
         deriv, info = super().__call__(x)
         self.deriv_info = info._asdict()
-
-        # TODO: use test_point function in case of Input domain error
-        # -> could maybe adjust base_step and also the deriv routine
-        # -> works like this: self.fd_rule.method = 'central'
 
         param_unit = self.param_center_val.unit
 
@@ -214,18 +212,19 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
 
         return out
     
-    _param_bound_storage = {
-        'total_mass': (0, np.inf),
-        'mass1': (0., np.inf),
-        'mass2': (0., np.inf),
-        'distance': (0., np.inf),
-        'mass_ratio': (0., 1.),
-        'inverse_mass_ratio': (1., np.inf),
-        'sym_mass_ratio': (0., 0.25),
-        'inclination': (0., 2.*np.pi),  # TODO: should this be np.pi?
-    }
-    # TODO: what other parameters are relevant in this regard?
-    # Maybe spins?
+    @property
+    def _default_base_step(self) -> float:
+        """Largest step size used by default."""
+        _par_val = self.param_center_val.value
+        return 1e-2*(_par_val if _par_val != 0. else 1.)
+        # -- If case needed to avoid zero step size
+        
+        # if _par_val == 0. or np.log10(_par_val) < 1:
+        #     return 1e-2
+        # else:
+        #     return 1e-2*_par_val
+    
+    _param_bound_storage = param_bounds.copy()
     
     @property
     def param_bounds(self, param: str) -> tuple[float, float]:
@@ -247,7 +246,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         assert len(bounds) == 2, 'Need exactly one lower and one upper bound.'
         self._param_bound_storage[param] = bounds
     
-    def test_point(self) -> None:
+    def test_base_step(self) -> None:
         """
         Check if `self.wf_params_at_point` contains potentially tricky
         values, e.g. mass ratios close to 1. If yes, a subsequent
@@ -263,27 +262,21 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
                     self.param_to_vary, default_bounds)
         
         _base_step = self.step.base_step
-        # if isinstance(_base_step, u.Quantity):
-        #     _base_step = _base_step.to_value(self.param_center_val.unit)
-        # lower_violation = self.param_center_val.value - _base_step <= lower_bound
-        # upper_violation = self.param_center_val.value + _base_step >= upper_bound
-        
-        if not isinstance(_base_step, u.Quantity):
-            _base_step = _base_step * self.param_center_val.unit
-        lower_violation = self.param_center_val - _base_step <= lower_bound*self.param_center_val.unit
-        upper_violation = self.param_center_val + _base_step >= upper_bound*self.param_center_val.unit
+        _par_val = self.param_center_val.value
+        lower_violation = _par_val - _base_step <= lower_bound
+        upper_violation = _par_val + _base_step >= upper_bound
 
+        # -- Check if base_step needs change
         if lower_violation and upper_violation:
-            # -- Recursively decrease step size until it works
-            self.step.base_step = _base_step / 2.
-            # TODO: or use difference between center_val and bound?
-            self.test_point()
+            self.step.base_step = min(_base_step/2., self._default_base_step)
         elif lower_violation and not upper_violation:
+            # -- Can only happen if method is not forward yet
             self.method = 'forward'
-            # self.fd_rule = self._fd_rule(n=self.n, method='forward', order=self.order)
+            self.step.base_step = min(_base_step/2., self._default_base_step)
         elif not lower_violation and upper_violation:
+            # -- Can only happen if method is not backward yet
             self.method = 'backward'
-            # self.fd_rule = self._fd_rule(n=self.n, method='backward', order=self.order)
+            self.step.base_step = min(_base_step/2., self._default_base_step)
     
     # -- In case calling seems unintiutive, create attribute
     @property
@@ -329,6 +322,23 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         :type: `dict[str, ~astropy.units.Quantity]`
         """
         return self._wf_params_at_point
+    
+    @property
+    def deriv_info(self) -> dict[str, Any]:
+        """
+        Information about the calculated derivative, given as a
+        dictionary. All keys from this dictionary are also accessible
+        as a class attribute.
+        """
+        return self._deriv_info
+    
+    @deriv_info.setter
+    def deriv_info(self, info: dict[str, Any]):
+        for key, val in info.items():
+            # -- Make each key from deriv_info available as attribute
+            setattr(self, key, val)
+        
+        self._deriv_info = info
 
 
 # -- Now: fix bug in nd.Derivative, complex input throws error. This is
@@ -479,7 +489,9 @@ class WaveformDerivativeAmplitudePhase():
         self._param_to_vary = param_to_vary
 
         if 'base_step' not in kwds:
-                kwds['base_step'] = 1e-2*self.param_center_val.value
+                kwds['base_step'] = self._default_base_step
+        elif isinstance(_base_step := kwds['base_step'], u.Quantity):
+            kwds['base_step'] = _base_step.to_value(self.param_center_val.unit)
         
         # def abs_wrapper(x):
         #     _wf_params_at_point = wf_params_at_point |{
@@ -533,7 +545,7 @@ class WaveformDerivativeAmplitudePhase():
             return deriv
         
         # -- Test for valid point, potentially adjusting method
-        self.test_point()        
+        self.test_base_step()        
 
         self.abs_deriv.full_output = True
         abs_deriv, abs_info = self.abs_deriv(x)
@@ -544,25 +556,20 @@ class WaveformDerivativeAmplitudePhase():
         self.deriv_info = {'abs': abs_info._asdict(),
                            'phase': phase_info._asdict()}
 
-        # TODO: use test_point function in case of Input domain error
-        # -> could maybe adjust base_step and also the deriv routine
-        # -> works like this: self.fd_rule.method = 'central'
-
-
         param_unit = self.param_center_val.unit
 
         wf = self.fun(x)
         ampl = np.abs(wf).value
         phase = np.unwrap(np.angle(wf)).value
-        # -- Following would be more future proof I think... But involves
-        # -- more calls to function... So should we do it?
+        # -- TODO: following would be more future proof I think... But
+        # -- involves more calls to function... So should we do it?
         # ampl = self.abs_fun(x)
         # phase = self.phase_fun(x)
 
         deriv = (abs_deriv + 1.j*ampl*phase_deriv) * np.exp(1j*phase)
 
-        # Idea: use type that wf_generator returns to have flexibility
-        # with respect to whether TimeSeries/FrequencySeries is passed
+        # -- Use type that wf_generator returns to have flexibility
+        # -- with whether TimeSeries/FrequencySeries is passed
         out = type(wf)(
             data=deriv,
             xindex=wf.frequencies,
@@ -571,10 +578,22 @@ class WaveformDerivativeAmplitudePhase():
 
         return out
     
-    _param_bound_storage = WaveformDerivativeNumdifftools._param_bound_storage
+    @property
+    def _default_base_step(self) -> float:
+        """Largest step size used by default."""
+        _par_val = self.param_center_val.value
+        return 1e-2*(_par_val if _par_val != 0. else 1.)
+        # -- If case needed to avoid zero step size
+        
+        # if _par_val == 0. or np.log10(_par_val) < 1:
+        #     return 1e-2
+        # else:
+        #     return 1e-2*_par_val
+    
+    _param_bound_storage = param_bounds.copy()
     param_bounds = WaveformDerivativeNumdifftools.param_bounds
     
-    def test_point(self) -> None:
+    def test_base_step(self) -> None:
         """
         Check if `self.wf_params_at_point` contains potentially tricky
         values, e.g. mass ratios close to 1. If yes, a subsequent
@@ -590,24 +609,21 @@ class WaveformDerivativeAmplitudePhase():
                     self.param_to_vary, default_bounds)
         
         _base_step = self.abs_deriv.step.base_step  # Same for phase_deriv
-        
-        if not isinstance(_base_step, u.Quantity):
-            _base_step = _base_step * self.param_center_val.unit
-        lower_violation = self.param_center_val - _base_step <= lower_bound*self.param_center_val.unit
-        upper_violation = self.param_center_val + _base_step >= upper_bound*self.param_center_val.unit
+        _par_val = self.param_center_val.value
+        lower_violation = _par_val - _base_step <= lower_bound
+        upper_violation = _par_val + _base_step >= upper_bound
 
+        # -- Check if base_step needs change
         if lower_violation and upper_violation:
-            # -- Recursively decrease step size until it works
-            self.abs_deriv.step.base_step = _base_step / 2.
-            self.phase_deriv.step.base_step = _base_step / 2.
-            # TODO: or use difference between center_val and bound?
-            self.test_point()
+            self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(_base_step/2., self._default_base_step)
         elif lower_violation and not upper_violation:
-            self.abs_deriv.method = 'forward'
-            self.phase_deriv.method = 'forward'
+            # -- Can only happen if method is not forward yet
+            self.method = 'forward'
+            self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(_base_step/2., self._default_base_step)
         elif not lower_violation and upper_violation:
-            self.abs_deriv.method = 'backward'
-            self.phase_deriv.method = 'backward'
+            # -- Can only happen if method is not backward yet
+            self.method = 'backward'
+            self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(_base_step/2., self._default_base_step)
     
     @property
     def deriv(self) -> Any:
@@ -634,7 +650,7 @@ class WaveformDerivativeAmplitudePhase():
         """
         Function that calculates the waveform amplitude.
 
-        :type: `~Callable[[float], ~numpy.ndarray]`
+        :type: `Callable[[float], ~numpy.ndarray]`
         """
         return self.abs_deriv.fun
     
@@ -652,6 +668,8 @@ class WaveformDerivativeAmplitudePhase():
         """
         Function that calculates the waveform phase.
 
-        :type: `~Callable[[float], ~numpy.ndarray]`
+        :type: `Callable[[float], ~numpy.ndarray]`
         """
         return self.phase_deriv.fun
+    
+    deriv_info = WaveformDerivativeNumdifftools.deriv_info

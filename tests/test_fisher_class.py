@@ -141,6 +141,10 @@ def test_deriv_routine_consistency():
             phenomx_generator,
             deriv_routine=routine
         )
+
+    print(fisher_gw_signal_tools.fisher)
+    print(fisher_numdifftools.fisher)
+    print(fisher_amplitude_phase.fisher)
     
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(

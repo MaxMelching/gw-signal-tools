@@ -207,7 +207,7 @@ def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
     # -- Important: have to pass same formula that is used after
     # -- adjustment in previous call
 
-    assert_allclose_series(deriv_1.deriv, deriv_2.deriv, atol=1., rtol=0.)
+    assert_allclose_series(deriv_1.deriv, deriv_2.deriv, atol=0., rtol=0.)
     assert deriv_1.deriv_info['deriv_formula'] == deriv_2.deriv_info['deriv_formula']
 
 

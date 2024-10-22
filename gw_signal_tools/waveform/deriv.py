@@ -12,7 +12,7 @@ import matplotlib as mpl
 
 # -- Local Package Imports
 from ..logging import logger
-from .inner_product import norm, inner_product
+from .inner_product import norm, inner_product, param_bounds
 from .nd_deriv import (
     WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
 )
@@ -472,7 +472,6 @@ class WaveformDerivativeGWSignaltools():
 
         # -- Test for valid point
         self.test_point(0.)
-        logger.info(self.deriv_formula)
 
         self.is_converged = False
         self.refine_numb = 0
@@ -677,7 +676,7 @@ class WaveformDerivativeGWSignaltools():
                 self.wf_params_at_point[self.param_to_vary] = new_point*self.param_center_val.unit
         return self.deriv
     
-    _param_bound_storage = WaveformDerivativeNumdifftools._param_bound_storage
+    _param_bound_storage = param_bounds.copy()
     param_bounds = WaveformDerivativeNumdifftools.param_bounds
 
     # TODO: what other parameters are relevant in this regard?
@@ -709,8 +708,6 @@ class WaveformDerivativeGWSignaltools():
         
         lower_violation = self._lower_point_checker(step_size, lower_bound)
         upper_violation = self._upper_point_checker(step_size, upper_bound)
-
-        logger.info((step_size, lower_violation, upper_violation))
         
         if lower_violation and upper_violation:
             # -- Step size simply too large, no need to change

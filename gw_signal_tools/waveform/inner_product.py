@@ -845,6 +845,23 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
     return False
 
 
+# TODO: should this be a constant, i.e. PARAM_BOUNDS? Don't think so
+param_bounds: dict[str, tuple[float, float]] = {
+    'total_mass': (0, np.inf),
+    'mass1': (0., np.inf),
+    'mass2': (0., np.inf),
+    'distance': (0., np.inf),
+    'mass_ratio': (0., 1.),
+    'inverse_mass_ratio': (1., np.inf),
+    'sym_mass_ratio': (0., 0.25),
+    'inclination': (0., 2.*np.pi),  # TODO: should this be np.pi?
+    'phi_ref': (-np.pi, np.pi),
+    'f_ref': (0., np.inf),
+}
+# TODO: what other parameters are relevant in this regard?
+# Maybe spins?
+
+
 def get_default_opt_params(
     wf_params: dict[str, u.Quantity],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries]
@@ -1090,12 +1107,11 @@ def optimize_overlap(
     init_guess = [wf_params[param].value for param in _opt_params]
     
     bounds = len(_opt_params)*[(None, None)]
-    if 'phi_ref' in _opt_params:
-        bounds[np.argwhere(_opt_params == 'phi_ref')[0, 0]] = (-np.pi, np.pi)
-        # -- Not 2*pi because phi_ref enters as 2*phi_ref in phase
+    for i in range(len(_opt_params)):
+        bounds[i] = param_bounds.get(_opt_params[i], (None, None))
+        if _opt_params[i] == 'mass_ratio' and wf_params['mass_ratio'] > 1:
+            bounds[i] = param_bounds.get('inverse_mass_ratio', (None, None))
 
-    # TODO: maybe also set bounds for f_ref for example?
-    
     result = minimize(fun=loss, x0=init_guess, bounds=bounds,
                       method='Nelder-Mead')
     # -- If possible, will find parameters so that mismatch <= 1e-5

@@ -12,9 +12,13 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   gw_signal_tools.PSDs
+   gw_signal_tools.waveform
 
    gw_signal_tools.fisher
+
+   gw_signal_tools.types
+
+   gw_signal_tools.PSDs
 
 Submodules
 ----------
@@ -22,13 +26,9 @@ Submodules
 .. toctree::
    :maxdepth: 2
 
-   inner_product
-
-   waveform_utils
-
-   matrix_with_units
-
    units
+
+   caching
 
    psd
 

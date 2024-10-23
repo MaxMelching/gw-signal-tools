@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to gw-signal-tools's documentation!
+Welcome to the gw-signal-tools documentation!
 ===========================================
 
 gw-signal-tools
@@ -29,9 +29,10 @@ gw-signal-tools
    tutorials/inner_product_tests.ipynb
    tutorials/derivative_tests.ipynb
    tutorials/fisher_tests.ipynb
-   tutorials/waveform_conversion_tests.ipynb
    tutorials/units.ipynb
+   tutorials/caching.ipynb
    tutorials/performance_tests.ipynb
+   tutorials/waveform_conversion_tests.ipynb
 
 .. toctree::
    :maxdepth: 2

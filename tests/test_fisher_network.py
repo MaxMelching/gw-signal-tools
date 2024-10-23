@@ -1,19 +1,20 @@
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import astropy.units as u
 import pytest
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
-from gw_signal_tools.waveform_utils import get_wf_generator
-from gw_signal_tools.types import Detector
+from gw_signal_tools.waveform import get_wf_generator, norm
+from gw_signal_tools.types import Detector, HashableDict
 from gw_signal_tools.PSDs import psd_no_noise
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
 
 
-#%% Initializing commonly used variables
+#%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -26,19 +27,23 @@ wf_params = {
     'eccentricity': 0.*u.dimensionless_unscaled,
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
-    # det is left out in purpose, shows that this is automatically set
+    # -- det is left out in purpose, shows that it is set automatically
     'ra': 0.2*u.rad,
     'dec': 0.2*u.rad,
     'psi': 0.5*u.rad,
     'tgps': 1126259462,
     'condition': 0
-}
+})
 
-phenomx_generator = get_wf_generator('IMRPhenomXPHM')
-phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
-phenomd_generator = get_wf_generator('IMRPhenomD')
 
-# Make sure mass1 and mass2 are not in default_dict (makes messy behaviour)
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+    phenomd_generator = get_wf_generator('IMRPhenomD')
+
+# -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
@@ -55,7 +60,7 @@ fisher_tot_mass = FisherMatrixNetwork(
     [hanford, livingston]
 )
 
-#%% ----- Simple consistency tests -----
+#%% -- Simple consistency tests -----------------------------------------------
 def test_single_det_consistency():
     fisher_v1 = FisherMatrixNetwork(
         wf_params,
@@ -90,7 +95,7 @@ def test_single_det_consistency():
         assert sys_error_1 == sys_error_2
 
 
-#%% ----- Feature tests -----
+#%% -- Feature tests ----------------------------------------------------------
 @pytest.mark.parametrize('params', [
     'total_mass',
     ['total_mass'],
@@ -105,6 +110,7 @@ def test_params(params):
         phenomx_generator,
         [hanford, livingston]
     )
+
 
 @pytest.mark.parametrize('det', [
     hanford,
@@ -121,12 +127,14 @@ def test_detector(det):
         det
     )
 
+
 def test_index_from_det():
     assert fisher_tot_mass._index_from_det(hanford) == 0
     assert fisher_tot_mass._index_from_det(hanford.name) == 0
 
     assert fisher_tot_mass._index_from_det(livingston) == 1
     assert fisher_tot_mass._index_from_det(livingston.name) == 1
+
 
 def test_detector_fisher():
     assert ((fisher_tot_mass.detector_fisher(hanford)
@@ -139,9 +147,9 @@ def test_detector_fisher():
             (fisher_tot_mass.detector_fisher(livingston)
              == fisher_tot_mass.detector_fisher(1)))
 
+
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass', 'time', 'phase']])
 def test_sys_error(params):
-    phenomd_generator = FisherMatrix.get_wf_generator('IMRPhenomD')
     fisher = FisherMatrixNetwork(
         wf_params,
         ['total_mass', 'mass_ratio', 'time', 'phase'],
@@ -173,24 +181,25 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, optimize=False,
                             optimize_fisher='psi', return_opt_info=True)
 
+
 @pytest.mark.parametrize('inner_prod_kwargs', [
     {},
     dict(f_range=[20.*u.Hz, 42.*u.Hz]),
     dict(df=2**-2, min_dt_prec=1e-5*u.s)
 ])
 def test_snr(inner_prod_kwargs):
-    from gw_signal_tools.inner_product import norm
     snr = 0.
     for det in [hanford, livingston]:
         snr += norm(phenomx_generator(wf_params | {'det': det.name}),
                     psd=det.psd, **inner_prod_kwargs)**2
     assert snr**.5 == fisher_tot_mass.snr(**inner_prod_kwargs)
 
+
 @pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_detectors', [None, [hanford]])
-@pytest.mark.parametrize('new_metadata', [None, {'return_info': False, 'convergence_check': 'mismatch'}])
+@pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
 def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
                       new_wf_generator, new_detectors, new_metadata):
     if new_metadata is None:
@@ -213,6 +222,7 @@ def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
     if new_detectors is not None:
         assert fisher_tot_mass_v2.detectors == new_detectors
     assert fisher_tot_mass_v2.metadata == (fisher_tot_mass.metadata | new_metadata)
+
 
 def test_copy():
     fisher_copy = fisher_tot_mass.copy()

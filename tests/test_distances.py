@@ -1,32 +1,30 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import unittest
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import matplotlib.pyplot as plt
-
 import astropy.units as u
-
 from gwpy.testing.utils import assert_quantity_equal
-
 import pytest
 
-# ----- Local Package Imports -----
-from gw_signal_tools.waveform_utils import get_wf_generator
+# -- Local Package Imports
+from gw_signal_tools.waveform import get_wf_generator
 from gw_signal_tools.fisher import (
     distance, linearized_distance
 )
 from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allclose_series
 )
-from gw_signal_tools import PLOT_STYLE_SHEET
+from gw_signal_tools.types import HashableDict
+from gw_signal_tools import PLOT_STYLE_SHEET, enable_caching_locally, disable_caching_locally
 plt.style.use(PLOT_STYLE_SHEET)
 
 
-#%% Initializing commonly used variables
+#%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'total_mass': 100.*u.solMass,
     'mass_ratio': 0.42*u.dimensionless_unscaled,
     'deltaT': 1./2048.*u.s,
@@ -40,11 +38,19 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
-approximant = 'IMRPhenomXPHM'
 
-wf_gen = get_wf_generator(approximant)
+with enable_caching_locally():
+# with disable_caching_locally():
+    # -- Avoid globally changing caching, messes up test_caching
+    wf_gen = get_wf_generator('IMRPhenomXPHM')
+
+# -- Make sure mass1 and mass2 are not in default_dict
+import lalsimulation.gwsignal.core.parameter_conventions as pc
+pc.default_dict.pop('mass1', None);
+pc.default_dict.pop('mass2', None);
+
 
 @pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 @pytest.mark.parametrize('optimize', [False, True])
@@ -79,6 +85,7 @@ def test_distance(param_to_vary, optimize, dist_kind):
 
     assert_quantity_equal(param_range, dist_no_step_size.xindex)
 
+
 @pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 def test_linearized_distance(param_to_vary):
     center_val = wf_params[param_to_vary]
@@ -96,6 +103,7 @@ def test_linearized_distance(param_to_vary):
     assert_allclose_quantity(dist.dx, step_size, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(u.Quantity([dist.xindex[0], dist.xindex[-1]]),
                              param_range, atol=step_size.value, rtol=0.0)
+
 
 @pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 def test_projected_linearized_distance(param_to_vary):
@@ -116,7 +124,6 @@ def test_projected_linearized_distance(param_to_vary):
     assert_allclose_quantity(u.Quantity([dist1.xindex[0], dist1.xindex[-1]]),
                              param_range, atol=step_size.value, rtol=0.0)
 
-
     dist2 = linearized_distance(
         param_to_vary=[param_to_vary],  # Testing equivalent input
         param_vals=param_range,
@@ -131,6 +138,7 @@ def test_projected_linearized_distance(param_to_vary):
                              param_range, atol=step_size.value, rtol=0.0)
 
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
+
 
 @pytest.mark.parametrize('params_to_project', [['time', 'phase'], 'time'])
 def test_params_to_project(params_to_project):
@@ -164,6 +172,7 @@ def test_params_to_project(params_to_project):
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
 
 
+#%% -- Confirm that certain errors are raised ---------------------------------
 class ErrorRaising(unittest.TestCase):
     param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]

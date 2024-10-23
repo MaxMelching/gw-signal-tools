@@ -1,13 +1,13 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import unittest
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 import astropy.units as u
 import pytest
 import matplotlib.pyplot as plt
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.test_utils import (
     assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
@@ -21,12 +21,13 @@ example_non_si_units = np.array([[2.0 * u.s, u.m], [u.m**2, u.s]])
 example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)], [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)]], dtype=object)
 
 
-# ----- Test cornerstone properties, value and unit -----
+#%% -- Test cornerstone properties, value and unit ----------------------------
 @pytest.mark.parametrize('units', [example_units, example_non_si_units, example_scaled_units])
 def test_unit_matrix_reading(units):
     matrix = MatrixWithUnits(example_values, units)
 
     np.all(matrix.unit == units)
+
 
 @pytest.mark.parametrize('unit', [u.s, 2.0 * u.s])
 def test_unit_scalar_reading(unit):
@@ -38,6 +39,7 @@ def test_unit_scalar_reading(unit):
 
     # np.all(matrix.unit == np.full(example_values.shape, unit, dtype=object))
     np.all(np.equal(matrix.unit, unit))
+
 
 def test_scalar_unit():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -57,7 +59,7 @@ def test_scalar_unit():
     )
 
 
-# ----- Test standard class functions -----
+#%% -- Test standard class functions ------------------------------------------
 def test_getting_and_slicing():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -74,6 +76,7 @@ def test_getting_and_slicing():
     assert_allequal_MatrixWithUnits(matrix2[0], MatrixWithUnits([42, 24], [2.0 * u.s, u.m]))
     assert_allequal_MatrixWithUnits(matrix2[1, 0], MatrixWithUnits(18, u.m**2))
 
+
 @pytest.mark.parametrize('set_val', [-2*u.dimensionless_unscaled, 3*u.pc, 42])
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_setting(set_val, units):
@@ -86,6 +89,7 @@ def test_setting(set_val, units):
     assert matrix[1, 1].unit == u.s
     # Only 1,1 component tested because it is same one for example_units and
     # scalar case u.s (otherwise values are unequal or not indexable)
+
 
 def test_eq():
     matrix_in_s1 = MatrixWithUnits(example_values, u.s)
@@ -111,10 +115,12 @@ def test_eq():
     matrix_single_val = MatrixWithUnits(42, u.dimensionless_unscaled)
     assert np.all(matrix_single_val == 42)
 
+
 def test_float():
     matrix = MatrixWithUnits(42, u.dimensionless_unscaled)
 
     assert float(matrix) == 42
+
 
 def test_copy():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -134,6 +140,7 @@ def test_copy():
     matrix_copy = copy(matrix)
     matrix_copy = deepcopy(matrix)
 
+
 def test_dict_conversion():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -141,7 +148,8 @@ def test_dict_conversion():
     assert_allequal_MatrixWithUnits(test_dict['matrix'], matrix)
     # Apparently, __hash__ is not needed, good
 
-# ----- Test common operations -----
+
+#%% -- Test common operations -------------------------------------------------
 def test_addition():
     matrix = MatrixWithUnits(example_values, example_units)
     
@@ -175,6 +183,7 @@ def test_addition():
         MatrixWithUnits(example_values + example_values, example_units)
     )
 
+
 def test_subtraction():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -207,6 +216,7 @@ def test_subtraction():
         matrix - 0.5 * matrix,
         MatrixWithUnits(0.5 * example_values, example_units)
     )
+
 
 def test_multiplication():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -277,6 +287,7 @@ def test_multiplication():
         MatrixWithUnits(example_values**2, example_units**2)
     )
 
+
 def test_division():
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
@@ -346,6 +357,7 @@ def test_division():
                         np.full((2, 2), u.dimensionless_unscaled))
     )
 
+
 def test_power():
     matrix = MatrixWithUnits(example_values, example_units)
     
@@ -363,11 +375,11 @@ def test_power():
                         np.full((2, 2), u.dimensionless_unscaled))
     )
 
-
     assert_allclose_MatrixWithUnits(
         matrix**(1/2),
         MatrixWithUnits(example_values**(1/2), example_units**(1/2))
     )
+
 
 def test_matmul():
     matrix = MatrixWithUnits(example_values, example_units)
@@ -400,7 +412,6 @@ def test_matmul():
         matrix_in_s @ matrix_in_s_2,
     )
 
-
     # -- Now tests for matrices that do not have single unit
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix2,
@@ -412,7 +423,6 @@ def test_matmul():
         matrix2.T @ matrix_in_s,
         MatrixWithUnits(example_values.T @ example_values, np.array([[u.s**2, u.s**2], [u.m * u.s, u.m * u.s]], dtype=object))
     )
-
 
     # -- Test with rows and columns
     matrix_col = matrix_in_s[:, 0]
@@ -467,6 +477,7 @@ def test_matmul():
                         np.array([[u.s*u.m, u.s**2], [u.m**2, u.m*u.s]], dtype=object))
     )
 
+
 @pytest.mark.parametrize('sign', [+1, -1])
 def test_abs(sign):
     matrix = MatrixWithUnits(sign*example_values, example_units)
@@ -475,7 +486,7 @@ def test_abs(sign):
     assert_allequal_MatrixWithUnits(abs(matrix), matrix_abs)
 
 
-# ----- Test numpy functions -----
+#%% -- Test numpy functions ---------------------------------------------------
 def test_transposing():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -488,7 +499,6 @@ def test_transposing():
     )
 
     matrix2 = MatrixWithUnits(example_values, u.s)
-
     
     assert_allequal_MatrixWithUnits(
         matrix2.T,
@@ -498,6 +508,7 @@ def test_transposing():
         )
     )
 
+
 def test_array_conversion():
     matrix = MatrixWithUnits(example_values, example_units)
     matrix = MatrixWithUnits(example_values, example_units)
@@ -505,11 +516,20 @@ def test_array_conversion():
 
     np.all(matrix_array == matrix.value)
 
+
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_len(units):
+    matrix = MatrixWithUnits(example_values, units)
+
+    assert len(matrix) == 2
+
+
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_size(units):
     matrix = MatrixWithUnits(example_values, units)
 
     assert matrix.size == 4
+
 
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_shape(units):
@@ -530,11 +550,13 @@ def test_reshape(new_shape):
         matrix2
     )
 
+
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_ndim(units):
     matrix = MatrixWithUnits(example_values, units)
     
     assert matrix.ndim == 2
+
 
 @pytest.mark.parametrize('values', [example_values, np.array([42], dtype=int),
     np.array([42.], dtype=float), np.array([42.j], dtype=complex)])
@@ -548,11 +570,13 @@ def test_dtype(values):
     except IndexError:
         assert type(matrix[0]) == u.Quantity
 
+
 def test_reading_from_array():
     matrix = MatrixWithUnits.from_numpy_array(example_values)
 
     assert np.all(np.equal(matrix.value, example_values))
     assert np.all(np.equal(matrix.unit, u.dimensionless_unscaled))
+
 
 def test_inv():
     matrix = MatrixWithUnits(example_values, u.s)
@@ -562,7 +586,6 @@ def test_inv():
         matrix @ matrix_inv,
         MatrixWithUnits.from_numpy_array(np.eye(2))
     )
-
 
     test_units_arr = np.array([u.s, u.m, u.kg], dtype=object)
     test_units = np.outer(test_units_arr, test_units_arr)
@@ -585,6 +608,7 @@ def test_inv():
         rtol=0.0
     )
 
+
 def test_diagonal():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -606,6 +630,7 @@ def test_diagonal():
         MatrixWithUnits([24], u.s)
     )
 
+
 def test_sqrt():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -613,6 +638,7 @@ def test_sqrt():
         matrix.sqrt(),
         MatrixWithUnits(np.sqrt(example_values), example_units**(1/2))
     )
+
 
 def test_cond():
     # -- Here we just make sure that calling works. Results are assumed
@@ -624,13 +650,14 @@ def test_cond():
     matrix.cond('nuc')
 
 
-# ----- Test astropy functions -----
+#%% -- Test astropy functions -------------------------------------------------
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_to_system(units):
     matrix = MatrixWithUnits(example_values, units)
 
     matrix.to_system(u.si)
     matrix.to_system(preferred_unit_system)
+
 
 def test_to():
     matrix = MatrixWithUnits([42, 96], [u.m, u.km])
@@ -646,6 +673,7 @@ def test_to():
         atol=0.0,
         rtol=1e-15  # Numerical errors, I think in initialization
     )
+
 
 def test_decompose():
     matrix = MatrixWithUnits(example_values, [[u.Msun, u.pc], [u.km, u.h]])
@@ -673,7 +701,7 @@ def test_decompose():
     )
 
 
-# ----- Test custom additions -----
+#%% -- Test custom additions --------------------------------------------------
 @pytest.mark.parametrize('given_ax', [True, False])
 def test_plot(given_ax):
     if given_ax:
@@ -694,8 +722,18 @@ def test_plot(given_ax):
 
     # Main goal is to make sure there are no errors
 
+@pytest.mark.parametrize('units', [example_units, u.s])
+def test_to_row_to_col(units):
+    matrix = MatrixWithUnits(example_values, units)
 
-# ----- Test error raising -----
+    row = matrix.to_row()
+    assert row.shape == (1, 4)
+
+    col = matrix.to_col()
+    assert col.shape == (4, 1)
+
+
+#%% -- Test error raising -----------------------------------------------------
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)

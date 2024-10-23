@@ -1,18 +1,23 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any, Callable
 
-# ----- Third Party Imports -----
-import numpy as np
-
+# -- Third Party Imports
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from ..logging import logger
-from ..inner_product import norm
+from ..waveform.inner_product import norm
 from .fisher import FisherMatrix
 from ..types import MatrixWithUnits, Detector
+
+
+__doc__ = """
+Module for the ``FisherMatrixNetwork`` class.
+"""
+
+__all__ = ('FisherMatrixNetwork', )
 
 
 class FisherMatrixNetwork(FisherMatrix):
@@ -98,7 +103,7 @@ class FisherMatrixNetwork(FisherMatrix):
         **metadata
     ) -> None:
         """Initialize a ``FisherMatrixNetwork``."""
-        # Setup for Network specifically
+        # -- Setup for Network specifically
         if isinstance(detectors, Detector):
             self._detectors = [detectors]
         else:
@@ -108,15 +113,15 @@ class FisherMatrixNetwork(FisherMatrix):
         for i, det in enumerate(self.detectors):
             self._detector_indices[det.name] = i
         
-        # Now we can proceed with standard Fisher setup
-        # Note that handling of detectors prior to this call is
-        # detrimental because self._calc_fisher needs it, which is
-        # potentially called in the following.
+        # -- Now we can proceed with standard Fisher setup
+        # -- Note that handling of detectors prior to this call is
+        # -- detrimental because self._calc_fisher needs it, which is
+        # -- potentially called in the following.
         _metadata = metadata.copy()
         _metadata.pop('psd', None)
-        # Make sure no psd keyword is present, this is always taken from
-        # detectors. Would not make sense to pass single PSD for a
-        # network of multiple detectors anyway.
+        # -- Make sure no psd keyword is present, this is always taken
+        # -- from detectors. Would not make sense to pass single PSD for
+        # -- a network of multiple detectors anyway.
 
         super().__init__(
             wf_params_at_point=wf_params_at_point,
@@ -131,7 +136,7 @@ class FisherMatrixNetwork(FisherMatrix):
         if direct_computation:
             self._calc_fisher()
 
-    # ----- Adding Network specific properties -----
+    # -- Adding Network specific properties
     @property
     def detectors(self):
         """
@@ -165,7 +170,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 'from the list of detectors.'
             )
     
-    # ----- Overwriting certain FisherMatrix properties -----
+    # -- Overwriting certain FisherMatrix properties
     def __getattr__(self, name: str) -> Any:
         return super().__getattr__(name)
 
@@ -259,11 +264,14 @@ class FisherMatrixNetwork(FisherMatrix):
             ]
     
     def _calc_fisher(self):
-        """Calculate the Fisher matrices for each detector."""
-        # TODO: check if we can make calculations more efficient. Maybe
-        # by caching or maybe by realizing that derivatives will not
-        # differ much in different detectors (only difference is PSD
-        # used to check convergence)
+        """
+        Calculate the Fisher matrices for each detector and combine them
+        into the network Fisher matrix by adding them together.
+        """
+        # -- Note: I do not think there is a way to make this more
+        # -- efficient. While sensitivities and thus PSDs might be
+        # -- similar, the response functions are definitely not in most
+        # -- cases. Thus no shortcut can be taken.
 
         self._fisher = 0.
         for i, det in enumerate(self.detectors):
@@ -271,17 +279,11 @@ class FisherMatrixNetwork(FisherMatrix):
 
             self._fisher += det_fisher.fisher
             
-            if self.metadata['return_info']:
-                self.deriv_info[det.name] = det_fisher.deriv_info
-                # Note: this works even if self.deriv_info is not
-                # initialized and despite it having no setter. The
-                # reason is that only elements are set, so the property
-                # is accessed first, which then initializes an instance.
-                # Commands like self.deriv_info = 0 do throw an error.
+            self._deriv_info[det.name] = det_fisher.deriv_info
     
         if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
-            # Conservative threshold choice for double precision,
-            # as quoted e.g. in gwbench paper
+            # -- Conservative threshold choice for double precision,
+            # -- as quoted e.g. in gwbench paper
             logger.info(
                 f'This Fisher matrix has a condition number of {cond_numb}, '
                 'meaning it is ill-conditioned.'
@@ -301,24 +303,24 @@ class FisherMatrixNetwork(FisherMatrix):
         if isinstance(optimize_fisher, str):
             optimize_fisher = [optimize_fisher]
         
-        # Goal of this function: duplicate as little code as possible.
-        # -> the operations required for this (mainly matrix multiplications)
-        #    do not add significant overhead compared to putting
-        #    adjusted version of code from FisherMatrix.sys_error here
-        #    (main cost is waveform generation and thus optimization)
+        # -- Goal of this function: duplicate as little code as possible
+        # -- -> the operations required for this (mainly matrix
+        # --    multiplications) do not add significant overhead
+        # --    compared to putting adjusted version of code from
+        # --    FisherMatrix.sys_error here (main cost is waveform
+        # --    generation and thus optimization)
 
-
-        sys_error = 0.
         fisher = 0.
         opt_bias = 0.
         vector = 0.
-        # 0. is most convenient way to initialize here, adding a
-        # MatrixWithUnits on top is allowed
+        # -- 0. is most convenient way to initialize here, adding a
+        # -- MatrixWithUnits on top is allowed and we do not have to
+        # -- worry about compatible units etc
 
         optimization_info = {}
 
         for i, det in enumerate(self.detectors):
-            sys_error = self.detector_fisher(i).systematic_error(
+            _, info = self.detector_fisher(i).systematic_error(
                     reference_wf_generator=reference_wf_generator,
                     params=None,  # Get all for now, filter before return
                     optimize=optimize,
@@ -326,31 +328,30 @@ class FisherMatrixNetwork(FisherMatrix):
                     return_opt_info=True,
                     **inner_prod_kwargs
                 )
-            # NOTE: every element is now tuple, so pay attention to indices
 
-            optimization_info[det.name] = sys_error[1]
+            optimization_info[det.name] = info
 
             if isinstance(optimize, bool) and not optimize:
                 used_opt_bias = 0.
             
                 if optimize_fisher is not None:
-                    used_fisher = sys_error[1]['opt_fisher'].fisher
+                    used_fisher = info['opt_fisher'].fisher
                 else:
                     used_fisher = self.detector_fisher(i).fisher
             else:
-                # Some kind of optimization was carried out, thus we
-                # can access attribute in info dictionary
-                used_fisher = sys_error[1]['opt_fisher'].fisher
-                used_opt_bias = sys_error[1]['opt_bias']
+                # -- Some kind of optimization was carried out, thus we
+                # -- can access attribute in info dictionary
+                used_fisher = info['opt_fisher'].fisher
+                used_opt_bias = info['opt_bias']
             
                 opt_bias += used_fisher @ used_opt_bias
 
-            vector += sys_error[1]['deriv_vector']
+            vector += info['deriv_vector']
             fisher += used_fisher
 
         fisher_bias = MatrixWithUnits.inv(fisher) @ (vector + opt_bias)
         
-        # Check which params shall be returned
+        # -- Check which params shall be returned
         if params is not None:
             if isinstance(params, str):
                 params = [params]
@@ -358,13 +359,13 @@ class FisherMatrixNetwork(FisherMatrix):
             if optimize_fisher is None:
                 param_indices = self.get_param_indices(params)
             else:
-                # Take difference of parameters
+                # -- Take difference of parameters
                 _params = params.copy()
                 for param in optimize_fisher:
                     try:
                         _params.remove(param)
                     except ValueError:
-                        # Is not supposed to be returned, continue
+                        # -- Is not supposed to be returned, continue
                         pass
                 
                 param_indices = self.get_param_indices(_params)

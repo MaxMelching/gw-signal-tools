@@ -9,13 +9,15 @@ from gwpy.frequencyseries import FrequencySeries
 
 # ---------- Local Package Imports ----------
 from ..fisher import FisherMatrix
-from ..inner_product import inner_product, norm, overlap
+from ..waveform.inner_product import inner_product, norm, overlap
 
 
 __doc__ = """
 Module that allows convenient calculation of various distances that can
 be defined on signal manifolds in gravitational wave data analysis.
 """
+
+__all__ = ('distance', 'linearized_distance')
 
 
 def distance(
@@ -163,13 +165,10 @@ def distance(
             raise ValueError('Invalid `distance_kind` is given.')
 
         distances += [
-            distance_val
+            distance_val.value
         ]
 
-    return Series(
-        distances,
-        xindex=param_vals
-    )
+    return Series(distances, xindex=param_vals, unit=distance_val.unit)
 
 def linearized_distance(
     param_to_vary: str | list[str],

@@ -1,5 +1,8 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import logging as _log
+
+
+__all__ = ('logger')
 
 
 logger = _log.getLogger(__name__)

@@ -1,4 +1,4 @@
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 import astropy.units as u
 from gwpy.frequencyseries import FrequencySeries
@@ -7,6 +7,9 @@ from gwpy.frequencyseries import FrequencySeries
 __doc__ = """
 Helper functions to read and write power spectral densities.
 """
+
+__all__ = ('psd_to_file', 'psd_from_file', 'psd_from_file_to_FreqSeries',
+           'get_FreqSeries_from_dict')
 
 
 def psd_to_file(

@@ -61,9 +61,9 @@ fisher_tot_mass = FisherMatrix(
 #%% -- Simple consistency tests -----------------------------------------------
 def test_unit():
     # -- All ways of accessing must work
-    assert fisher_tot_mass.fisher[0, 0].unit == 1/u.solMass**2
-    assert fisher_tot_mass.fisher.unit[0, 0] == 1/u.solMass**2
-    assert fisher_tot_mass.unit[0, 0] == 1/u.solMass**2
+    assert fisher_tot_mass.fisher[0, 0].unit == u.strain**2/u.solMass**2
+    assert fisher_tot_mass.fisher.unit[0, 0] == u.strain**2/u.solMass**2
+    assert fisher_tot_mass.unit[0, 0] == u.strain**2/u.solMass**2
 
 
 def test_inverse():

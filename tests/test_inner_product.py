@@ -18,13 +18,15 @@ from gw_signal_tools.waveform import (
 from gwpy.testing.utils import assert_quantity_equal
 from gw_signal_tools.PSDs import psd_no_noise
 from gw_signal_tools.test_utils import assert_allclose_quantity
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
+from gw_signal_tools.types import HashableDict
 
 
 #%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'mass1': 36*u.solMass,
     'mass2': 29*u.solMass,
     'deltaT': 1./2048.*u.s,
@@ -32,34 +34,44 @@ wf_params = {
     'f_max': f_max,
     'f22_ref': 20.*u.Hz,
     'phi_ref': 0.*u.rad,
-    'distance': 1.*u.Mpc,
+    'distance': 440.*u.Mpc,
     'inclination': 0.0*u.rad,
     'eccentricity': 0.*u.dimensionless_unscaled,
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
+
+# -- Make sure mass1 and mass2 are not in default_dict
+import lalsimulation.gwsignal.core.parameter_conventions as pc
+pc.default_dict.pop('mass1', None);
+pc.default_dict.pop('mass2', None);
 
 approximant = 'IMRPhenomXPHM'
 gen = gwsignal_get_waveform_generator(approximant)
 
-def td_wf_gen(wf_params):
-    return wfm.GenerateTDWaveform(wf_params, gen)
+from gw_signal_tools.waveform.utils import _CORRECT_H_UNIT_TIME, _CORRECT_H_UNIT_FREQU
 
-def fd_wf_gen(wf_params):
-    return wfm.GenerateFDWaveform(wf_params, gen)
+with enable_caching_locally():
+# with disable_caching_locally():
+    from gw_signal_tools.caching import cache_func
 
-hp_t, _ = td_wf_gen(wf_params)
+    @cache_func
+    def td_wf_gen(wf_params):
+        hp, hc = wfm.GenerateTDWaveform(wf_params, gen)
+        return hp*_CORRECT_H_UNIT_TIME, hc*_CORRECT_H_UNIT_TIME
 
-# -- Two waveforms will be generated in frequency domain, first with
-# -- finer sampling and second with coarser one
-hp_f_fine, _ = fd_wf_gen(wf_params)
+    @cache_func
+    def fd_wf_gen(wf_params):
+        hp, hc = wfm.GenerateFDWaveform(wf_params, gen)
+        return hp*_CORRECT_H_UNIT_FREQU, hc*_CORRECT_H_UNIT_FREQU
+# -- NOTE: unit conversion is needed because of inconsistent handling of
+# -- units in lal, not because of error in gw_signal_tools code
 
-hp_f_coarse, _ = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
 
-# -- Make units consistent with gw_signal_tools
-hp_f_fine *= u.s
-hp_f_coarse *= u.s
+hp_t, hc_t = td_wf_gen(wf_params)
+hp_f_fine, hc_f_fine = fd_wf_gen(wf_params)
+hp_f_coarse, hc_f_coarse = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
 
 
 #%% -- Technical test if signals are edited inplace ---------------------------
@@ -268,7 +280,6 @@ def test_f_range(f_min, f_max):
     assert_quantity_equal(norm1, norm_no_units)
 
     hp_f_restricted, _ = fd_wf_gen(wf_params | {'f22_start': f_min, 'f_max': f_max})
-    hp_f_restricted.override_unit(u.s)
     norm2 = norm(hp_f_restricted)
 
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-3)
@@ -336,11 +347,9 @@ def test_df_consistency():
 
     # -- Different signals with matching df in inner_product
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 2})
-    hp_f.override_unit(u.s)
     norm2 = norm(hp_f, df=hp_f_fine.df / 2)
 
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': hp_f_fine.df / 4})
-    hp_f.override_unit(u.s)
     norm3 = norm(hp_f, df=hp_f_fine.df / 4)
 
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=5e-4)
@@ -403,7 +412,7 @@ def test_different_units():
 
 
 #%% -- Confirm that certain errors are raised ---------------------------------
-class ErrorRaising(unittest.TestCase):
+class InnProdErrorRaising(unittest.TestCase):
     def test_signal_type_checking(self):
         with self.assertRaises(TypeError):
             inner_product(np.array([42]), hp_f_fine)
@@ -429,11 +438,11 @@ class ErrorRaising(unittest.TestCase):
     
     def test_df_unit_testing(self):
         with self.assertRaises(ValueError):
-            norm(hp_f_fine, df=0.0625 * u.m)
-
-    # def test_optimize_requirements(self):
-    #     with self.assertRaises(ValueError):
-    #         ...  # Generate using get_strain, then remove certain components -> with behaviour from now, it is intended that no error should be raised!
+            norm(hp_f_fine, df=0.0625*u.m)
+    
+    def test_min_dt_prec_unit_testing(self):
+        with self.assertRaises(ValueError):
+            norm(hp_f_fine, min_dt_prec=1e-3*u.m, optimize_time_and_phase=True)
 
 
 #%% -- Confirming results with PyCBC match function ---------------------------
@@ -571,11 +580,12 @@ def test_norm_optimized():
 
 
 #%% -- Testing Overlap Optimization -------------------------------------------
+@pytest.mark.slow  # Because mass1 is involved, time and phase are fast
 @pytest.mark.parametrize('opt, shift', [[False, 2.*u.Msun], [True, 2.*u.Msun],
                                         [True, 5.*u.Msun], [True, 10.*u.Msun]])
 def test_mass_opt(opt, shift):
     def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]*u.s
+        return fd_wf_gen(wf_params)[0]
     
     def shifted_wf_gen(wf_params):
         return wf_gen(wf_params | {'mass1': wf_params['mass1']+shift})
@@ -602,7 +612,7 @@ def test_mass_opt(opt, shift):
 @pytest.mark.parametrize('phic', [0.*u.rad, 0.12*u.rad, -0.3*np.pi*u.rad])
 def test_time_phase_opt(tc, phic):
     def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]*u.s
+        return fd_wf_gen(wf_params)[0]
     
     def shifted_wf_gen(wf_params):
         wf = wf_gen(wf_params)
@@ -650,7 +660,7 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
     phic = 0.12*u.rad
 
     def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]*u.s
+        return fd_wf_gen(wf_params)[0]
     
     def shifted_wf_gen(wf_params):
         wf = wf_gen(wf_params)
@@ -676,8 +686,7 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast
 @pytest.mark.parametrize('params', [
-    'time', ['mass1', 'time'],
-    'phase', ['mass1', 'phase'],
+    'time', ['mass1', 'time'], 'phase', ['mass1', 'phase'],
     pytest.param(['time', 'tc'], marks=pytest.mark.xfail(raises=ValueError,
         strict=True, reason='Invalid input')),
     pytest.param(['phase', 'psi'], marks=pytest.mark.xfail(raises=ValueError,
@@ -686,7 +695,7 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
 def test_time_phase_arg_handling(params):
     # -- Testing strange combinations for handling
     def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]*u.s
+        return fd_wf_gen(wf_params)[0]
     
     _, _, opt_params = optimize_overlap(
         wf_params,
@@ -707,7 +716,7 @@ def test_arg_equivalence(opt_params):
     psi = 0.12*u.rad
 
     def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]*u.s
+        return fd_wf_gen(wf_params)[0]
     
     def shifted_wf_gen(wf_params):
         wf = wf_gen(wf_params)

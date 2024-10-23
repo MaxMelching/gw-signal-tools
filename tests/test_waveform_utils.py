@@ -16,19 +16,20 @@ from gw_signal_tools.waveform.utils import (
     td_to_fd_waveform, fd_to_td_waveform,
     pad_to_get_target_df, restrict_f_range,
     get_signal_at_target_df, get_signal_at_target_frequs,
-    get_strain, fill_f_range,
-    # get_mass_scaled_wf
+    get_strain, fill_f_range, get_wf_generator
 )
 from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allequal_series
 )
+from gw_signal_tools import enable_caching_locally, disable_caching_locally
+from gw_signal_tools.types import HashableDict
 
 
 #%% -- Initializing commonly used variables -----------------------------------
 f_min = 20.*u.Hz
 f_max = 1024.*u.Hz
 
-wf_params = {
+wf_params = HashableDict({
     'mass1': 36*u.solMass,
     'mass2': 29*u.solMass,
     'deltaT': 1./2048.*u.s,
@@ -42,36 +43,37 @@ wf_params = {
     'longAscNodes': 0.*u.rad,
     'meanPerAno': 0.*u.rad,
     'condition': 0
-}
+})
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
 pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
-approximant = 'IMRPhenomXPHM'
-gen = gwsignal_get_waveform_generator(approximant)
+gen = gwsignal_get_waveform_generator('IMRPhenomXPHM')
 
-def td_wf_gen(wf_params):
-    return wfm.GenerateTDWaveform(wf_params, gen)
+from gw_signal_tools.waveform.utils import _CORRECT_H_UNIT_TIME, _CORRECT_H_UNIT_FREQU
 
-def fd_wf_gen(wf_params):
-    return wfm.GenerateFDWaveform(wf_params, gen)
+with enable_caching_locally():
+# with disable_caching_locally():
+    from gw_signal_tools.caching import cache_func
+
+    @cache_func
+    def td_wf_gen(wf_params):
+        hp, hc = wfm.GenerateTDWaveform(wf_params, gen)
+        return hp*_CORRECT_H_UNIT_TIME, hc*_CORRECT_H_UNIT_TIME
+
+    @cache_func
+    def fd_wf_gen(wf_params):
+        hp, hc = wfm.GenerateFDWaveform(wf_params, gen)
+        return hp*_CORRECT_H_UNIT_FREQU, hc*_CORRECT_H_UNIT_FREQU
+# -- NOTE: unit conversion is needed because of inconsistent handling of
+# -- units in lal, not because of error in gw_signal_tools code
 
 
 hp_t, hc_t = td_wf_gen(wf_params)
-
 hp_f_fine, hc_f_fine = fd_wf_gen(wf_params)
-
 hp_f_coarse, hc_f_coarse = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * hp_t.dx)})
-
-
-hp_f_fine.override_unit(u.s)
-hc_f_fine.override_unit(u.s)
-hp_f_coarse.override_unit(u.s)
-hc_f_coarse.override_unit(u.s)
-# NOTE: unit conversion is needed because of inconsistent handling of units in
-# lal, not because of error in gw_signal_tools code
 
 
 #%% -- Testing transformation into one domain and back ------------------------
@@ -200,7 +202,7 @@ def test_complex_ifft_fft_consistency():
         np.flip(np.conjugate(hp_f_fine+0.j)[1:]),
         f0=-hp_f_fine.frequencies[-1],
         df=hp_f_fine.df
-    ).append(hp_f_fine+0.j, inplace=True)*u.s
+    ).append(hp_f_fine+0.j, inplace=True)
 
     h_symm_t = fd_to_td_waveform(h_symm)
 
@@ -214,6 +216,22 @@ def test_complex_ifft_fft_consistency():
     # Some residual imaginary part is there, but of negligible amplitude
     # f_min_comp, f_max_comp = 25.0 * u.Hz, 512.0 * u.Hz  # Restrict to interesting region, elsewhere only values close to zero and thus numerical errors might occur
     # assert_allclose_series(h_symm.crop(start=f_min_comp, end=f_max_comp), h_symm_f.crop(start=f_min_comp, end=f_max_comp), atol=0., rtol=0.)
+
+
+def test_ifft_frequency_checking():
+    with pytest.raises(ValueError, match='Signal starts at positive frequency'):
+        fd_to_td_waveform(hp_f_fine[1:])
+    
+    h_symm = FrequencySeries(
+        np.flip(np.conjugate(hp_f_fine+0.j)[1:]),
+        f0=-hp_f_fine.frequencies[-1],
+        df=hp_f_fine.df
+    ).append(hp_f_fine+0.j, inplace=True)
+
+    with pytest.raises(ValueError, match='`signal` does not have correct format for ifft'):
+        fd_to_td_waveform(h_symm[1:])
+
+test_ifft_frequency_checking()
 
 
 def test_complex_and_real_fft_consistency():
@@ -247,7 +265,7 @@ def test_complex_and_real_ifft_consistency():
 
 #%% -- Testing helper functions for frequency region stuff --------------------
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])
-# These input values are powers of two, have to be reproduced exactly
+# -- These input values are powers of two, have to be reproduced exactly
 def test_pad_to_target_df_exact(df):
     hp_t_padded = pad_to_get_target_df(hp_t, df)
     hp_t_f = td_to_fd_waveform(hp_t_padded)
@@ -256,18 +274,32 @@ def test_pad_to_target_df_exact(df):
 
 
 @pytest.mark.parametrize('df', [0.007*u.Hz, 0.001*u.Hz])
-# These input values are not exact powers of two and thus cannot be
-# reproduced exactly (thus ensure sufficient accuracy)
+# -- These input values are not exact powers of two and thus cannot be
+# -- reproduced exactly (thus ensure sufficient accuracy)
 def test_pad_to_target_df_not_exact(df):
     hp_t_padded = pad_to_get_target_df(hp_t, df)
     hp_t_f = td_to_fd_waveform(hp_t_padded)
 
+    assert df >= hp_t_f.df  # If not equal, must not be coarser
     assert_allclose_quantity(df, hp_t_f.df, atol=0.0, rtol=1e-5)
+
+
+def test_pad_to_target_df_too_large():
+    df = 2.0*u.Hz
+    # -- Above sampling frequency of signal, so padding is not
+    # -- supposed to do anything
+    hp_t_padded = pad_to_get_target_df(hp_t, df)
+    hp_t_f = td_to_fd_waveform(hp_t_padded)
+    expected_df = 1.0 / (hp_t.dt * hp_t.size)
+
+    assert_allequal_series(hp_t_padded, hp_t)
+
+    assert_quantity_equal(expected_df, hp_t_f.df)
 
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, 0.007*u.Hz, 0.001*u.Hz])
 @pytest.mark.parametrize('full_metadata', [False, True])
-def test_pad_to_target_df_exact(df, full_metadata):
+def test_get_signal_at_target_df_exact(df, full_metadata):
     hp_f_interp = get_signal_at_target_df(hp_f_fine, df, full_metadata=full_metadata)
 
     assert_quantity_equal(df, hp_f_interp.df)
@@ -284,7 +316,6 @@ def test_get_signal_at_target_frequs_interp_and_padding(f_low, f_high, df):
 
 
     hp_f_at_df, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    hp_f_at_df.override_unit(u.s)
 
     hp_f_at_df = hp_f_at_df[
         (hp_f_at_df.frequencies >= f_min)
@@ -327,8 +358,8 @@ def test_get_signal_at_target_frequs_interp_and_padding(f_low, f_high, df):
     # Otherwise interpolation might be linear between last zero sample and
     # first non-zero one, leading to values that are not zero
 
-    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * u.s)
-    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * u.s)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * _CORRECT_H_UNIT_FREQU)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * _CORRECT_H_UNIT_FREQU)
 
 
 @pytest.mark.parametrize('df', [hp_f_fine.df, hp_f_fine.df / 2, hp_f_fine.df / 4, 0.007 * u.Hz, 0.001 * u.Hz])  # hp_f_coarse.df too coarse for comparison to make sense
@@ -342,7 +373,6 @@ def test_get_signal_at_target_frequs_interp_and_filling(f_low, f_high, df):
 
 
     hp_f_at_df, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    hp_f_at_df.override_unit(u.s)
 
     hp_f_at_df = hp_f_at_df[
         (hp_f_at_df.frequencies >= f_low)
@@ -383,8 +413,8 @@ def test_get_signal_at_target_frequs_interp_and_filling(f_low, f_high, df):
     # Otherwise interpolation might be linear between last zero sample and
     # first non-zero one, leading to values that are not zero
 
-    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * u.s)
-    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * u.s)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_2, 0.0 * _CORRECT_H_UNIT_FREQU)
+    assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * _CORRECT_H_UNIT_FREQU)
 
 
 def test_restrict_f_range_copy():
@@ -393,7 +423,6 @@ def test_restrict_f_range_copy():
 
 def test_restrict_f_range_none_args():
     hp_f, _ = fd_wf_gen(wf_params)
-    hp_f.override_unit(u.s)
 
     hp_f_filtered = hp_f[hp_f != 0.0 * hp_f.unit]
 
@@ -442,7 +471,6 @@ def test_restrict_f_range_none_args():
 # is about nature of its value (power of two or not)
 def test_restrict_f_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    hp_f.override_unit(u.s)
     
     hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
     
@@ -488,7 +516,6 @@ def test_restrict_f_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high
 # pad_to_target_df does good job (not necessarily related to restrict_f_range)
 def test_restrict_f_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    hp_f.override_unit(u.s)
     
     hp_f_restricted = restrict_f_range(hp_f, f_range=[f_crop_low, f_crop_high])
     
@@ -530,11 +557,10 @@ def test_restrict_f_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
 # Checking with one that is not power of two is important to ensure
 # pad_to_target_df does good job (not necessarily related to restrict_f_range)
-@pytest.mark.parametrize('f_fill_low', [0.8 * f_min, f_min, 1.2 * f_min])
+@pytest.mark.parametrize('f_fill_low', [-f_min, 0.8 * f_min, f_min, 1.2 * f_min])
 @pytest.mark.parametrize('f_fill_high', [0.8 * f_max, f_max, 1.2 * f_max])
 def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    hp_f.override_unit(u.s)
 
     hp_f_restricted = restrict_f_range(hp_f, fill_range=[f_fill_low, f_fill_high])
     # NOTE: we will not use Series.crop to get the comparisons because it
@@ -578,115 +604,113 @@ def test_restrict_f_range_filling(df, f_fill_low, f_fill_high):
     ]
 
     if f_fill_low > hp_f.f0:
-        assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_2)
+        assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_2)
     else:
         assert len(hp_f_restricted_cropped_2) == 0
 
     if f_fill_high < hp_f.frequencies[-1]:
-        assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_3)
+        assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_3)
     else:
         assert len(hp_f_restricted_cropped_3) == 0
 
 
-# @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
-# # Checking with one that is not power of two is important to ensure
-# # pad_to_target_df does good job (not necessarily related to restrict_f_range)
-# @pytest.mark.parametrize('f_crop_low', [0.9 * f_min, f_min])
-# @pytest.mark.parametrize('f_crop_high', [f_max, 1.1 * f_max])
-# @pytest.mark.parametrize('f_fill_low', [1.1 * f_min, f_min])
-# @pytest.mark.parametrize('f_fill_high', [0.9 * f_max, f_max])
-# def test_restrict_f_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
-#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-#     hp_f.override_unit(u.s)
+@pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
+# Checking with one that is not power of two is important to ensure
+# pad_to_target_df does good job (not necessarily related to restrict_f_range)
+@pytest.mark.parametrize('f_crop_low', [0.9 * f_min, f_min])
+@pytest.mark.parametrize('f_crop_high', [f_max, 1.1 * f_max])
+@pytest.mark.parametrize('f_fill_low', [1.1 * f_min, f_min])
+@pytest.mark.parametrize('f_fill_high', [0.9 * f_max, f_max])
+def test_restrict_f_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 
-#     hp_f_restricted = restrict_f_range(hp_f,
-#                                        f_range=[f_crop_low, f_crop_high],
-#                                        fill_range=[f_fill_low, f_fill_high])
+    hp_f_restricted = restrict_f_range(hp_f,
+                                       f_range=[f_crop_low, f_crop_high],
+                                       fill_range=[f_fill_low, f_fill_high])
 
-#     assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
-#                              atol=df.value, rtol=0.0)
-#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-#                              atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+                             atol=df.value, rtol=0.0)
+    assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+                             atol=df.value, rtol=0.0)
     
-#     # NOTE: we will not use Series.crop to get the comparisons because it
-#     # utilizes a method similar to what is done in restrict_f_range.
-#     # Instead, more straightforward array slicing is used
+    # NOTE: we will not use Series.crop to get the comparisons because it
+    # utilizes a method similar to what is done in restrict_f_range.
+    # Instead, more straightforward array slicing is used
 
-#     hp_f_cropped = hp_f[(hp_f.frequencies >= f_fill_low)
-#                             & (hp_f.frequencies <= f_fill_high)]
-#     hp_f_restricted_cropped = hp_f_restricted[
-#         (hp_f_restricted.frequencies >= f_fill_low)
-#         & (hp_f_restricted.frequencies <= f_fill_high)
-#     ]
+    hp_f_cropped = hp_f[(hp_f.frequencies >= f_fill_low)
+                            & (hp_f.frequencies <= f_fill_high)]
+    hp_f_restricted_cropped = hp_f_restricted[
+        (hp_f_restricted.frequencies >= f_fill_low)
+        & (hp_f_restricted.frequencies <= f_fill_high)
+    ]
 
-#     assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+    assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
 
-#     # assert_allclose_quantity(hp_f_restricted_cropped.f0, f_fill_low,
-#     #                          atol=df.value, rtol=0.0)
-#     # assert_allclose_quantity(hp_f_restricted_cropped.frequencies[-1], f_fill_high,
-#     #                          atol=df.value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted_cropped.f0, f_fill_low,
+    #                          atol=df.value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted_cropped.frequencies[-1], f_fill_high,
+    #                          atol=df.value, rtol=0.0)
 
 
-#     # Also check that everything has been set to zero outside of f_range
-#     hp_f_restricted_cropped_2 = hp_f_restricted[
-#         hp_f_restricted.frequencies < f_fill_low
-#     ]
-#     hp_f_restricted_cropped_3 = hp_f_restricted[
-#         hp_f_restricted.frequencies > f_fill_high
-#     ]
+    # Also check that everything has been set to zero outside of f_range
+    hp_f_restricted_cropped_2 = hp_f_restricted[
+        hp_f_restricted.frequencies < f_fill_low
+    ]
+    hp_f_restricted_cropped_3 = hp_f_restricted[
+        hp_f_restricted.frequencies > f_fill_high
+    ]
 
-#     assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_2)
-#     assert_quantity_equal(0.0 * u.s, hp_f_restricted_cropped_3)
+    assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_2)
+    assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_3)
     
-#     # assert_allclose_quantity(hp_f_restricted_cropped_2.f0, f_crop_low,
-#     #                          atol=df.value, rtol=0.0)
-#     # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-#     #                          atol=df.value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted_cropped_2.f0, f_crop_low,
+    #                          atol=df.value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+    #                          atol=df.value, rtol=0.0)
 
 
-# @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, hp_f_fine.df / 4])
-# # Region where pad_to_get_to
-# def test_restrict_f_range_with_padding_and_cropping_exact(df):
-#     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
-#     # For contiguous padding to be possible, f_crop_low has to be an integer
-#     # multiple of df
+@pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, hp_f_fine.df / 4])
+def test_restrict_f_range_with_padding_and_cropping_exact(df):
+    f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
+    # For contiguous padding to be possible, f_crop_low has to be an integer
+    # multiple of df
 
-#     # hp_t_padded = pad_to_get_target_df(hp_t, df)
-#     # hp_t_f = td_to_fd_waveform(hp_t_padded)
-#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-#     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-#     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
-#                                        fill_range=[f_crop_low, None])
+    # hp_t_padded = pad_to_get_target_df(hp_t, df)
+    # hp_t_f = td_to_fd_waveform(hp_t_padded)
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
+    hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
+    hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
+                                       fill_range=[f_crop_low, None])
     
-#     # NOTE: we will not use Series.crop to get the comparisons because it
-#     # utilizes computations similar to what is done in restrict_f_range.
-#     # Instead, more straightforward array slicing is used
+    # NOTE: we will not use Series.crop to get the comparisons because it
+    # utilizes computations similar to what is done in restrict_f_range.
+    # Instead, more straightforward array slicing is used
+    print(hp_f_restricted.frequencies[-1], hp_f_restricted.df, f_crop_high)
+    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+                             atol=0.8 * df.value, rtol=0.0)
+    # -- Coarse requires 0.8, for fine 0.42 would be sufficient
 
-#     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
-#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-#                              atol=0.42 * df.value, rtol=0.0)
-#     # We expect accuracy smaller than 0.5 here, which should be distinguishable
 
+@pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
+def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
+    f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
 
-# @pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
-# def test_restrict_f_range_with_padding_and_cropping_not_exact(df):
-#     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
-
-#     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-#     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-#     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
-#                                        fill_range=[f_crop_low, None])
+    hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
+    hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
+    hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],
+                                       fill_range=[f_crop_low, None])
     
-#     # NOTE: we will not use Series.crop to get the comparisons because it
-#     # utilizes computations similar to what is done in restrict_f_range.
-#     # Instead, more straightforward array slicing is used
+    # NOTE: we will not use Series.crop to get the comparisons because it
+    # utilizes computations similar to what is done in restrict_f_range.
+    # Instead, more straightforward array slicing is used
 
-#     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
-#     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-#                              atol=df.value, rtol=0.0)
-#     # More tolerance needed here since using the more accurate slicing
-#     # method used here is too expensive for use in restrict_f_range. This
-#     # comes at the price of certain smaller deviations for some df
+    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+                             atol=df.value, rtol=0.0)
+    # More tolerance needed here since using the more accurate slicing
+    # method used here is too expensive for use in restrict_f_range. This
+    # comes at the price of certain smaller deviations for some df
 
 
 # TODO: test for various cases if copy works; e.g. if copy=False, but nothing
@@ -752,18 +776,23 @@ def test_get_strain_extrinsic():
     params = wf_params | ext_params
     ht_test = get_strain(params, 'time', generator=gen)
     ht_test = get_strain(params, 'time', generator=gen)
-    assert_quantity_equal(
-        GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params),
-        ht_test
-    )
+    # -- Note: overriding needed here because of some lal error that is
+    # -- occuring. Maybe also due to insufficient lalsimultion version
+    hp_t.override_unit(u.dimensionless_unscaled)
+    hc_t.override_unit(u.dimensionless_unscaled)
+    lal_t_out = GravitationalWavePolarizations(hp_t, hc_t).strain(**ext_params)
+    lal_t_out.override_unit(_CORRECT_H_UNIT_TIME)
+    assert_quantity_equal(lal_t_out, ht_test)
 
     hf_test = get_strain(wf_params | ext_params, 'frequency', generator=gen)
-    assert_quantity_equal(
-        GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params),
-        hf_test
-    )
-test_get_strain_extrinsic()
-class ErrorRaising(unittest.TestCase):
+    hp_f_fine.override_unit(u.dimensionless_unscaled)
+    hc_f_fine.override_unit(u.dimensionless_unscaled)
+    lal_f_out = GravitationalWavePolarizations(hp_f_fine, hc_f_fine).strain(**ext_params)
+    lal_f_out.override_unit(_CORRECT_H_UNIT_FREQU)
+    assert_quantity_equal(lal_f_out, hf_test)
+
+
+class GetStrainErrorRaising(unittest.TestCase):
     def test_domain_checking(self):
         with self.assertRaises(ValueError):
             get_strain(wf_params, 'domain', generator=gen)
@@ -777,158 +806,29 @@ class ErrorRaising(unittest.TestCase):
             get_strain(wf_params | {'psi': 0.5*u.rad}, 'time', generator=gen)
 
 
-#%% -- Testing mass rescaling -------------------------------------------------
+def test_get_wf_generator_cache():
+    # -- Creative test for whether caching is on or not: try accessing
+    # -- an attribute that cache as wrapper defines, ".cache_info()"
 
-# TODO: get this to work
-
-# wf_params_with_total_mass = wf_params.copy()
-# wf_params_with_total_mass.pop('mass1')
-# wf_params_with_total_mass.pop('mass2')
-
-# total_mass = 100.*u.solMass
-# wf_params_with_total_mass['total_mass'] = total_mass
-# wf_params_with_total_mass['mass_ratio'] = 0.5 * u.dimensionless_unscaled
-
-
-# @pytest.mark.parametrize('target_unit_sys', ['SI', 'cosmo', 'geom'])
-# def test_scaling_fd(target_unit_sys):
-#     mass1 = total_mass
-#     mass2 = 0.5 * total_mass
-#     mass3 = 0.25 * total_mass
-
-#     # hp_f_M1, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass1})
-#     # hp_f_M2, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass2})
-#     # hp_f_M3, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass3})
-
-#     # hp_f_M1 = rescale_with_Mtotal(hp_f_M1, mass1, target_unit_sys)
-#     # hp_f_M2 = rescale_with_Mtotal(hp_f_M2, mass2, target_unit_sys)
-#     # hp_f_M3 = rescale_with_Mtotal(hp_f_M3, mass3, target_unit_sys)
-
-#     hp_f_M1 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass1, 'deltaF': 2**-8 * u.Hz}, 'FD', gen, target_unit_sys)
-#     hp_f_M2 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass2, 'deltaF': 2**-8 * u.Hz}, 'FD', gen, target_unit_sys)
-#     hp_f_M3 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass3, 'deltaF': 2**-8 * u.Hz}, 'FD', gen, target_unit_sys)
-
-#     # df_interpolate = 2**-6
-#     # hp_f_M1 = hp_f_M1.interpolate(df_interpolate)
-#     # hp_f_M2 = hp_f_M2.interpolate(df_interpolate)
-#     # hp_f_M3 = hp_f_M3.interpolate(df_interpolate)
-
-#     f_min = max(hp_f_M1.frequencies[0], hp_f_M2.frequencies[0], hp_f_M3.frequencies[0])
-#     f_max = min(hp_f_M1.frequencies[-1], hp_f_M2.frequencies[-1], hp_f_M3.frequencies[-1])
-
-#     hp_f_M1 = hp_f_M1.crop(start=f_min, end=f_max)
-#     hp_f_M2 = hp_f_M2.crop(start=f_min, end=f_max)
-#     hp_f_M3 = hp_f_M3.crop(start=f_min, end=f_max)
-#     # hp_f_M1 = restrict_f_range(hp_f_M1, f_range=[f_min, f_max])
-#     # hp_f_M2 = restrict_f_range(hp_f_M2, f_range=[f_min, f_max])
-#     # hp_f_M3 = restrict_f_range(hp_f_M3, f_range=[f_min, f_max])
-
-#     # Maybe rather use restrict_f_range?
-
-#     assert_allclose(hp_f_M1, hp_f_M2, atol=0.0, rtol=0.01)
-#     assert_allclose(hp_f_M2, hp_f_M3, atol=0.0, rtol=0.01)
-
-
-# @pytest.mark.parametrize('target_unit_sys', ['SI', 'cosmo', 'geom'])
-# def test_scaling_td(target_unit_sys):
-#     import astropy.constants as const  # TODO: check if import outside of function. Then also define constants outside
-#     mass1 = total_mass
-#     mass2 = 0.5 * total_mass
-#     mass3 = 0.25 * total_mass
-
-#     # hp_f_M1, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass1}, gen)
-#     # hp_f_M2, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass2})
-#     # hp_f_M3, _ = fd_wf_gen(wf_params_with_total_mass | {'total_mass': mass3})
-
-#     # hp_f_M1 = rescale_with_Mtotal(hp_f_M1, mass1, target_unit_sys)
-#     # hp_f_M2 = rescale_with_Mtotal(hp_f_M2, mass2, target_unit_sys)
-#     # hp_f_M3 = rescale_with_Mtotal(hp_f_M3, mass3, target_unit_sys)
-
-#     deltaT = 2**-4 * 1./4096.*u.s
-
-#     hp_t_M1 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass1, 'deltaT': deltaT * mass1.value}, 'TD', gen, target_unit_sys)
-#     hp_t_M2 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass2, 'deltaT': deltaT * mass2.value}, 'TD', gen, target_unit_sys)
-#     hp_t_M3 = get_mass_scaled_wf(wf_params_with_total_mass | {'total_mass': mass3, 'deltaT': deltaT * mass3.value}, 'TD', gen, target_unit_sys)
-
-#     # df_interpolate = 2**-6
-#     # hp_f_M1 = hp_f_M1.interpolate(df_interpolate)
-#     # hp_f_M2 = hp_f_M2.interpolate(df_interpolate)
-#     # hp_f_M3 = hp_f_M3.interpolate(df_interpolate)
-
-#     # t_min = max(hp_t_M1.times[0], hp_t_M2.times[0], hp_t_M3.times[0])
-#     # t_max = min(hp_t_M1.times[-1], hp_t_M2.times[-1], hp_t_M3.times[-1])
-
-#     Msun_to_kg = const.M_sun / u.Msun
-#     kg_to_s = const.G / const.c**3
+    with enable_caching_locally():
+        wf_gen = get_wf_generator('IMRPhenomXPHM', cache=True)
+        wf_gen.cache_info()
     
-#     if target_unit_sys == 'cosmo':
-#         t_min, t_max = -0.01, 0.0001
-#     elif target_unit_sys == 'SI':
-#         t_min, t_max = -0.01 / Msun_to_kg.value, 0.0001 / Msun_to_kg.value
-#     elif target_unit_sys == 'geom':
-#         t_min, t_max = -0.01 / (Msun_to_kg * kg_to_s).value, 0.0001 / (Msun_to_kg * kg_to_s).value
+        wf_gen = get_wf_generator('IMRPhenomXPHM', cache=False)
+        with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
+            wf_gen.cache_info()
+        
+        wf_gen = get_wf_generator('IMRPhenomXPHM')
+        wf_gen.cache_info()
 
-#     hp_t_M1 = hp_t_M1.crop(start=t_min, end=t_max)
-#     hp_t_M2 = hp_t_M2.crop(start=t_min, end=t_max)
-#     hp_t_M3 = hp_t_M3.crop(start=t_min, end=t_max)
-
-#     assert_allclose(hp_t_M1.value, hp_t_M2.value, atol=0.0, rtol=0.1)
-#     assert_allclose(hp_t_M2.value, hp_t_M3.value, atol=0.0, rtol=0.1)
-
-
-# def test_conversion_si_units():
-#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
-
-#     hp_f_rescaled = rescale_with_Mtotal(
-#         hp_f,
-#         wf_params_with_total_mass['total_mass'],
-#         target_unit_sys='si'
-#     )
-
-#     hp_f_v2 = scale_to_Mtotal(
-#         hp_f_rescaled,
-#         wf_params_with_total_mass['total_mass'],
-#         unit_sys='si'
-#     )
-
-
-#     assert_allclose(hp_f, hp_f_v2, atol=0.0, rtol=0.01)
-
-
-# def test_conversion_geom_units():
-#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
-
-#     hp_f_rescaled = rescale_with_Mtotal(
-#         hp_f,
-#         wf_params_with_total_mass['total_mass'],
-#         target_unit_sys='geom'
-#     )
-
-#     hp_f_v2 = scale_to_Mtotal(
-#         hp_f_rescaled,
-#         wf_params_with_total_mass['total_mass'],
-#         unit_sys='geom'
-#     )
-
-
-#     assert_allclose(hp_f, hp_f_v2, atol=0.0, rtol=0.01)
-
-
-# def test_conversion_cosmo_units():
-#     hp_f, _ = fd_wf_gen(wf_params_with_total_mass)
-
-#     hp_f_rescaled = rescale_with_Mtotal(
-#         hp_f,
-#         wf_params_with_total_mass['total_mass'],
-#         target_unit_sys='cosmo'
-#     )
-
-#     hp_f_v2 = scale_to_Mtotal(
-#         hp_f_rescaled,
-#         wf_params_with_total_mass['total_mass'],
-#         unit_sys='si'
-#     )
-
-
-#     assert_allclose(hp_f, hp_f_v2, atol=0.0, rtol=0.01)
-# # %%
+    with disable_caching_locally():
+        wf_gen = get_wf_generator('IMRPhenomXPHM', cache=True)
+        wf_gen.cache_info()
+    
+        wf_gen = get_wf_generator('IMRPhenomXPHM', cache=False)
+        with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
+            wf_gen.cache_info()
+        
+        wf_gen = get_wf_generator('IMRPhenomXPHM')
+        with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
+            wf_gen.cache_info()

@@ -373,9 +373,10 @@ def test_df_handling(df1, df2):
 def test_different_units():
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
 
+    rescale_unit = u.s
     hp_f_fine_rescaled = hp_f_fine.copy()
-    hp_f_fine_rescaled.frequencies *= u.s
-    hp_f_fine_rescaled /= u.s
+    hp_f_fine_rescaled.frequencies *= rescale_unit
+    hp_f_fine_rescaled /= rescale_unit
     # -- NOTE: rescaling the amplitude this way is not strictly
     # -- necessary, one could also get a consistent result without this
     # -- step. By doing that, we simply ensure the resulting norm is
@@ -386,14 +387,11 @@ def test_different_units():
 
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.001)
     
-    new_frequ_unit = hp_f_fine_rescaled.frequencies.unit
 
     psd_no_noise_rescaled = psd_no_noise.copy()  # Verify manually what happens
-    # psd_no_noise_rescaled = psd_no_noise.__deepcopy__(None)  # Verify manually what happens
-    psd_no_noise_rescaled.override_unit(1/new_frequ_unit)
-    psd_no_noise_rescaled.frequencies *= (
-        1/psd_no_noise_rescaled.frequencies.unit * new_frequ_unit
-    )
+    psd_no_noise_rescaled.frequencies *= rescale_unit
+    psd_no_noise_rescaled /= rescale_unit
+    # -- Also rescale density that it represents, psd is per frequ_unit
 
     norm1 = norm(hp_f_fine_rescaled, psd=psd_no_noise_rescaled)
     norm2 = norm(hp_f_fine, psd=psd_no_noise)

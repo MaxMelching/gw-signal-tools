@@ -117,7 +117,7 @@ def psd_from_file_to_FreqSeries(
     return FrequencySeries(
         psd,
         frequencies=freqs,
-        unit=1 / u.Hz,  # TODO: change to strain/Hz once lal updates are incorporated
+        unit=u.strain**2/u.Hz,
         **kwargs
     )
 

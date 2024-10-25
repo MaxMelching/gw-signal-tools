@@ -170,18 +170,19 @@ def inner_product(
         psd = psd_no_noise.copy()
 
         # -- Make sure units are consistent with input. PSD is always a
-        # -- density, i.e. strain per frequency
-        psd.override_unit(1 / frequ_unit)  # TODO: change to strain/Hz once lal updates are incorporated
+        # -- density, i.e. strain**2 per frequency
         if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
             psd.frequencies *= (frequ_unit / psd_frequ_unit)
+            psd /= (frequ_unit / psd_frequ_unit)
+            # -- Rescale density that it represents, psd is per frequ_unit
     
     if isinstance(psd, FrequencySeries):
         assert frequ_unit == psd.frequencies.unit, \
             'Need consistent frequency/time units for `psd` and other signals.'
         
-        assert 1 / frequ_unit == psd.unit, \
-            ('Need valid psd units for psd, has to be strain per frequency.')
-        # TODO: change to strain/Hz once lal updates are incorporated
+        assert ((u.strain**2/frequ_unit == psd.unit)
+                or (1/frequ_unit == psd.unit)), \
+            ('Need valid psd units for psd, has to be strain^2 per frequency.')
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 

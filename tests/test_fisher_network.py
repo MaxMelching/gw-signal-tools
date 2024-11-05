@@ -173,13 +173,13 @@ def test_sys_error(params):
     fisher.systematic_error(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(return_info=False,
-                                 new_params_to_vary=['total_mass', 'mass_ratio', 'tc', 'psi'])
+                                 new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'])
     
-    fisher.systematic_error(phenomd_generator, params='mass_ratio', optimize='tc',
+    fisher.systematic_error(phenomd_generator, params='mass_ratio', optimize='time',
                             optimize_fisher='total_mass')
 
     fisher.systematic_error(phenomd_generator, optimize=False,
-                            optimize_fisher='psi', return_opt_info=True)
+                            optimize_fisher='phase', return_opt_info=True)
 
 
 @pytest.mark.parametrize('inner_prod_kwargs', [

@@ -684,11 +684,7 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast
 @pytest.mark.parametrize('params', [
-    'time', ['mass1', 'time'], 'phase', ['mass1', 'phase'],
-    pytest.param(['time', 'tc'], marks=pytest.mark.xfail(raises=ValueError,
-        strict=True, reason='Invalid input')),
-    pytest.param(['phase', 'psi'], marks=pytest.mark.xfail(raises=ValueError,
-        strict=True, reason='Invalid input'))
+    'time', ['mass1', 'time'], 'phase', ['mass1', 'phase']
 ])
 def test_time_phase_arg_handling(params):
     # -- Testing strange combinations for handling
@@ -705,30 +701,3 @@ def test_time_phase_arg_handling(params):
     if isinstance(params, str):
         params = [params]  # For length comparison
     assert len(opt_params) == len(params)
-
-
-@pytest.mark.slow  # Because mass1 is involved, time and phase are fast
-@pytest.mark.parametrize('opt_params', [['tc', 'psi'], ['mass1', 'tc', 'psi']])
-def test_arg_equivalence(opt_params):
-    tc = -0.2*u.s
-    psi = 0.12*u.rad
-
-    def wf_gen(wf_params):
-        return fd_wf_gen(wf_params)[0]
-    
-    def shifted_wf_gen(wf_params):
-        wf = wf_gen(wf_params)
-        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 2.j*psi)
-    
-    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
-        wf_params,
-        shifted_wf_gen,
-        wf_gen,
-        opt_params=opt_params,
-        df=2**-3,  # Not required, but speeds up calculations
-        min_dt_prec=1e-5
-    )
-
-    assert_allclose_quantity(tc, opt_params['tc'], atol=1e-5, rtol=0.)
-    assert_allclose_quantity(psi, opt_params['psi'], atol=1e-3, rtol=1e-2)
-    assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)

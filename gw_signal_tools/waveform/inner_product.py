@@ -936,20 +936,22 @@ def optimize_overlap(
         :code:`get_default_opt_params`. However, internal parameters can
         also be part of the list.
 
-        Must be in :code:`wf_params` or :code:`'tc'` (equivalent:
-        :code:`'time'`), :code:`'psi'` (equivalent up to a factor:
-        :code:`'phase' = 2*'psi'`). The latter two are essentially
-        global time and phase shifts, they enter in the waveform only as
-        a factor :math:`\exp(i \cdot 2 \psi - i \cdot 2 \pi \cdot f
-        \cdot tc)`. Commonly used names for them are coalescence time
-        and polarization angle.
+        Must be in :code:`wf_params` or :code:`'time'`, :code:`phase`.
+        The latter two are global time and phase shifts, they enter the
+        waveform only via a factor
+        :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`.
+        Beware that the polarization angle :code:`psi` might be
+        degenerate with :code:`phase`, if you are using the complex
+        strain combination :math:`h = h_+ + i \, h_{\times}`.
 
         Note that it is also possible to optimize over phase and/or time
         by enabling optimization over phase and time in the inner
         product function (by passing keyword arguments like
         :code:`optimize_time_and_phase=True`, will be given to inner
-        product). The corresponding result will also be part of the
-        output, despite potentially not being in :code:`opt_params`.
+        product; in fact, this is how things are handled anyway for
+        these two parameters). The corresponding result will also be
+        part of the output, despite potentially not being in
+        :code:`opt_params`.
     inner_prod_kw_args : 
         All additional keyword arguments are passed to the
         :code:`~gw_signal_tools.inner_product.overlap` function. Can be
@@ -1004,27 +1006,13 @@ def optimize_overlap(
         _opt_params = np.array(opt_params)
 
         # -- time and phase indices are accessed frequently, thus store
-        if 'tc' in _opt_params:
-            time_index = np.argwhere(_opt_params == 'tc')[0, 0]
-            inner_prod_kwargs['optimize_time'] = True
-
-            if 'time' in _opt_params:
-                raise ValueError('Providing both `\'tc\'` and `\'time\'` is '
-                                 'not permitted.')
-        elif 'time' in _opt_params:
+        if 'time' in _opt_params:
             time_index = np.argwhere(_opt_params == 'time')[0, 0]
             inner_prod_kwargs['optimize_time'] = True
         else:
             time_index = None
         
-        if 'psi' in _opt_params:
-            phase_index = np.argwhere(_opt_params == 'psi')[0, 0]
-            inner_prod_kwargs['optimize_phase'] = True
-
-            if 'phase' in _opt_params:
-                raise ValueError('Providing both `\'psi\'` and `\'phase\'` is '
-                                 'not permitted.')
-        elif 'phase' in _opt_params:
+        if 'phase' in _opt_params:
             phase_index = np.argwhere(_opt_params == 'phase')[0, 0]
             inner_prod_kwargs['optimize_phase'] = True
         else:
@@ -1044,30 +1032,16 @@ def optimize_overlap(
                         f'waveform mismatch is {1.-_match_val:.5f}.')
             
             opt_params_results = {}
-            tc = opt_info['peak_time']
-            phic = opt_info['peak_phase']
+            time = opt_info['peak_time']
+            phase = opt_info['peak_phase']
 
-            if (time_index is not None and
-                (time_param := opt_params[time_index]) == 'time'):
-                # -- Either time was given or optimization was turned on
-                # -- with no corresponding parameter in opt_params
-                opt_params_results['time'] = tc
-            elif time_index is not None and time_param == 'tc':
-                opt_params_results['tc'] = tc
-            else:
-                # -- No time optimization was carried out
-                pass
+            if time_index is not None:
+                opt_params_results['time'] = time
 
-            if (phase_index is not None and
-                (phase_param := opt_params[phase_index]) == 'phase'):
-                opt_params_results['phase'] = phic
-            elif phase_index is not None and phase_param == 'psi':
-                opt_params_results['psi'] = 0.5*phic
-            else:
-                # -- No phase optimization was carried out
-                pass
+            if phase_index is not None:
+                opt_params_results['phase'] = phase
 
-            return wf1, wf2 * np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic), opt_params_results
+            return wf1, wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase), opt_params_results
             # -- Note: redefining wf2 with the phase factor using *=
             # -- is a very bad idea. That is because the result of the
             # -- call is potentially already cached, and in that case
@@ -1133,27 +1107,16 @@ def optimize_overlap(
         # -- evaluated in values of optimized inner product result
         _, opt_info = inner_product(wf1, wf2, **(inner_prod_kwargs
                                                  | {'return_opt_info': True}))
-        tc = opt_info['peak_time']
-        phic = opt_info['peak_phase']
+        time = opt_info['peak_time']
+        phase = opt_info['peak_phase']
 
         if time_index is not None:            
-            opt_params_results[opt_params[time_index]] = tc
-        else:
-            # -- No time optimization was carried out
-            pass
+            opt_params_results['time'] = time
 
         if phase_index is not None:
-            if opt_params[phase_index] == 'phase':
-                # -- Either phase was given or optimization was turned
-                # -- on with no corresponding parameter in opt_params
-                opt_params_results['phase'] = phic
-            else:
-                opt_params_results['psi'] = 0.5*phic
-        else:
-            # -- No phase optimization was carried out
-            pass
+            opt_params_results['phase'] = phase
 
-        wf2 = wf2 * np.exp(-2.j*np.pi*tc*wf2.frequencies + 1.j*phic)
+        wf2 = wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase)
         # -- Using *= here would be bad because the result of the call
         # -- is potentially already cached, and in that case the cached
         # -- result would be overwritten (bad)

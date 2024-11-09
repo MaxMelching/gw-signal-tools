@@ -16,7 +16,7 @@ from ..logging import logger
 from .utils import (
     pad_to_target_df, get_signal_at_target_frequs
 )
-from .ft import td_to_fd_waveform
+from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
 from ._error_helpers import _q_convert
 
@@ -127,7 +127,7 @@ def inner_product(
 
     See Also
     --------
-    gw_signal_tools.waveform_utils.td_to_fd_waveform :
+    gw_signal_tools.waveform.ft.td_to_fd :
         Used to convert ``TimeSeries`` input to a ``FrequencySeries``.
     gwpy.frequencyseries.frequencyseries.interpolate :
         Function used to get signals to same sampling rate.
@@ -202,7 +202,7 @@ def inner_product(
             'it is recommended to turn on optimization over time, phase.'
         )
 
-        signal1 = td_to_fd_waveform(pad_to_target_df(signal1, df))
+        signal1 = td_to_fd(pad_to_target_df(signal1, df))
 
     if isinstance(signal2, TimeSeries):
         logger.info(
@@ -211,7 +211,7 @@ def inner_product(
             'it is recommended to turn on optimization over time, phase.'
         )
         
-        signal2 = td_to_fd_waveform(pad_to_target_df(signal2, df))
+        signal2 = td_to_fd(pad_to_target_df(signal2, df))
         
     # -- Handling frequency range
     f_lower, f_upper = [

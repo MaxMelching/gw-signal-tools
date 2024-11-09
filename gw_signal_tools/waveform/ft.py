@@ -1,37 +1,33 @@
+# -- Standard Lib Imports
+from typing import Literal
+
 # -- Third Party Imports
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import numpy as np
+import astropy.units as u
+from gwpy.frequencyseries import FrequencySeries
+from gwpy.timeseries import TimeSeries
 
-# -- Local Package Imports
-from ._error_helpers import _q_convert
 
-
-__all__ = ('td_to_fd_waveform', 'fd_to_td_waveform')
+__all__ = ('FT_CONVENTION_DEFAULT', 'td_to_fd', 'fd_to_td',
+           'correct_for_conditioning', 'shift_signal_cyclic', 'shift_signal')
 
 
 __doc__ = """
-
+Files handling Fourier transform functions interplay with gwsignal.
 """
 
 
-# TODO: once gwsignal with FT is on main branch, maybe just point to
-# these functions?
-
 try:
-    # from lalsimulation.gwsignal.core.utils import (
-    #     td_to_fd, fd_to_td, zero_pad, shift_signal, roll_signal
-    # )
-
-    import astropy.units as u
-
-    from typing import Literal
-    from gwpy.frequencyseries import FrequencySeries
-    from gwpy.timeseries import TimeSeries
-
+    from lalsimulation.gwsignal.core.utils import FT_CONVENTION_DEFAULT
+except ImportError:
     FT_CONVENTION_DEFAULT: str = 'wrap'
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import td_to_fd
+except ImportError:
     def td_to_fd(
         signal: TimeSeries,
         convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
@@ -102,6 +98,9 @@ try:
             raise ValueError(f"Invalid convention '{convention}'.")
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import fd_to_td
+except ImportError:
     def fd_to_td(
         signal: FrequencySeries,
         convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
@@ -198,6 +197,9 @@ try:
         return out
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import correct_for_conditioning
+except ImportError:
     def correct_for_conditioning(signal: FrequencySeries) -> FrequencySeries:
         """
         Change end time of signal to zero by rolling back the portion at
@@ -221,6 +223,9 @@ try:
             return shift_signal_cyclic(signal, -time_shift)
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import shift_signal_cyclic
+except ImportError:
     def shift_signal_cyclic(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
@@ -265,6 +270,9 @@ try:
                             '`TimeSeries`.')
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import shift_signal
+except ImportError:
     def shift_signal(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
@@ -298,6 +306,9 @@ try:
                             '`TimeSeries`.')
 
 
+try:
+    from lalsimulation.gwsignal.core.utils import zero_pad
+except ImportError:
     def zero_pad(
         signal: TimeSeries,
         df: float | u.Quantity
@@ -349,149 +360,3 @@ try:
         else:
             # -- No padding required
             return signal
-
-
-
-    td_to_fd_waveform = td_to_fd
-    fd_to_td_waveform = fd_to_td
-except ImportError:
-    ...
-    # define them manually
-
-    # Point to functions or make quick wrapper (in case additional
-    # rolling for example is wanted)
-
-
-    def td_to_fd_waveform(signal: TimeSeries) -> FrequencySeries:
-        """
-        Transform given :code:`signal` to Fourier domain. Note that the
-        output is normalized to represent the continuous frequency
-        components, not the discrete ones. Furthermore, a phase shift is
-        applied to account for the starting of :code:`signal`.
-
-        Parameters
-        ----------
-        signal : ~gwpy.timeseries.TimeSeries
-            Signal to be transformed.
-
-        Returns
-        -------
-        out : ~gwpy.frequencyseries.FrequencySeries
-            Transformed :code:`signal`.
-
-        See Also
-        --------
-        numpy.fft.rfft, numpy.fft.fft : Fourier transformations used.
-        """
-        # Check if rfft can be performed or full fft needed
-        if np.iscomplexobj(signal):
-            out = FrequencySeries(
-                np.fft.fftshift(np.fft.fft(signal)) * signal.dx,  # Discrete -> continuous
-                frequencies=np.fft.fftshift(np.fft.fftfreq(signal.size, d=signal.dx.value)) << 1 / signal.dx.unit,
-                unit=signal.unit * signal.dx.unit,  # Make sure numpy functions carry unit correctly
-                name=('Fourier transform of '
-                    + signal.name if signal.name is not None else None),
-                channel=signal.channel,
-                epoch=signal.epoch.value + (-1 if signal.epoch.value < 0 else 0)
-            )
-        else:
-            out = FrequencySeries(
-                np.fft.rfft(signal) * signal.dx,  # Discrete -> continuous
-                frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value) << 1 / signal.dx.unit,
-                unit=signal.unit * signal.dx.unit,  # Make sure numpy functions carry unit correctly
-                name=('Fourier transform of '
-                    + signal.name if signal.name is not None else None),
-                channel=signal.channel,
-                epoch=signal.epoch.value + (-1 if signal.epoch.value < 0 else 0)
-            )
-        
-        # Account for non-zero starting time
-        # out *= np.exp(-1.j * 2 * np.pi * out.frequencies * signal.t0)
-        # Equivalent to multiplication with epoch because for TimeSeries, t0=epoch
-        return out
-
-
-    def fd_to_td_waveform(signal: FrequencySeries) -> TimeSeries:
-        """
-        Transform given :code:`signal` to time domain. Note that the input
-        is expected to be normalized according to :code:`td_to_fd_waveform`,
-        i.e. so that the components in :code:`signal` are continuous
-        frequency components.
-
-        Parameters
-        ----------
-        signal : ~gwpy.frequencyseries.FrequencySeries
-            Signal to be transformed.
-
-        Returns
-        -------
-        out : ~gwpy.timeseries.TimeSeries
-            Transformed :code:`signal`.
-
-        Notes
-        -----
-        In case you experience a wrap-around after applying this function,
-        there are two options: either interpolating :code:`signal` to a
-        higher resolution in frequency space or, if :code:`signal` itself is
-        obtained from a Fourier transform, pad the time domain signal with
-        zeros at its end (if the signal goes to zero at its end), e.g. using
-        the function :code:`~gw_signal_tools.waveform.utils.
-        pad_to_target_df`. The time span to be padded should be roughly the
-        same as the epoch (i.e. the starting time) of the signal, so that
-        a shift by it does not cause a wrap-around.
-
-        See Also
-        --------
-        numpy.fft.irfft, numpy.fft.ifft :
-            Inverse Fourier transformations used.
-        """
-        # Avoid wrap-around of signal by manually setting starting time and making
-        # sure signal starts at zero using time shift with negative epoch
-        # signal = signal * np.exp(1.j*2*np.pi*signal.frequencies.value*signal.epoch.value)
-        # TODO: call _signal?
-        # NOTE: taking value of epoch here is important, otherwise no conversion
-        # to number is performed from Time class
-
-        # Check if irfft can be performed or full ifft needed
-        if signal.f0 == 0.0:
-            dt = 1 / (2 * (signal.size - 1) * signal.df)
-            # NOTE: 2*(n-1) follows normalization that happens according to the docs:
-            # https://numpy.org/doc/stable/reference/generated/numpy.fft.irfft.html
-
-            out = TimeSeries(
-                np.fft.irfft(signal / dt),
-                unit=signal.unit / dt.unit,  # Make sure numpy functions carry unit correctly
-                t0=signal.epoch.value * dt.unit,  # t0=epoch for TimeSeries
-                dt=dt,  # Units might not be s, thus no use of .to()
-                name=('Inverse Fourier transform of '
-                    + signal.name if signal.name is not None else None),
-                channel=signal.channel
-            )
-        elif signal.f0 < 0.0:
-            if np.fft.ifftshift(signal.frequencies)[0] != 0.0:
-                raise ValueError(
-                    '`signal` does not have correct format for ifft. Please check '
-                    'https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html#numpy.fft.ifft'
-                    'for the requirements regarding frequency range.'
-                )
-
-            dt = 1 / (signal.size * signal.df)
-            # Note: follows normalization that happens according to the docs:
-            # https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html
-
-            out = TimeSeries(
-                np.fft.ifft(np.fft.ifftshift(signal) / dt),
-                unit=signal.unit / dt.unit,  # Make sure numpy functions carry unit correctly
-                t0=signal.epoch.value * dt.unit,  # t0=epoch for TimeSeries
-                dt=dt,  # Units might not be s, thus no use of .to()
-                name=('Inverse Fourier transform of '
-                    + signal.name if signal.name is not None else None),
-                channel=signal.channel
-            )
-        else:
-            raise ValueError(
-                'Signal starts at positive frequency. Need either f0=0 (for irfft)'
-                ' or negative f0 (for ifft).'
-            )
-
-        return out

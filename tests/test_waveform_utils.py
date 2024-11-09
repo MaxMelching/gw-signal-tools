@@ -17,9 +17,7 @@ from gw_signal_tools.waveform.utils import (
     get_signal_at_target_df, get_signal_at_target_frequs,
     get_strain, fill_f_range, get_wf_generator
 )
-from gw_signal_tools.waveform.ft import (
-    td_to_fd_waveform, fd_to_td_waveform,
-)
+from gw_signal_tools.waveform.ft import td_to_fd
 from gw_signal_tools.test_utils import (
     assert_allclose_quantity, assert_allequal_series
 )
@@ -83,7 +81,7 @@ hp_f_coarse, hc_f_coarse = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * h
 # -- These input values are powers of two, have to be reproduced exactly
 def test_pad_to_target_df_exact(df):
     hp_t_padded = pad_to_target_df(hp_t, df)
-    hp_t_f = td_to_fd_waveform(hp_t_padded)
+    hp_t_f = td_to_fd(hp_t_padded)
 
     assert_quantity_equal(df, hp_t_f.df)
 
@@ -93,7 +91,7 @@ def test_pad_to_target_df_exact(df):
 # -- reproduced exactly (thus ensure sufficient accuracy)
 def test_pad_to_target_df_not_exact(df):
     hp_t_padded = pad_to_target_df(hp_t, df)
-    hp_t_f = td_to_fd_waveform(hp_t_padded)
+    hp_t_f = td_to_fd(hp_t_padded)
 
     assert df >= hp_t_f.df  # If not equal, must not be coarser
     assert_allclose_quantity(df, hp_t_f.df, atol=0.0, rtol=1e-5)
@@ -104,7 +102,7 @@ def test_pad_to_target_df_too_large():
     # -- Above sampling frequency of signal, so padding is not
     # -- supposed to do anything
     hp_t_padded = pad_to_target_df(hp_t, df)
-    hp_t_f = td_to_fd_waveform(hp_t_padded)
+    hp_t_f = td_to_fd(hp_t_padded)
     expected_df = 1.0 / (hp_t.dt * hp_t.size)
 
     assert_allequal_series(hp_t_padded, hp_t)
@@ -491,7 +489,7 @@ def test_restrict_f_range_with_padding_and_cropping_exact(df):
     # multiple of df
 
     # hp_t_padded = pad_to_target_df(hp_t, df)
-    # hp_t_f = td_to_fd_waveform(hp_t_padded)
+    # hp_t_f = td_to_fd(hp_t_padded)
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
     hp_f_restricted = restrict_f_range(hp_f, f_range=[0.0, f_crop_high],

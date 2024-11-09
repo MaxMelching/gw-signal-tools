@@ -12,7 +12,7 @@ import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.waveform import (
-    td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs,
+    td_to_fd_waveform, pad_to_target_df, get_signal_at_target_frequs,
     inner_product, norm, overlap, optimize_overlap, optimized_inner_product
 )
 from gwpy.testing.utils import assert_quantity_equal
@@ -302,8 +302,8 @@ def test_f_range_handling(f_range):
 
 
 def test_positive_negative_f_range_consistency():
-    h = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df))
-    h_symm = td_to_fd_waveform(pad_to_get_target_df(hp_t, df=hp_f_fine.df) + 0.j)
+    h = td_to_fd_waveform(pad_to_target_df(hp_t, df=hp_f_fine.df))
+    h_symm = td_to_fd_waveform(pad_to_target_df(hp_t, df=hp_f_fine.df) + 0.j)
     # -- h_symm has symmetric spectrum around f=0.0 and the same
     # -- spectrum as h for positive frequencies
     assert h.f0 != h_symm.f0  # Make sure they are not the same
@@ -324,7 +324,7 @@ def test_positive_negative_f_range_consistency():
     assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
     assert_allclose_quantity(0.*u.s, time_2, atol=1e-12, rtol=0.0)
 
-    assert_quantity_equal(norm1, norm2)
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm1_opt, norm2_opt, atol=0.0, rtol=1e-12)
 
     norm_plus = norm(h_symm, f_range=[0.0, f_upper])

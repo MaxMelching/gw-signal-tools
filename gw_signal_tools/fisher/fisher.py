@@ -175,8 +175,8 @@ class FisherMatrix:
             _params = params.copy()  # We potentially remove later on
         
         # -- Assert no degenerate parameters are given
-        assert not ('time' in _params and 'tc' in _params)
-        assert not ('phase' in _params and 'psi' in _params)
+        # assert not ('time' in _params and 'tc' in _params)
+        # assert not ('phase' in _params and 'psi' in _params)
         # Build in some phi_ref check too? Maybe even based on hm_or_precessing?
         # from gw_signal_tools.inner_product import test_hm, test_precessing
         # assert not (
@@ -393,15 +393,13 @@ class FisherMatrix:
             Parameter(s) with respect to which the derivatives will be
             computed, the norms of which constitute the Fisher matrix.
             Must be compatible with :code:`param_to_vary` input to the
-            function :code:`~gw_signal_tools.fisher.fisher_utils.
-            get_waveform_derivative_1D_with_convergence`, i.e. either
-            :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
-            (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a
+            the derivative classes defined in :code:`~gw_signal_tools.
+            waveform`, i.e. either :code:`'time'`, :code:`'phase'` or a
             key in :code:`wf_params_at_point`.
 
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
-            suppported
+            suppported.
         new_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
@@ -687,15 +685,12 @@ class FisherMatrix:
 
             opt_wf_params = self.wf_params_at_point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
-            # TODO: decide if tc, psi should be included in here or not
-            # (I think it does make sense to do so)
+            # TODO: decide if time, phase should be included in here or not
+            # (I think it does make sense to do so) -> with new wrapper generator it would
 
             # -- Remove parameters that are not used in wf generation
-            time_shift = opt_vals.pop('tc', 0.*u.s) + opt_vals.pop('time', 0.*u.s)
-            phase_shift = 2.*opt_vals.pop('psi', 0.*u.rad) + opt_vals.pop('phase', 0.*u.rad)  # 2 due to separate interpretation of phase, psi
-            # -- Idea of addition: only one will be non-zero, giving
-            # -- multiple would not make sense due to their equivalency
-            
+            time_shift = opt_vals.pop('time', 0.*u.s)
+            phase_shift = opt_vals.pop('phase', 0.*u.rad)            
 
             if len(opt_vals) == 0:
                 # -- Means that only time and/or phase were optimized
@@ -703,12 +698,7 @@ class FisherMatrix:
                 # -- no need to recalculate (expensive operation)
                 opt_fisher = self
             else:
-                opt_wf_params.pop('tc', None)
                 opt_wf_params.pop('time', None)
-                if 'psi' not in self.wf_params_at_point:
-                    # -- Otherwise we would remove external parameter
-                    # -- needed for waveform generation
-                    opt_wf_params.pop('psi', None)
                 opt_wf_params.pop('phase', None)
 
                 opt_fisher = FisherMatrix(
@@ -790,10 +780,8 @@ class FisherMatrix:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
 
-                if param in ['tc', 'time']:
+                if param == 'time':
                     opt_bias[i] = time_shift
-                elif param == 'psi':
-                    opt_bias[i] = 0.5*phase_shift
                 elif param == 'phase':
                     opt_bias[i] = phase_shift
                 else:

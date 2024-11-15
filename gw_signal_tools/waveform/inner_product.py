@@ -907,7 +907,7 @@ def optimize_overlap(
         :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`.
         Beware that the polarization angle :code:`psi` might be
         degenerate with :code:`phase`, if you are using the complex
-        strain combination :math:`h = h_+ + i \, h_{\times}`.
+        strain combination :math:`h = h_+ \pm i \, h_{\times}`.
 
         Note that it is also possible to optimize over phase and/or time
         by enabling optimization over phase and time in the inner

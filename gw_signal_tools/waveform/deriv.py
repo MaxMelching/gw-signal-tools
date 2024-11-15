@@ -110,7 +110,7 @@ class WaveformDerivativeGWSignaltools():
         global phase and time shifts.
         Beware that the polarization angle :code:`psi` might be
         degenerate with :code:`phase`, if you are using the complex
-        strain combination :math:`h = h_+ + i \, h_{\times}`.
+        strain combination :math:`h = h_+ \pm i \, h_{\times}`.
 
         The last analytical derivative is the one for the luminosity
         distance :math:`D_L`, which enters in waveforms only as an

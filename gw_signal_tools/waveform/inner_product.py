@@ -14,7 +14,7 @@ import astropy.units as u
 from ..units import preferred_unit_system
 from ..logging import logger
 from .utils import (
-    pad_to_target_df, get_signal_at_target_frequs
+    pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift
 )
 from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
@@ -1006,7 +1006,7 @@ def optimize_overlap(
             if phase_index is not None:
                 opt_params_results['phase'] = phase
 
-            return wf1, wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase), opt_params_results
+            return wf1, apply_time_phase_shift(wf2, time, phase), opt_params_results
             # -- Note: redefining wf2 with the phase factor using *=
             # -- is a very bad idea. That is because the result of the
             # -- call is potentially already cached, and in that case
@@ -1081,7 +1081,7 @@ def optimize_overlap(
         if phase_index is not None:
             opt_params_results['phase'] = phase
 
-        wf2 = wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase)
+        wf2 = apply_time_phase_shift(wf2, time, phase)
         # -- Using *= here would be bad because the result of the call
         # -- is potentially already cached, and in that case the cached
         # -- result would be overwritten (bad)

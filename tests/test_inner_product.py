@@ -642,10 +642,14 @@ def test_time_phase_opt(tc, phic):
     assert_allclose(
         1.,
         [overlap(wf1_shifted, wf2_shifted),
-         overlap(wf1_shifted_2, wf2_shifted_2)],
+         overlap(wf1_shifted, wf2_shifted, optimize_time_and_phase=True),
+         overlap(wf1_shifted_2, wf2_shifted_2),
+         overlap(wf1_shifted_2, wf2_shifted_2, optimize_time_and_phase=True),
+         ],
         atol=1e-4,
         rtol=0.
     )
+    # -- Repeated optimization should not change overlap results
 
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast

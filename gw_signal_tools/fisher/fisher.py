@@ -13,7 +13,8 @@ from ..units import preferred_unit_system
 from ..logging import logger
 from ..waveform import (
     get_wf_generator, inner_product, norm, overlap, optimize_overlap,
-    get_default_opt_params, _INNER_PROD_ARGS
+    get_default_opt_params, _INNER_PROD_ARGS, time_phase_wrapper,
+    apply_time_phase_shift
 )
 from ..types import MatrixWithUnits
 from .fisher_utils import fisher_matrix
@@ -157,6 +158,16 @@ class FisherMatrix:
     #     # Do some parameter checks?
 
     #     self._wf_params_at_point = wf_params
+
+    @property
+    def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+        return self._wf_generator
+    
+    @wf_generator.setter
+    def wf_generator(self, wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]) -> None:
+        self._wf_generator = wf_gen
+
+        self._wf_gen_time_phase = time_phase_wrapper(wf_gen)
     
     @property
     def params_to_vary(self) -> list[str]:
@@ -681,12 +692,27 @@ class FisherMatrix:
             )
             delta_h = opt_wf_1 - opt_wf_2
 
-            optimization_info['remaining_mismatch'] = 1. - overlap(opt_wf_1, opt_wf_2, **inner_prod_kwargs)
-
             opt_wf_params = self.wf_params_at_point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
             # TODO: decide if time, phase should be included in here or not
             # (I think it does make sense to do so) -> with new wrapper generator it would
+
+            # -- Do some potentially interesting mismatch calculations
+            optimization_info['remaining_mismatch'] = 1. - overlap(
+                # opt_wf_1, opt_wf_2, **inner_prod_kwargs
+                opt_wf_1, opt_wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            )
+            # -- Either optimize is turned on (i.e. overlap is already
+            # -- optimized, or the relevant mismatch is non-optimized one)
+            # -- -> even when inner product in Fisher is optimized. Such
+            # --    an optimization is only carried out between waveform
+            # --    difference and derivative! And remaining_mismatch is
+            # --    is concerned with mismatch of waveform difference
+            optimization_info['lsa_mismatch'] = 1. - overlap(
+                self._wf_gen_time_phase(self.wf_params_at_point),
+                self._wf_gen_time_phase(opt_wf_params),
+                **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            )  # -- Same argument as for remaining_mismatch
 
             # -- Remove parameters that are not used in wf generation
             time_shift = opt_vals.pop('time', 0.*u.s)
@@ -760,7 +786,7 @@ class FisherMatrix:
             # -- For Fisher matrix, time and phase shift have no impact,
             # -- but for pure derivatives, they do!
             for i, deriv in enumerate(derivs):
-                derivs[i] = deriv * np.exp(-2.j*np.pi*deriv.frequencies*time_shift + 1.j*phase_shift)
+                derivs[i] = apply_time_phase_shift(deriv, time_shift, phase_shift)
         
         vector = MatrixWithUnits.from_numpy_array(np.zeros((opt_fisher.nparams, 1)))
         for i, deriv in enumerate(derivs):

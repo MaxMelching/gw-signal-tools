@@ -708,11 +708,12 @@ class FisherMatrix:
             # --    an optimization is only carried out between waveform
             # --    difference and derivative! And remaining_mismatch is
             # --    is concerned with mismatch of waveform difference
-            optimization_info['lsa_mismatch'] = 1. - overlap(
-                self._wf_gen_time_phase(self.wf_params_at_point),
-                self._wf_gen_time_phase(opt_wf_params),
-                **(inner_prod_kwargs | {'optimize_time_and_phase': False})
-            )  # -- Same argument as for remaining_mismatch
+            # optimization_info['lsa_mismatch'] = 1. - overlap(
+            #     self._wf_gen_time_phase(self.wf_params_at_point),
+            #     self._wf_gen_time_phase(opt_wf_params),
+            #     **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            # )  # -- Same argument as for remaining_mismatch
+            # TODO: THIS IS NOT LSA MISMATCH!
 
             # -- Remove parameters that are not used in wf generation
             time_shift = opt_vals.pop('time', 0.*u.s)
@@ -751,7 +752,9 @@ class FisherMatrix:
             wf_2 = self.wf_generator(self.wf_params_at_point)
             delta_h = wf_1 - wf_2
 
-            optimization_info['remaining_mismatch'] = 1. - overlap(wf_1, wf_2, **inner_prod_kwargs)
+            optimization_info['remaining_mismatch'] = 1. - overlap(
+                wf_1, wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            )  # -- Same argument as above
 
             if optimize_fisher is not None:
                 opt_fisher = self.project_fisher(optimize_fisher)
@@ -816,6 +819,51 @@ class FisherMatrix:
 
             fisher_bias += opt_bias
             optimization_info['opt_bias'] = opt_bias
+        
+        # true_params = self.wf_params_at_point.copy() | {'time': 0.*u.s, 'phase': 0.*u.rad}
+        true_params = {'time': 0.*u.s, 'phase': 0.*u.rad} | self.wf_params_at_point#.copy()
+        # from copy import deepcopy
+        # true_params = deepcopy(self.wf_params_at_point) | {'time': 0.*u.s, 'phase': 0.*u.rad}
+        for param in opt_fisher.params_to_vary:
+            i = opt_fisher.get_param_indices(param)
+            # true_params[param] += MatrixWithUnits.reshape(fisher_bias[i], -1)
+            # true_params[param] = self.wf_params_at_point[param] + fisher_bias[i][0, 0]
+            true_params[param] = true_params[param] + fisher_bias[i][0, 0]
+            # true_params[param] += fisher_bias[i][0, 0]  # Requires deepcopy to not modify self.wf_params_at_point
+        
+        optimization_info['true_params'] = true_params
+
+        # -- np.sum does not work for Quantities, thus need manual sum
+        _linear_contr = 0.
+        for i in range(opt_fisher.nparams):
+            _linear_contr += derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0]
+        
+        try:
+            optimization_info['lsa_mismatch'] = 1. - overlap(
+                opt_fisher._wf_gen_time_phase(true_params),
+                # opt_fisher._wf_gen_time_phase(opt_wf_params if opt_params is not None else opt_fisher.wf_params_at_point),
+                opt_fisher._wf_gen_time_phase(opt_fisher.wf_params_at_point if optimize is False else opt_wf_params)
+                # + np.sum(derivs*np.array([true_params[param] - (opt_fisher.wf_params_at_point | {'time': 0.*u.s, 'phase': 0.*u.rad} if optimize is False else opt_wf_params)[param] for param in self.params_to_vary])),
+                # + np.sum(derivs*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)),
+                # + np.sum([derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0] for i in range(opt_fisher.nparams)]),
+                + _linear_contr,
+                **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            )  # -- Same argument as for remaining_mismatch
+        except ValueError as err:
+            if 'Input domain error' in str(err):
+                # -- Estimate is bad, pushes out of valid param range
+                optimization_info['lsa_mismatch'] = np.nan
+            else:
+                raise ValueError(err)
+
+        # TODO: shouldn't we look at one waveform plus sum over deriv*bias
+        # (would then require calculating this mismatch before opt_bias is added
+        # to fisher_bias, or looking at (fisher_bias - opt_bias)[i][0, 0])?
+        # Because this describes fit between linear approximation and true
+        # difference. Currently, we are looking at mismatch that has to be
+        # approximated over by the linear approximation, but this gives no
+        # statement about how well it works in this particular case
+
 
         # -- Check which params shall be returned
         if params is not None:

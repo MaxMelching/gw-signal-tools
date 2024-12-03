@@ -18,7 +18,7 @@ from .utils import (
 )
 from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
-from ._error_helpers import _q_convert
+from ._error_helpers import _q_convert, _compare_series, _assert_ft_compatible
 
 
 __doc__ = """
@@ -153,11 +153,16 @@ def inner_product(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
 
+    # -- NOTE: we do not check for equal units of signals, since there
+    # -- are usecases for inner products between signals with different
+    # -- units (e.g. Fisher matrix). Thus this is not a physical
+    # -- requirement, so we do not enforce it.
+
     if isinstance(signal2, FrequencySeries):
-        assert frequ_unit == signal2.frequencies.unit, \
+        assert signal2.frequencies.unit._is_equivalent(frequ_unit), \
             'Need consistent frequency/time units for `signal1` and `signal2`.'
     elif isinstance(signal2, TimeSeries):
-        assert frequ_unit == signal2.times.unit * u.Hz / u.s, \
+        assert (signal2.times.unit * u.Hz / u.s)._is_equivalent(frequ_unit), \
             'Need consistent frequency/time units for `signal1` and `signal2`.'
     else:
         raise TypeError(
@@ -171,19 +176,15 @@ def inner_product(
         psd = psd_no_noise.copy()
 
         # -- Make sure units are consistent with input. PSD is always a
-        # -- density, i.e. strain**2 per frequency
+        # -- density, i.e. some unit per frequency
         if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
             psd.frequencies *= (frequ_unit / psd_frequ_unit)
             psd /= (frequ_unit / psd_frequ_unit)
             # -- Rescale density that it represents, psd is per frequ_unit
     
     if isinstance(psd, FrequencySeries):
-        assert frequ_unit == psd.frequencies.unit, \
+        assert psd.frequencies.unit._is_equivalent(frequ_unit), \
             'Need consistent frequency/time units for `psd` and other signals.'
-        
-        assert ((u.strain**2/frequ_unit == psd.unit)
-                or (1/frequ_unit == psd.unit)), \
-            ('Need valid psd units for psd, has to be strain^2 per frequency.')
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
@@ -391,6 +392,17 @@ def inner_product_computation(
         # -- signal2.size = psd.size if this error is not raised
         raise ValueError(custom_error_msg)
     
+    # assert signal1._is_compatible_gwpy(signal2)
+    # signal1._compare_index(psd)  # Units need not match here
+    # -- Hmmm this does not actually check for equality...
+
+    # assert _compare_series(signal1, signal2)
+    # assert _compare_series(signal1, psd)
+    
+    # _compare_series(signal1, signal2)
+    # _compare_series(signal1, psd)
+    _compare_series(signal1, signal2, psd)
+    
     output_unit = ((signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
                    .decompose(bases=preferred_unit_system.bases))
     # -- Resets scale only for units, not for value. Best we can do
@@ -398,7 +410,7 @@ def inner_product_computation(
     # -- To determine factor in front of integral, check if one-sided
     one_sided = ((signal1.frequencies[0].value >= 0.0) or
                  (signal1.frequencies[-1].value <= 0.0))
-    return (4.0 if one_sided else 2.) * np.real(
+    return (4.0 if one_sided else 2.0) * np.real(
         simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies)
     ) * output_unit
 
@@ -485,50 +497,22 @@ def optimized_inner_product(
         :code:`'peak_time'`, and :code:`phase_shift` the value returned
         in (iii), i.e. with key :code:`'peak_phase'`.
     """
+    # -- First step: ensuring input signals are consistent
     frequ_unit = signal1.frequencies.unit
 
-    # -- First step: assure same distance of samples
-    assert (allclose_quantity(signal1.df, psd.df, atol=0.0, rtol=1e-5)
-            and allclose_quantity(signal2.df, psd.df, atol=0.0, rtol=1e-5)), \
-        'Signals must have equal frequency spacing.'
-    
+    # assert _compare_series(signal1, signal2)
+    # assert _compare_series(signal1, psd)
+    # _compare_series(signal1, signal2)
+    # _compare_series(signal1, psd)
+    _compare_series(signal1, signal2, psd)
+
     # -- Second step: make sure all signals start at valid frequencies
-    assert ((allclose_quantity(signal1.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
-             and allclose_quantity(signal2.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0)
-             and allclose_quantity(psd.f0, 0.0 * frequ_unit, atol=0.0, rtol=0.0))
-            or (allclose_quantity(-(signal1.f0 + signal1.df), signal1.frequencies[-1], atol=signal1.df.value, rtol=0.0)
-                and allclose_quantity(-(signal2.f0 + signal2.df), signal2.frequencies[-1], atol=signal2.df.value, rtol=0.0)
-                and allclose_quantity(-(psd.f0 + psd.df), psd.frequencies[-1], atol=psd.df.value, rtol=0.0))), \
-        ('All signals must start either at f=0 or be symmetric around f=0, '
-         'where the latter refers to the case of an odd sample size. For an '
-         'even sample size, on the other hand, the number of samples for '
-         'positive frequencies is expected to be one less than the number of '
-         'samples for negative frequencies, in accordance with the format '
-         'expected by `~numpy.fft.ifftshift`. Note that the conditions just'
-         'mentioned do not apply to the case of a starting frequency f=0, '
-         'where both even and odd sample sizes are accepted.')
-    
-    # -- Third step: assure frequencies are sufficiently equal.
-    # -- Maximum deviation allowed between the is given df, which
-    # -- determines accuracy the signals have been sampled with.
-    custom_error_msg = (
-        'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is already small, consider '
-        'choosing a (negative) power of two as these seem to work best.'
-    )
-    # -- Is perhaps because interpolate uses fft, which works best with powers of two
-    try:
-        assert_allclose_quantity(signal1.frequencies, signal2.frequencies,
-                                 atol=0.5*signal1.df.value, rtol=0.)
-        assert_allclose_quantity(signal1.frequencies, psd.frequencies,
-                                 atol=0.5*signal1.df.value, rtol=0.)
-    except ValueError:
-        # -- Due to unequal sample size. Since this is automatically
-        # -- checked by numpy, we can be sure that signal1.size =
-        # -- signal2.size = psd.size if this error is not raised
-        raise ValueError(custom_error_msg)
-    
-    # -- Fourth step: computations
+    # _assert_ft_compatible(signal1)
+    # _assert_ft_compatible(signal2)
+    # _assert_ft_compatible(psd)
+    _assert_ft_compatible(signal1, signal2, psd)
+
+    # -- Third step: computations
     dft_vals = (signal1 * signal2.conjugate() / psd)
 
     if min_dt_prec is not None:
@@ -547,12 +531,12 @@ def optimized_inner_product(
     if np.isclose(0., dft_vals.f0.value, atol=0.5*dft_vals.df.value, rtol=0.):
         n_append = dft_vals.size - 1
         n_total = dft_vals.size + n_append
-        dt = 1. / (n_total*signal1.df)
+        current_dt = 1. / (n_total*signal1.df)
 
         if min_dt_prec is None:
-            min_dt_prec = dt
+            min_dt_prec = current_dt
         
-        if dt > min_dt_prec:
+        if current_dt > min_dt_prec:
             n_required = np.ceil(1. / (min_dt_prec*signal1.df))
         else:
             n_required = n_total
@@ -562,16 +546,19 @@ def optimized_inner_product(
         n_append = n_required - dft_vals.size
         
         full_dft_vals = 4.*np.append(dft_vals.value, np.zeros(n_append))
+        # -- Note: ifft function expects positive frequency values first
+        # -- and then negative. Since we add at least as many zeros as
+        # -- len(dft_vals), we adhere to this and things are consistent
     else:
         n_append = 0
         n_total = dft_vals.size
 
-        dt = 1. / (n_total*signal1.df)
+        current_dt = 1. / (n_total*signal1.df)
 
         if min_dt_prec is None:
-            min_dt_prec = dt
+            min_dt_prec = current_dt
         
-        if dt > min_dt_prec:
+        if current_dt > min_dt_prec:
             n_required = np.ceil(1. / (min_dt_prec*signal1.df))
         else:
             n_required = n_total
@@ -623,6 +610,8 @@ def optimized_inner_product(
     # starting time when setting match series, be consistent there
     # -> or maybe it does not play role because we can argue via periodicity
     #    in signal length? Starting time zero should remain
+    # -> also, we only care about relative (!) time shift that we have
+    #    to introduce, not the actual difference in starting time
 
     match_series = np.roll(match_series, shift=number_to_roll)
     match_series.shift(-match_series.times[number_to_roll])

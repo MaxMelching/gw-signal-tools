@@ -194,13 +194,15 @@ def inner_product(
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
-    # -- If necessary, do fft (padding to ensure
+    # -- If necessary, do Fourier transform (padding to ensure
     # -- sufficient resolution in frequency domain)
     if isinstance(signal1, TimeSeries):
         logger.info(
             '`signal1` is a ``TimeSeries``, performing an automatic FFT.'
             'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase.'
+            'it is recommended to turn on optimization over time, phase. '
+            'Alternatively, do the FFT manually and make sure the result '
+            'looks reasonable.'
         )
 
         signal1 = td_to_fd(pad_to_target_df(signal1, df))
@@ -209,11 +211,13 @@ def inner_product(
         logger.info(
             '`signal2` is a ``TimeSeries``, performing an automatic FFT.'
             'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase.'
+            'it is recommended to turn on optimization over time, phase. '
+            'Alternatively, do the FFT manually and make sure the result '
+            'looks reasonable.'
         )
-        
+
         signal2 = td_to_fd(pad_to_target_df(signal2, df))
-        
+
     # -- Handling frequency range
     f_lower, f_upper = [
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),

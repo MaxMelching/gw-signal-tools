@@ -366,41 +366,7 @@ def inner_product_computation(
     --------
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
-    # -- Assure same distance of samples
-    assert (allclose_quantity(signal1.df, psd.df, atol=0., rtol=1e-5)
-            and allclose_quantity(signal2.df, psd.df, atol=0., rtol=1e-5)), \
-        'Signals must have equal frequency spacing.'
-    
-    # -- Second step: make sure frequencies are sufficiently equal.
-    # -- Maximum deviation allowed between the is given df, which
-    # -- determines accuracy the signals have been sampled with.
-    custom_error_msg = (
-        'Frequency samples of input signals are not equal. This might be '
-        'due to `df` being too large. If `df` is already small, consider '
-        'choosing a (negative) power of two as these seem to work best.'
-    )
-
-    try:
-        assert (allclose_quantity(signal1.frequencies, signal2.frequencies,
-                                  atol=0.5*signal1.df.value, rtol=0.)
-                and allclose_quantity(signal1.frequencies, psd.frequencies,
-                                  atol=0.5*signal1.df.value, rtol=0.)), \
-            custom_error_msg
-    except ValueError:
-        # -- Due to unequal sample size. Since this is automatically
-        # -- checked by numpy, we can be sure that signal1.size =
-        # -- signal2.size = psd.size if this error is not raised
-        raise ValueError(custom_error_msg)
-    
-    # assert signal1._is_compatible_gwpy(signal2)
-    # signal1._compare_index(psd)  # Units need not match here
-    # -- Hmmm this does not actually check for equality...
-
-    # assert _compare_series(signal1, signal2)
-    # assert _compare_series(signal1, psd)
-    
-    # _compare_series(signal1, signal2)
-    # _compare_series(signal1, psd)
+    # -- Assure input signals are compatible
     _compare_series(signal1, signal2, psd)
     
     output_unit = ((signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit)
@@ -500,16 +466,9 @@ def optimized_inner_product(
     # -- First step: ensuring input signals are consistent
     frequ_unit = signal1.frequencies.unit
 
-    # assert _compare_series(signal1, signal2)
-    # assert _compare_series(signal1, psd)
-    # _compare_series(signal1, signal2)
-    # _compare_series(signal1, psd)
     _compare_series(signal1, signal2, psd)
 
     # -- Second step: make sure all signals start at valid frequencies
-    # _assert_ft_compatible(signal1)
-    # _assert_ft_compatible(signal2)
-    # _assert_ft_compatible(psd)
     _assert_ft_compatible(signal1, signal2, psd)
 
     # -- Third step: computations

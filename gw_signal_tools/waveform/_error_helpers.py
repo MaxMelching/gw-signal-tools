@@ -38,47 +38,6 @@ def _q_convert(quant: float | u.Quantity, target_unit: u.Unit, arg1name: str,
             raise ValueError(_UNIT_CONV_ERR % (arg1name, quant.unit, arg2name, target_unit))
 
 
-# def _compare_series(s1: Series, s2: Series) -> tuple[bool, str]:
-#     """Return whether equal, error message with reason if not."""
-#     if not s1.unit._is_equivalent(s2.unit):
-#         return False, 'Signals must have equivalent units.'
-
-#     if not allclose_quantity(s1.df, s2.df, atol=0., rtol=1e-5):
-#         return False, 'Signals must have equal spacing on x-axis.'
-
-#     # TODO: decide whether to compare whole frequency array or just
-#     # start and end frequency. But then things in between could go wrong
-
-#     if not allclose_quantity(s1.xindex, s2.xindex, atol=0.5*s1.dx.value, rtol=0.):
-#         # -- Note: this automatically checks for equal size
-#         return False, ('Signals must have sufficiently equal xindex. '
-#                        'Maximum allowed deviation is 0.5*dx.')
-
-#     # -- Default return is that series are equal
-#     return True, ''
-
-# def _compare_series(s1: Series, s2: Series, test_unit: bool = True) -> None:
-#     """Checks input for compatibility, raises error if not."""
-#     if test_unit and not s1.unit._is_equivalent(s2.unit):
-#         # raise ValueError(f'Signals must have equivalent units.')
-#         # raise ValueError(f'Signals do not have equivalent units.')
-#         raise ValueError(f'Signals do not have equivalent units ({s1.unit} vs. {s2.unit}).')
-#         # raise ValueError(f'Signals do not have equivalent units ({s1.unit:latex} vs. {s2.unit:latex}).')
-
-#     if not allclose_quantity(s1.dx, s2.dx, atol=0., rtol=1e-5):
-#         # raise ValueError('Signals must have equal spacing on x-axis.')
-#         # raise ValueError('Signals do not have equal spacing on x-axis.')
-#         raise ValueError(f'Signals do not have equal spacing on x-axis ({s1.dx} vs. {s2.dx}).')
-
-#     # TODO: decide whether to compare whole frequency array or just
-#     # start and end frequency. But then things in between could go wrong
-
-#     if not allclose_quantity(s1.xindex, s2.xindex, atol=0.5*s1.dx.value, rtol=0.):
-#         # -- Note: this automatically checks for equal size
-#         raise ValueError('Signals must have sufficiently equal xindex. '
-#                          'Maximum allowed deviation is 0.5*dx.')
-
-# def _compare_series(s1: Series, s2: Series) -> None:
 def _compare_series(*s: list[Series]) -> None:
     """Checks if input is mutually compatible, raises error if not."""
     # -- Checks: equal length, sufficiently equal spacing, sufficiently

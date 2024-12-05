@@ -67,7 +67,7 @@ class MatrixWithUnits:
 
     Examples
     --------
-    >>> value_matrix = np.array([[42, 96], [96, 42]])
+    >>> value_matrix = np.array([[42., 96.], [96., 42.]])
     >>> unit_matrix = np.array([[u.s, u.m], [u.m, u.s]], dtype=object)
     >>> matrix = MatrixWithUnits(value_matrix, unit_matrix)
     >>> print(matrix)
@@ -83,8 +83,8 @@ class MatrixWithUnits:
     convert this class into more common data types:
 
     >>> np.array(matrix)
-    array([[42, 96],
-           [96, 42]])
+    array([[42., 96.],
+           [96., 42.]])
     
     This enables calling numpy functions directly on instances of
     ``MatrixWithUnits``, e.g.
@@ -114,11 +114,23 @@ class MatrixWithUnits:
 
     It is also possible to initialize using a single unit, e.g.
 
-    >>> MatrixWithUnits(np.array([[42, 96], [96, 42]]), u.s)
+    >>> MatrixWithUnits(np.array([[42., 96.], [96., 42.]]), u.s)
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
     
-           
+    and even without a unit:
+
+    >>> MatrixWithUnits([[42., 96.], [96., 42.]])
+    array([[<Quantity 42.>, <Quantity 96.>],
+           [<Quantity 96.>, <Quantity 42.>]], dtype=object)
+
+    Also works with a list of quantities instead of floats:
+    
+    >>> MatrixWithUnits([[42.*u.s, 96.*u.m], [96.*u.m, 42.*u.s]])
+    array([[<Quantity 42. s>, <Quantity 96. m>],
+           [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    
+    
     -> mention MatrixWithUnits.from_numpy_array? Can also say that this just
     creates instance with unit dimensionless, but is there for convenience
     in case you don't want to understand more of inner workings of class
@@ -134,26 +146,66 @@ class MatrixWithUnits:
     _allowed_input_types = _allowed_unit_types + _allowed_value_types
 
 
-    def  __init__(self, value: ArrayLike, unit: ArrayLike) -> None:
+    def  __init__(self, value: ArrayLike, unit: ArrayLike = None,
+                  override_int_dtype: bool = True) -> None:
+        # -- By default, int are converted to float because otherwise,
+        # -- subsequent operations (like .to()) might not work properly
         """Initialize a ``MatrixWithUnits``."""
-        # Internally, value and unit are stored as numpy arrays due to their
-        # versatility. Now we have to make sure the conversion works
+        if unit is None:
+            # -- Input is ArrayLike filled with floats or Quantities
+            try:
+                _input = np.asarray(value, dtype=object)
+                _dtype_arr = _input.reshape(-1)[0]
+                # _value_dtype = _dtype_arr.dtype
+                _value_dtype = type(_dtype_arr)
+            except IndexError:
+                # -- Empty array, choose default dtype float
+                _value_dtype = float
+
+            if override_int_dtype and _value_dtype == int:
+                _value_dtype = float
+
+            _value = np.zeros(np.shape(_input), dtype=_value_dtype)
+            _unit = np.empty(np.shape(_input), dtype=object)
+
+            for index, val in np.ndenumerate(_input):
+                try:
+                    _value[index] = val.value
+                    _unit[index] = val.unit
+                except AttributeError:
+                    if isinstance(val, self._allowed_value_types):
+                        _value[index] = val
+                        _unit[index] = u.dimensionless_unscaled
+                    else:
+                        raise ValueError(
+                            'If a ``MatrixWithUnits`` shall be initialized '
+                            'from a list/array, each element must either be a '
+                            'float or an astropy Quantity.'
+                        )
+            
+            self.value = _value
+            self.unit = _unit
+
+            return None  # To break __init__ at this point
+
+        # -- Internally, value and unit are stored as numpy arrays due
+        # -- to their versatility. Now we have to make sure that the
+        # -- conversion works
         try:
-            # Will work for arrays
-            value_dtype = value.dtype  # type: ignore
-            # Explanation of ignore: we cover case where no dtype exists
-        except AttributeError:
-            if type(value) in self._allowed_value_types:
-                value_dtype = type(value)
-            else:
-                # Default numeric type
-                value_dtype = float
+            _dtype_arr = np.asarray(value).reshape(-1)[0]
+            # _value_dtype = _dtype_arr.dtype
+            _value_dtype = type(_dtype_arr)
+        except IndexError:
+            # -- Empty array, choose default dtype float
+            _value_dtype = float
 
-        value = np.asarray(value, dtype=value_dtype)
+        if override_int_dtype and _value_dtype == int:
+            _value_dtype = float
 
+        value = np.asarray(value, dtype=_value_dtype)
 
-        # Scalar unit is allowed input even for value array, handled here
         if isinstance(unit, self._allowed_unit_types):
+            # -- Scalar unit given
             unit = u.Unit(unit)
         else:
             assert np.shape(value) == np.shape(unit), \
@@ -162,7 +214,8 @@ class MatrixWithUnits:
             
             unit = np.asarray(unit, dtype=object)
 
-        # Setters will take care of checking each element for correct type
+        # -- Set properties, more care with checking for types etc is
+        # -- done in the setters
         self.value = value
         self.unit = unit
         # NOTE: setting "private" properties here already is not good practice.
@@ -802,3 +855,9 @@ class MatrixWithUnits:
         ax.grid(False)
 
         return ax
+
+
+if __name__ == '__main__':
+    # -- Run doctests
+    import doctest
+    doctest.testmod()

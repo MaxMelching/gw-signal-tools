@@ -61,14 +61,21 @@ def pad_to_target_df(
         target_sample_number = int(np.ceil(1.0 / (signal.dt * df)))
         number_to_append = target_sample_number - signal.size
 
-        padding_series = TimeSeries(
+        # padding_series = TimeSeries(
+        #     np.zeros(number_to_append),
+        #     unit=signal.unit,
+        #     t0=signal.times[-1] + signal.dt,
+        #     dt=signal.dt,
+        #     dtype=signal.dtype
+        # )
+        # padded_signal = signal.append(padding_series, inplace=False)
+        padded_signal = TimeSeries(
             np.zeros(number_to_append),
             unit=signal.unit,
-            t0=signal.times[-1] + signal.dt,
+            t0=signal.t0 - number_to_append*signal.dt,
             dt=signal.dt,
             dtype=signal.dtype
-        )
-        padded_signal = signal.append(padding_series, inplace=False)
+        ).append(signal)
     else:
         padded_signal = signal
 

@@ -2,7 +2,7 @@
 import logging as _log
 
 
-__all__ = ('logger')
+__all__ = ('logger',)
 
 
 logger = _log.getLogger(__name__)
@@ -12,10 +12,11 @@ logger.setLevel(_log.INFO)
 
 formatter = _log.Formatter(
     fmt='%(asctime)s  %(levelname)s (%(filename)s: %(lineno)d): %(message)s',
-    datefmt='%Y-%m-%d  %H:%M:%S'
+    datefmt='%Y-%m-%d  %H:%M:%S',
 )
 
 from sys import stderr as _stderr
+
 ch = _log.StreamHandler(stream=_stderr)  # More explicit
 ch.setLevel(_log.INFO)
 ch.setFormatter(formatter)

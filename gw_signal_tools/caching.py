@@ -8,14 +8,21 @@ import logging
 from gw_signal_tools import logger
 
 
-__all__ = ('disable_caching', 'enable_caching', 'cache_func', 'use_caching',
-           'enable_caching_locally', 'disable_caching_locally')
+__all__ = (
+    'disable_caching',
+    'enable_caching',
+    'cache_func',
+    'use_caching',
+    'enable_caching_locally',
+    'disable_caching_locally',
+)
 
 
 # _cache = cache
 _cache = lru_cache(maxsize=128, typed=True)
 # TODO: should we use lru_cache with typed=True? Right now, I do not
 # see why, but I might be missing something
+
 
 def _dummy_cache(func):
     """Wrapper returning the input function."""
@@ -29,6 +36,7 @@ _calling_from_context: bool = False
 # TODO: think about whether this makes sense or not. If we take logging
 # level approach, then we also omit all other info messages emitted by
 # logger, not sure if I like that...
+
 
 def disable_caching():
     global _calling_from_context
@@ -74,6 +82,7 @@ def enable_caching_locally():
         # logger.setLevel(original_level)
         _calling_from_context = False
 
+
 @contextlib.contextmanager
 def disable_caching_locally():
     # -- Save state of things that we change in context
@@ -93,6 +102,7 @@ def disable_caching_locally():
 
         # logger.setLevel(original_level)
         _calling_from_context = False
+
 
 # TODO: maybe make custom cacher that tries to, but fails if input is
 # usual dictionary? Then we could control whether or not something is

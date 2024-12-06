@@ -144,7 +144,7 @@ branch = true
 ignore_errors = true
 
 
-[tool.black]
+[tool.black]  # For tests without file changes, run black --diff --color <file>
 verbose = true
 
 # line-length = 88

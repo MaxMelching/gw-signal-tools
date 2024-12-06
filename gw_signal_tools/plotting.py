@@ -37,5 +37,5 @@ latexparams: dict[str, str] = {
     # ----- Detector parameters -----
     'log_likelihood': r'$\log\mathcal{L}$',
     'network_optimal_snr': r'$\rho_{\mathrm{opt}}$ (network)',
-    'network_matched_filter_snr': r'$\rho_{\mathrm{matched filter}}$ (network)'
+    'network_matched_filter_snr': r'$\rho_{\mathrm{matched filter}}$ (network)',
 }

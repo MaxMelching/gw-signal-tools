@@ -1,11 +1,11 @@
-# NOTE: the code in this file is essentially copy and pasted from
-# https://github.com/astropy/astropy/blob/main/astropy/units/si.py,
-# https://github.com/astropy/astropy/blob/main/astropy/units/astrophys.py,
-# https://github.com/astropy/astropy/blob/main/astropy/units/cgs.py
-# (parts of each file are here). In particular, virtually all credit
-# belongs to the astropy developers
+# -- NOTE: the code in this file is essentially copy and pasted from
+# -- https://github.com/astropy/astropy/blob/main/astropy/units/si.py,
+# -- https://github.com/astropy/astropy/blob/main/astropy/units/astrophys.py,
+# -- https://github.com/astropy/astropy/blob/main/astropy/units/cgs.py
+# -- (parts of each file are here). In particular, virtually all credit
+# -- belongs to the astropy developers
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import astropy.units as u
 from astropy.units.core import def_unit
 from astropy.constants import si as _const_si
@@ -13,7 +13,7 @@ import astropy.units.si as _si
 import astropy.units.astrophys as _astrophys
 
 
-__doc__ = """
+__doc__: str = """
 Custom unit module for the gw-signal-tools package. In here, we define
 certain base units that are used most commonly for our calculations.
 
@@ -54,23 +54,26 @@ def_unit(
 )
 
 
-# All that is left to do is defining a basis that can be converted to
+# -- All that is left to do is defining a basis that can be converted to
 s = _si.s
 Msun = _astrophys.Msun
 rad = _si.rad
 pc = _astrophys.pc
 
-# Add other units that we won't use, but for completeness (copied from u.si)
+# -- Add other units that we won't use, but for completeness (copied from u.si)
 A = _si.A
 cd = _si.cd
 K = _si.K
 mol = _si.mol
 
+
+# -- Handle strain unit. Is a little complicated, e.g. because custom
+# -- adding would cause problems when GWPy and this package are loaded
 import gwpy.detector.units  # noqa: F401 - Adds strain to astropy units
-# -> custom adding would cause problems when GWPy and this package are loaded
+
 u.get_current_unit_registry()._registry.pop('strain', None)
-# Potential problem is that strain was equivalent to
-# dimensionless_unscaled at some point. Avoid by custom definition.
+# -- Potential problem is that strain was equivalent to astropy unit
+# -- dimensionless_unscaled in some versions. Avoid by custom definition.
 u.def_unit('strain', namespace=_ns)
 u.add_enabled_units(_ns)
 
@@ -87,10 +90,11 @@ u.set_enabled_equivalencies(u.dimensionless_angles())
 __all__ += [n for n, v in _ns.items() if isinstance(v, u.UnitBase)]
 
 
-# This generates a docstring for this module that describes all of the
-# standard units defined here. Also copied from astropy.units.si
-__doc__ += '\n\n'
+# -- This generates a docstring for this module that describes all of
+# -- the standard units defined here. Also copied from astropy.units.si.
 from astropy.units.utils import generate_unit_summary as _generate_unit_summary
+
+__doc__ += '\n\n'
 __doc__ += _generate_unit_summary(globals())
 
 

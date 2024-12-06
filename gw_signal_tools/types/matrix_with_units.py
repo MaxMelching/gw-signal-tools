@@ -23,10 +23,19 @@ class MatrixWithUnits:
 
     Parameters
     ----------
-    value : 
-        Matrix-like object with numerical values.
-    unit : 
+    value : ArrayLike
+        Matrix-like object with values. There are several possibilities
+        what these values represent, which also depend on the interplay
+        with the `unit` argument. Values can be numerical, whence units
+        can be specified separately, if desired (no units is also
+        accepted as an input). However, the values can also be an array
+        or a list of astropy Quantities, i.e. numbers and units. All of
+        these cases will be parsed correctly, yielding equivalent
+        instances of the class.
+    unit : ArrayLike, optional, default = None
         Matrix-like object with corresponding units to :code:`value`.
+        Can be None, to indicate that either no units are given, or that
+        units are already included in value.
         
         Note that no care is taken to produce irreducible units (i.e.
         unscaled ones, while applying the scale from units to the
@@ -34,6 +43,15 @@ class MatrixWithUnits:
         given as numbers of the kind 10e30*kg would then also be
         converted. For our usecases of this class, such a behaviour is
         unwanted.
+    override_int : boolean, optional, default = True
+        Whether to override integers in the input. In principle, the
+        class tries to retain input dtypes. However, integers are a
+        special case since a value of 2 metres in an entry, which is
+        converted to km using the `.to` method would not be converted
+        to the expected value of 0.02, but rather to the interger 0. For
+        this reason, the default behaviour is to convert integers into
+        floats, in order to avoid such unexpected results. This argument
+        provides the possibility to keep integers.
 
     Notes
     -----
@@ -77,6 +95,8 @@ class MatrixWithUnits:
     True
     >>> print(np.all(matrix.unit == unit_matrix))
     True
+
+    -> mention that MatrixWithUnits(value_matrix*unit_matrix) is equivalent
 
     Alternatively, one can extract the values by converting to an array,
     which is supposed to simplify usage and provide an easy way to
@@ -129,11 +149,6 @@ class MatrixWithUnits:
     >>> MatrixWithUnits([[42.*u.s, 96.*u.m], [96.*u.m, 42.*u.s]])
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
-    
-    
-    -> mention MatrixWithUnits.from_numpy_array? Can also say that this just
-    creates instance with unit dimensionless, but is there for convenience
-    in case you don't want to understand more of inner workings of class
     """
     # -- Set array priority so that Quantity left addition and
     # -- multiplication with MatrixWithUnits are superseded. Otherwise,
@@ -147,7 +162,7 @@ class MatrixWithUnits:
 
 
     def  __init__(self, value: ArrayLike, unit: ArrayLike = None,
-                  override_int_dtype: bool = True) -> None:
+                  convert_int: bool = True) -> None:
         # -- By default, int are converted to float because otherwise,
         # -- subsequent operations (like .to()) might not work properly
         """Initialize a ``MatrixWithUnits``."""
@@ -162,7 +177,7 @@ class MatrixWithUnits:
                 # -- Empty array, choose default dtype float
                 _value_dtype = float
 
-            if override_int_dtype and _value_dtype == int:
+            if convert_int and _value_dtype == int:
                 _value_dtype = float
 
             _value = np.zeros(np.shape(_input), dtype=_value_dtype)
@@ -199,7 +214,7 @@ class MatrixWithUnits:
             # -- Empty array, choose default dtype float
             _value_dtype = float
 
-        if override_int_dtype and _value_dtype == int:
+        if convert_int and _value_dtype == int:
             _value_dtype = float
 
         value = np.asarray(value, dtype=_value_dtype)
@@ -597,7 +612,14 @@ class MatrixWithUnits:
     # ----- Deal with selected useful numpy functions/attributes -----
     def __array__(self, copy: Optional[bool] = None,
                   dtype: Optional[bool] = None) -> np.ndarray:
+        """
+        Method that handles conversion into an array. We deliberately
+        choose to convert only the value, since this will ensure that
+        operations with numpy arrays will work. If the product of value
+        and unit was passed, applying certain numpy functions to 
+        """
         return np.asarray(self.value, copy=copy, dtype=dtype)
+        # return np.asarray(self.value*self.unit, copy=copy, dtype=dtype)
 
     def view(self, *args) -> Any:
         return self.value.view(*args)  # Or use array somehow?
@@ -679,11 +701,7 @@ class MatrixWithUnits:
     @property
     def dtype(self) -> Any:
         return u.Quantity
-    
-    @staticmethod
-    def from_numpy_array(arr: np.ndarray) -> MatrixWithUnits:
-        return MatrixWithUnits(arr, u.dimensionless_unscaled)
-    
+        
     def reshape(self, new_shape: Any) -> MatrixWithUnits:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array
@@ -817,7 +835,7 @@ class MatrixWithUnits:
             fig, ax = plt.subplots()
 
         non_zero_mask = np.not_equal(self.value, 0.)
-        mesh = ax.pcolormesh(np.log10(np.abs(self), where=non_zero_mask),
+        mesh = ax.pcolormesh(np.log10(np.abs(self.value), where=non_zero_mask),
                              cmap='magma')
         mesh.update_scalarmappable()
 

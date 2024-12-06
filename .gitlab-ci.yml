@@ -1,20 +1,20 @@
-# Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
-
+# -- Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
 image: python:3.11.5  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
+# -- General CI setups
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
 cache:
   paths:
-    - .cache/pip
+    - $PIP_CACHE_DIR
 
 before_script:  # Enabling virtual environment is recommended
-  # - apt-get update && apt-get install libgsl-dev  # For surrogate model -> not sure if still required (gwsurrogate not needed, but we still want to call surrogate)
+  - apt-get update && apt-get install -y libgsl-dev  # For pyseobnr, surrogate model
   - python --version ; pip --version  # For debugging
-  - pip install virtualenv
-  - virtualenv venv
-  - source venv/bin/activate
+  - python -m venv env
+  - source env/bin/activate
+  - python -m pip install --upgrade pip
 # Also possible: use extends. If venv not needed for every script, for example
 
 
@@ -25,15 +25,18 @@ stages:
   - deploy
 
 
-# Test installation of repo
+# -- Test installation of repo
 installation:
   stage: install
   script:
-    - pip install '.[dev, jupyter]'
+    - pip install --find-links=${PIP_CACHE_DIR} '.[dev, jupyter, pyseobnr]'
+    - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
     paths:
       - build/*
+      # -- Unfortunately, the virtual environment is too large to be kept as an
+      # -- artifact. Thus we cannot simply activate it again in testing job.
   rules:
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
@@ -41,19 +44,18 @@ installation:
       # when: manual  # Also possible for certain tests
 
 
-# Verify code is running correctly
+# -- Verify code is running correctly
 testing:
   stage: test
-  # dependencies:
-  #   - installation
-  needs:
-    - job: installation
-      artifacts: true
+  dependencies:
+    - installation
+  # -- Unfortunately, extends does not actually extend the script, so not really useful for us
   script:
-    - pip install --find-links=PIP_CACHE_DIR .[dev]
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev]  # Think it would also find cache without --find-links, but we make sure of that
+    - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
+    # -- Previous lines just repeat what installation does, now testing
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
-    # TODO: add -v at the end? Shows names of test that fail/pass during running
     - coverage report
     - coverage html
     # - mv htmlcov/ public/  # Huh, cannot acces this because no GitLab pages??

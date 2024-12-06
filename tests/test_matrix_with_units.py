@@ -22,11 +22,30 @@ example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)], 
 
 
 #%% -- Test cornerstone properties, value and unit ----------------------------
+def test_different_inits():
+    value_arr = np.array([[42., 24.], [18., 96.]])  # Quantity converts to float anyway!
+    unit_arr = np.array([[u.s, u.pc], [u.m, u.kg]])
+    matrix_1 = MatrixWithUnits(value_arr, unit_arr)
+
+    value_unit_arr = value_arr*unit_arr
+    matrix_2 = MatrixWithUnits(value_unit_arr)
+
+    value_unit_list = [[42*u.s, 24*u.pc], [18*u.m, 96*u.kg]]
+    matrix_3 = MatrixWithUnits(value_unit_list)
+
+    print(matrix_1.value)
+    print(matrix_2.value)
+    print(matrix_3.value)
+
+    # assert_allequal_MatrixWithUnits(matrix_1, matrix_2)
+    # assert_allequal_MatrixWithUnits(matrix_1, matrix_3)
+test_different_inits()
+
 @pytest.mark.parametrize('units', [example_units, example_non_si_units, example_scaled_units])
 def test_unit_matrix_reading(units):
     matrix = MatrixWithUnits(example_values, units)
 
-    np.all(matrix.unit == units)
+    assert np.all(matrix.unit == units)
 
 
 @pytest.mark.parametrize('unit', [u.s, 2.0 * u.s])
@@ -38,7 +57,7 @@ def test_unit_scalar_reading(unit):
         unit = u.Unit(unit)
 
     # np.all(matrix.unit == np.full(example_values.shape, unit, dtype=object))
-    np.all(np.equal(matrix.unit, unit))
+    assert np.all(np.equal(matrix.unit, unit))
 
 
 def test_scalar_unit():
@@ -109,7 +128,7 @@ def test_eq():
     assert np.all(matrix_in_s1 == matrix) == False
     assert np.any(matrix_in_s1 != matrix) == True  # Test not equal operator
     
-    matrix_dim_less = MatrixWithUnits.from_numpy_array(example_values)
+    matrix_dim_less = MatrixWithUnits(example_values)
     assert np.all(matrix_dim_less == example_values)
 
     matrix_single_val = MatrixWithUnits(42, u.dimensionless_unscaled)
@@ -561,7 +580,7 @@ def test_ndim(units):
 @pytest.mark.parametrize('values', [example_values, np.array([42], dtype=int),
     np.array([42.], dtype=float), np.array([42.j], dtype=complex)])
 def test_dtype(values):
-    matrix = MatrixWithUnits(values, u.s)
+    matrix = MatrixWithUnits(values, u.s, convert_int=False)
     
     assert matrix.value.dtype == values.dtype
     assert matrix.dtype == u.Quantity
@@ -572,7 +591,7 @@ def test_dtype(values):
 
 
 def test_reading_from_array():
-    matrix = MatrixWithUnits.from_numpy_array(example_values)
+    matrix = MatrixWithUnits(example_values)
 
     assert np.all(np.equal(matrix.value, example_values))
     assert np.all(np.equal(matrix.unit, u.dimensionless_unscaled))
@@ -584,7 +603,7 @@ def test_inv():
 
     assert_allclose_MatrixWithUnits(
         matrix @ matrix_inv,
-        MatrixWithUnits.from_numpy_array(np.eye(2))
+        MatrixWithUnits(np.eye(2))
     )
 
     test_units_arr = np.array([u.s, u.m, u.kg], dtype=object)
@@ -660,7 +679,7 @@ def test_to_system(units):
 
 
 def test_to():
-    matrix = MatrixWithUnits([42, 96], [u.m, u.km])
+    matrix = MatrixWithUnits([42., 96.], [u.m, u.km])
 
     matrix[0] = matrix[0].to(u.km)
     assert_allequal_MatrixWithUnits(matrix, MatrixWithUnits([0.042, 96], [u.km, u.km]))

@@ -169,55 +169,55 @@ amp_phase_deriv = WaveformDerivativeAmplitudePhase(
 )
 
 
-# fig, [ax1, ax2, ax3] = plt.subplots(figsize=(18, 24), nrows=3)
+fig, [ax1, ax2, ax3] = plt.subplots(figsize=(18, 24), nrows=3)
 
-# # ax1.plot(test.deriv, '-', label='Numdifftools')
-# # ax1.plot(test_2.deriv, '--', label='GWSignaltools')
-# # ax1.plot(test_3.deriv, ':', label='AmplitudePhase')
+# ax1.plot(test.deriv, '-', label='Numdifftools')
+# ax1.plot(test_2.deriv, '--', label='GWSignaltools')
+# ax1.plot(test_3.deriv, ':', label='AmplitudePhase')
 
-# # eval_point = wf_params[test_param]
-# eval_point = wf_params[test_param]*0.9
-# # eval_point = wf_params[test_param]*1.2
-# # ax1.plot(nd_deriv(eval_point), '-', label='Numdifftools')
-# # # ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}), '--', label='GWSignaltools')
-# # ax1.plot(gwsignal_deriv(eval_point), '--', label='GWSignaltools')
-# # ax1.plot(amp_phase_deriv(eval_point), ':', label='AmplitudePhase')
+# eval_point = wf_params[test_param]
+eval_point = wf_params[test_param]*0.9
+# eval_point = wf_params[test_param]*1.2
+# ax1.plot(nd_deriv(eval_point), '-', label='Numdifftools')
+# # ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}), '--', label='GWSignaltools')
+# ax1.plot(gwsignal_deriv(eval_point), '--', label='GWSignaltools')
+# ax1.plot(amp_phase_deriv(eval_point), ':', label='AmplitudePhase')
 
-# nd_deriv_eval = nd_deriv(eval_point)
-# gwsignal_deriv_eval = gwsignal_deriv(eval_point)
-# amp_phase_deriv_eval = amp_phase_deriv(eval_point)
+nd_deriv_eval = nd_deriv(eval_point)
+gwsignal_deriv_eval = gwsignal_deriv(eval_point)
+amp_phase_deriv_eval = amp_phase_deriv(eval_point)
 
-# ax1.plot(nd_deriv(eval_point).real, '-', label='Numdifftools')
-# # ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).real, '--', label='GWSignaltools')
-# ax1.plot(gwsignal_deriv(eval_point).real, '--', label='GWSignaltools')
-# ax1.plot(amp_phase_deriv(eval_point).real, ':', label='AmplitudePhase')
+ax1.plot(nd_deriv(eval_point).real, '-', label='Numdifftools')
+# ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).real, '--', label='GWSignaltools')
+ax1.plot(gwsignal_deriv(eval_point).real, '--', label='GWSignaltools')
+ax1.plot(amp_phase_deriv(eval_point).real, ':', label='AmplitudePhase')
 
-# ax1.set_title('Real Part')
-# ax1.legend()
+ax1.set_title('Real Part')
+ax1.legend()
 
-# ax2.plot(nd_deriv(eval_point).imag, '-', label='Numdifftools')
-# # ax2.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).imag, '--', label='GWSignaltools')
-# ax2.plot(gwsignal_deriv(eval_point).imag, '--', label='GWSignaltools')
-# ax2.plot(amp_phase_deriv(eval_point).imag, ':', label='AmplitudePhase')
+ax2.plot(nd_deriv(eval_point).imag, '-', label='Numdifftools')
+# ax2.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).imag, '--', label='GWSignaltools')
+ax2.plot(gwsignal_deriv(eval_point).imag, '--', label='GWSignaltools')
+ax2.plot(amp_phase_deriv(eval_point).imag, ':', label='AmplitudePhase')
 
-# ax2.set_title('Imaginary Part')
-# ax2.legend()
+ax2.set_title('Imaginary Part')
+ax2.legend()
 
-# # ax3.plot(nd_deriv.deriv - gwsignal_deriv.deriv, '-', label='Numdifftools - GWSignaltools')
-# # ax3.plot(nd_deriv.deriv - amp_phase_deriv.deriv, '--', label='Numdifftools - AmplitudePhase')
-# # ax3.plot(gwsignal_deriv.deriv - amp_phase_deriv.deriv, ':', label='GWSignaltools - AmplitudePhase')
-# # ax3.plot((nd_deriv.deriv - gwsignal_deriv.deriv).abs(), '-', label='Numdifftools - GWSignaltools')
-# # ax3.plot((nd_deriv.deriv - amp_phase_deriv.deriv).abs(), '--', label='Numdifftools - AmplitudePhase')
-# # ax3.plot((gwsignal_deriv.deriv - amp_phase_deriv.deriv).abs(), ':', label='GWSignaltools - AmplitudePhase')
+# ax3.plot(nd_deriv.deriv - gwsignal_deriv.deriv, '-', label='Numdifftools - GWSignaltools')
+# ax3.plot(nd_deriv.deriv - amp_phase_deriv.deriv, '--', label='Numdifftools - AmplitudePhase')
+# ax3.plot(gwsignal_deriv.deriv - amp_phase_deriv.deriv, ':', label='GWSignaltools - AmplitudePhase')
+# ax3.plot((nd_deriv.deriv - gwsignal_deriv.deriv).abs(), '-', label='Numdifftools - GWSignaltools')
+# ax3.plot((nd_deriv.deriv - amp_phase_deriv.deriv).abs(), '--', label='Numdifftools - AmplitudePhase')
+# ax3.plot((gwsignal_deriv.deriv - amp_phase_deriv.deriv).abs(), ':', label='GWSignaltools - AmplitudePhase')
 
-# ax3.plot((nd_deriv_eval - gwsignal_deriv_eval).abs(), '-', label='Numdifftools - GWSignaltools')
-# ax3.plot((nd_deriv_eval - amp_phase_deriv_eval).abs(), '--', label='Numdifftools - AmplitudePhase')
-# ax3.plot((gwsignal_deriv_eval - amp_phase_deriv_eval).abs(), ':', label='GWSignaltools - AmplitudePhase')
+ax3.plot((nd_deriv_eval - gwsignal_deriv_eval).abs(), '-', label='Numdifftools - GWSignaltools')
+ax3.plot((nd_deriv_eval - amp_phase_deriv_eval).abs(), '--', label='Numdifftools - AmplitudePhase')
+ax3.plot((gwsignal_deriv_eval - amp_phase_deriv_eval).abs(), ':', label='GWSignaltools - AmplitudePhase')
 
-# ax3.legend()
+ax3.legend()
 
-# # plt.show()
-# plt.close()  # -- Activate when running pytest
+# plt.show()
+plt.close()  # -- Activate when running pytest
 
 
 

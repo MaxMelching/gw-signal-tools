@@ -701,7 +701,19 @@ class MatrixWithUnits:
     @property
     def dtype(self) -> Any:
         return u.Quantity
-        
+    
+    def to_numpy_full(self) -> np.ndarray:
+        """
+        Return numpy array with Quantities as elements, i.e. the product
+        of value and unit. The corresponding array dtype is `object`.
+
+        The reason we decided not to do this in __array__ is that this
+        method is called by numpy. And to enable ufunc compatibility,
+        __array__ only returns the value, while this function returns
+        a numpy array of the whole matrix.
+        """
+        return np.asarray(self.value * self.unit, dtype=object)
+    
     def reshape(self, new_shape: Any) -> MatrixWithUnits:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array

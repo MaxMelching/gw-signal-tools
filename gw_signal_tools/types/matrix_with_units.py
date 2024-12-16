@@ -1,11 +1,15 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any, Literal
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from numpy.typing import ArrayLike
 import astropy.units as u
+
+# -- Local Package Imports
+# from ..logging import logger
+from gw_signal_tools.logging import logger
 
 
 __doc__ = """
@@ -163,21 +167,29 @@ class MatrixWithUnits:
 
     def  __init__(self, value: ArrayLike, unit: ArrayLike = None,
                   convert_int: bool = True) -> None:
-        # -- By default, int are converted to float because otherwise,
-        # -- subsequent operations (like .to()) might not work properly
         """Initialize a ``MatrixWithUnits``."""
         if unit is None:
             # -- Input is ArrayLike filled with floats or Quantities
             try:
+                # -- Idea: create numpy array, extract single element,
+                # -- infer type of this element
                 _input = np.asarray(value, dtype=object)
                 _dtype_arr = _input.reshape(-1)[0]
-                # _value_dtype = _dtype_arr.dtype
                 _value_dtype = type(_dtype_arr)
+                if isinstance(_dtype_arr, u.Quantity):
+                    # -- Manually overwrite object to float
+                    _value_dtype = float
             except IndexError:
                 # -- Empty array, choose default dtype float
                 _value_dtype = float
 
             if convert_int and _value_dtype == int:
+                logger.info(
+                    'By default, the input type ``int`` is converted to'
+                    '``float`` because otherwise, subsequent operations on '
+                    'the ``MatrixWithUnits`` instance (for example .to()) '
+                    'might not work properly.'
+                )
                 _value_dtype = float
 
             _value = np.zeros(np.shape(_input), dtype=_value_dtype)

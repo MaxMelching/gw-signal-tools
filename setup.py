@@ -61,7 +61,7 @@ setuptools.setup(
         'lalsuite',
         'numpy',
         'scipy',
-        'matplotlib',
+        'matplotlib!=3.10.0',  # Causes some weird bug at the moment
         'gwpy>=3',
         # 'pyseobnr',  # Not entirely sure if needed -> better as extra
         # 'gwsurrogate'  # Not entirely sure if needed -> NOT NEEDED, we only call through lal

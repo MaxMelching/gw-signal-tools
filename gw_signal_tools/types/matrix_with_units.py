@@ -373,9 +373,9 @@ class MatrixWithUnits:
     def __copy__(self) -> MatrixWithUnits:
         # Is called for matrix_copy = copy(matrix)
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value.__copy__(), self.unit)
+            return self.__class__(self.value.__copy__(), self.unit)
         else:
-            return MatrixWithUnits(self.value.__copy__(), self.unit.__copy__())
+            return self.__class__(self.value.__copy__(), self.unit.__copy__())
 
     def copy(self) -> MatrixWithUnits:
         # Is called for matrix_copy = matrix.copy() or
@@ -416,12 +416,12 @@ class MatrixWithUnits:
                 # Scalar
                 return new_value * self.unit
             else:
-                return MatrixWithUnits(new_value, self.unit)
+                return self.__class__(new_value, self.unit)
         else:
             if isinstance(new_value, self._allowed_value_types):
                 return new_value * self.unit.__getitem__(key)
             else:
-                return MatrixWithUnits(new_value, self.unit.__getitem__(key))
+                return self.__class__(new_value, self.unit.__getitem__(key))
 
     def __setitem__(self, key: Any, value: Any) -> None:
         try:
@@ -451,23 +451,23 @@ class MatrixWithUnits:
 
     # -- Common operations ----------------------------------------------------
     def __neg__(self) -> MatrixWithUnits:
-        return MatrixWithUnits(-self.value, self.unit)
+        return self.__class__(-self.value, self.unit)
 
     def __abs__(self) -> MatrixWithUnits:
-        return MatrixWithUnits(self.value.__abs__(), self.unit)
-        # return MatrixWithUnits(np.abs(self.value), self.unit)
+        return self.__class__(self.value.__abs__(), self.unit)
+        # return self.__class__(np.abs(self.value), self.unit)
 
     def __add__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_value_types):
-            return MatrixWithUnits(self.value + other, self.unit)
+            return self.__class__(self.value + other, self.unit)
         elif isinstance(other, u.Quantity):
             assert np.all(np.equal(other.unit, self.unit))
 
-            return MatrixWithUnits(self.value + other.value, self.unit)
+            return self.__class__(self.value + other.value, self.unit)
         elif isinstance(other, MatrixWithUnits):
             assert np.all(np.equal(other.unit, self.unit))
 
-            return MatrixWithUnits(self.value + other.value, self.unit)
+            return self.__class__(self.value + other.value, self.unit)
         else:
             raise TypeError(
                 f'Addition between {type(other)} and `MatrixWithUnit` is not '
@@ -494,18 +494,18 @@ class MatrixWithUnits:
 
     def __mul__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_value_types):
-            return MatrixWithUnits(self.value * other, self.unit)
+            return self.__class__(self.value * other, self.unit)
         elif isinstance(other, self._pure_unit_types):
             # ndarray times Unit would produce error, thus do manually
             new_unit = np.empty(self.shape, dtype=object)
             for i, val in np.ndenumerate(self.unit):
                 new_unit[i] = u.Unit(val * other)
-            return MatrixWithUnits(self.value, new_unit)
+            return self.__class__(self.value, new_unit)
         elif isinstance(other, u.Quantity):
             # Fall back to multiplication with unit and value
             return self * other.value * other.unit
         elif isinstance(other, MatrixWithUnits):
-            return MatrixWithUnits(self.value * other.value, self.unit * other.unit)
+            return self.__class__(self.value * other.value, self.unit * other.unit)
         else:
             raise TypeError(
                 f'Multiplication between {type(other)} and `MatrixWithUnit`'
@@ -518,20 +518,20 @@ class MatrixWithUnits:
 
     def __truediv__(self, other):
         # if isinstance(other, self._allowed_value_types):
-        #     return MatrixWithUnits(self.value / other, self.unit)
+        #     return self.__class__(self.value / other, self.unit)
         # elif isinstance(other, self._pure_unit_types):
         #     # ndarray times Unit would produce error, thus do manually
         #     new_unit = np.empty(self.shape, dtype=object)
         #     for i, val in np.ndenumerate(self.unit):
         #         new_unit[i] = u.Unit(val/other)
-        #     return MatrixWithUnits(self.value, new_unit)
+        #     return self.__class__(self.value, new_unit)
         # elif isinstance(other, u.Quantity):
         #     return self / other.value / other.unit
         # elif isinstance(other, MatrixWithUnits):
-        #     return MatrixWithUnits(self.value / other.value, self.unit / other.unit)
+        #     return self.__class__(self.value / other.value, self.unit / other.unit)
         # else:
         #     try:
-        #         return MatrixWithUnits(self.value / other, self.unit)
+        #         return self.__class__(self.value / other, self.unit)
         #     except:
         #         raise TypeError(
         #             f'Division of `MatrixWithUnit` and {type(other)}'
@@ -547,7 +547,7 @@ class MatrixWithUnits:
 
     def __rtruediv__(self, other: Any) -> MatrixWithUnits:
         # if isinstance(other, self._allowed_value_types):
-        #     return MatrixWithUnits(other / self.value, 1/self.unit)
+        #     return self.__class__(other / self.value, 1/self.unit)
         # # Following two are actually handled by astropy (correctly), are left
         # # here as backup (to show how they work). Thus excluded from coverage
         # elif isinstance(other, self._pure_unit_types):
@@ -555,12 +555,12 @@ class MatrixWithUnits:
         #     new_unit = np.empty(self.shape, dtype=object)
         #     for i, val in np.ndenumerate(self.unit):
         #         new_unit[i] = u.Unit(other/val)
-        #     return MatrixWithUnits(1. / self.value, new_unit)
+        #     return self.__class__(1. / self.value, new_unit)
         # elif isinstance(other, u.Quantity):
-        #     return MatrixWithUnits(other.value / self.value, new_unit)
+        #     return self.__class__(other.value / self.value, new_unit)
         # else:
         #     try:
-        #         return MatrixWithUnits(other / self.value, 1/self.unit)
+        #         return self.__class__(other / self.value, 1/self.unit)
         #     except:
         #         raise TypeError(
         #             f'Division of {type(other)} and `MatrixWithUnit`'
@@ -577,7 +577,7 @@ class MatrixWithUnits:
 
     def __pow__(self, other: Any) -> MatrixWithUnits:
         if isinstance(other, self._allowed_value_types):
-            return MatrixWithUnits(self.value.__pow__(other), self.unit.__pow__(other))
+            return self.__class__(self.value.__pow__(other), self.unit.__pow__(other))
         else:
             raise TypeError(
                 'Raising of `MatrixWithUnit` to a non-numeric type like '
@@ -585,7 +585,7 @@ class MatrixWithUnits:
             )
 
     def __matmul__(self, other):
-        # Problem we have to circumvent: the code "return MatrixWithUnits(
+        # Problem we have to circumvent: the code "return self.__class__(
         # self.value @ other.value, self.unit @ other.unit)" does not work
         # because astropy units cannot be added (and adding them would also
         # change value, which is not intended). Thus we have to handle unit
@@ -656,7 +656,7 @@ class MatrixWithUnits:
 
                     new_unit[i, j] = unit_test
 
-            return MatrixWithUnits(new_value, new_unit)
+            return self.__class__(new_value, new_unit)
         else:
             raise TypeError(
                 'Cannot perform matrix multiplication between '
@@ -691,9 +691,9 @@ class MatrixWithUnits:
         :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
         """
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value.T, self.unit)
+            return self.__class__(self.value.T, self.unit)
         else:
-            return MatrixWithUnits(self.value.T, self.unit.T)
+            return self.__class__(self.value.T, self.unit.T)
 
     @property
     def size(self):
@@ -794,9 +794,9 @@ class MatrixWithUnits:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(np.reshape(self.value, new_shape), self.unit)
+            return self.__class__(np.reshape(self.value, new_shape), self.unit)
         else:
-            return MatrixWithUnits(
+            return self.__class__(
                 np.reshape(self.value, new_shape), np.reshape(self.unit, new_shape)
             )
 
@@ -806,21 +806,21 @@ class MatrixWithUnits:
             np.equal(matrix.unit, matrix.T.unit)
         ), 'Need symmetric unit for inversion.'
 
-        return MatrixWithUnits(np.linalg.inv(matrix.value), matrix.unit**-1)
+        return matrix.__class__(np.linalg.inv(matrix.value), matrix.unit**-1)
 
     def diagonal(self, *args, **kwargs):
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(
+            return self.__class__(
                 np.diagonal(self.value, *args, **kwargs).copy(), self.unit
             )
         else:
-            return MatrixWithUnits(
+            return self.__class__(
                 np.diagonal(self.value, *args, **kwargs).copy(),
                 np.diagonal(self.unit, *args, **kwargs).copy(),
             )
 
     def sqrt(self):
-        return MatrixWithUnits(np.sqrt(self.value), self.unit ** (1 / 2))
+        return self.__class__(np.sqrt(self.value), self.unit ** (1 / 2))
 
     def cond(self, matrix_norm: float | Literal['fro', 'nuc'] = 'fro') -> float:
         """
@@ -846,13 +846,13 @@ class MatrixWithUnits:
     # -- Selected useful astropy functions/attributes -------------------------
     def to_system(self, system: Any) -> MatrixWithUnits:
         if isinstance(self.unit, self._pure_unit_types):
-            return MatrixWithUnits(self.value, self.unit.to_system(system)[0])
+            return self.__class__(self.value, self.unit.to_system(system)[0])
         else:
             new_unit = self.unit
             for index, val in np.ndenumerate(self.unit):
                 new_unit[index] = val.to_system(system)[0]
 
-            return MatrixWithUnits(self.value, new_unit)
+            return self.__class__(self.value, new_unit)
 
     def to(self, new_unit: u.Unit) -> MatrixWithUnits:
         new_matrix = self.copy()

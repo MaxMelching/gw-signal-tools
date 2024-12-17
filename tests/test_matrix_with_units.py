@@ -26,20 +26,30 @@ def test_different_inits():
     value_arr = np.array([[42., 24.], [18., 96.]])  # Quantity converts to float anyway!
     unit_arr = np.array([[u.s, u.pc], [u.m, u.kg]])
     matrix_1 = MatrixWithUnits(value_arr, unit_arr)
+    assert matrix_1.value.dtype == float
 
     value_unit_arr = value_arr*unit_arr
     matrix_2 = MatrixWithUnits(value_unit_arr)
+    assert matrix_2.value.dtype == float
 
     value_unit_list = [[42*u.s, 24*u.pc], [18*u.m, 96*u.kg]]
     matrix_3 = MatrixWithUnits(value_unit_list)
+    assert matrix_3.value.dtype == float
 
-    print(matrix_1.value)
-    print(matrix_2.value)
-    print(matrix_3.value)
+    assert_allequal_MatrixWithUnits(matrix_1, matrix_2)
+    assert_allequal_MatrixWithUnits(matrix_1, matrix_3)
 
-    # assert_allequal_MatrixWithUnits(matrix_1, matrix_2)
-    # assert_allequal_MatrixWithUnits(matrix_1, matrix_3)
-test_different_inits()
+
+def test_convert_int():
+    values = [[42, 24], [18, 96]]
+    matrix_float = MatrixWithUnits(values, example_units, convert_int=True)
+    matrix_int = MatrixWithUnits(values, example_units, convert_int=False)
+
+    print(matrix_float.value.dtype)
+
+    assert matrix_float.value.dtype == float
+    assert matrix_int.value.dtype == int
+test_convert_int()
 
 @pytest.mark.parametrize('units', [example_units, example_non_si_units, example_scaled_units])
 def test_unit_matrix_reading(units):
@@ -584,10 +594,7 @@ def test_dtype(values):
     
     assert matrix.value.dtype == values.dtype
     assert matrix.dtype == u.Quantity
-    try:
-        assert type(matrix[0, 0]) == u.Quantity
-    except IndexError:
-        assert type(matrix[0]) == u.Quantity
+    assert type(matrix.reshape(-1)[0]) == u.Quantity
 
 
 def test_reading_from_array():

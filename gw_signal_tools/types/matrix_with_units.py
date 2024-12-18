@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Self, SupportsIndex
 
 # -- Third Party Imports
 import numpy as np
@@ -8,8 +8,7 @@ from numpy.typing import ArrayLike, DTypeLike
 import astropy.units as u
 
 # -- Local Package Imports
-# from ..logging import logger
-from gw_signal_tools.logging import logger
+from ..logging import logger
 
 
 __doc__ = """
@@ -370,14 +369,14 @@ class MatrixWithUnits:
         # but because of way it has been set by user (e.g. to array)
         return float(self.value * self.unit)
 
-    def __copy__(self) -> MatrixWithUnits:
+    def __copy__(self) -> Self:
         # Is called for matrix_copy = copy(matrix)
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value.__copy__(), self.unit)
         else:
             return self.__class__(self.value.__copy__(), self.unit.__copy__())
 
-    def copy(self) -> MatrixWithUnits:
+    def copy(self) -> Self:
         # Is called for matrix_copy = matrix.copy() or
         # matrix_copy = MatrixWithUnits.copy(matrix)
         return self.__copy__()
@@ -409,7 +408,7 @@ class MatrixWithUnits:
             'based on numpy arrays, which are in turn unhashable.'
         )
 
-    def __getitem__(self, key: Any) -> MatrixWithUnits:
+    def __getitem__(self, key: Any) -> Self:
         new_value = self.value.__getitem__(key)
         if isinstance(self.unit, self._pure_unit_types):
             if isinstance(new_value, self._allowed_value_types):
@@ -450,14 +449,14 @@ class MatrixWithUnits:
         return self.value.__len__()
 
     # -- Common operations ----------------------------------------------------
-    def __neg__(self) -> MatrixWithUnits:
+    def __neg__(self) -> Self:
         return self.__class__(-self.value, self.unit)
 
-    def __abs__(self) -> MatrixWithUnits:
+    def __abs__(self) -> Self:
         return self.__class__(self.value.__abs__(), self.unit)
         # return self.__class__(np.abs(self.value), self.unit)
 
-    def __add__(self, other: Any) -> MatrixWithUnits:
+    def __add__(self, other: Any) -> Self:
         if isinstance(other, self._allowed_value_types):
             return self.__class__(self.value + other, self.unit)
         elif isinstance(other, u.Quantity):
@@ -474,11 +473,11 @@ class MatrixWithUnits:
                 'supported.'
             )
 
-    def __radd__(self, other: Any) -> MatrixWithUnits:
+    def __radd__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__add__(other)
 
-    def __sub__(self, other: Any) -> MatrixWithUnits:
+    def __sub__(self, other: Any) -> Self:
         try:
             return self.__add__(other.__neg__())
         except AttributeError:  # no __neg__ for example
@@ -487,12 +486,12 @@ class MatrixWithUnits:
                 'supported.'
             )
 
-    def __rsub__(self, other: Any) -> MatrixWithUnits:
+    def __rsub__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__neg__().__add__(other)
         # return (self.__sub__(other)).__neg__()  # Equivalent
 
-    def __mul__(self, other: Any) -> MatrixWithUnits:
+    def __mul__(self, other: Any) -> Self:
         if isinstance(other, self._allowed_value_types):
             return self.__class__(self.value * other, self.unit)
         elif isinstance(other, self._pure_unit_types):
@@ -512,7 +511,7 @@ class MatrixWithUnits:
                 ' is not supported.'
             )
 
-    def __rmul__(self, other: Any) -> MatrixWithUnits:
+    def __rmul__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__mul__(other)
 
@@ -545,7 +544,7 @@ class MatrixWithUnits:
                 f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
             )
 
-    def __rtruediv__(self, other: Any) -> MatrixWithUnits:
+    def __rtruediv__(self, other: Any) -> Self:
         # if isinstance(other, self._allowed_value_types):
         #     return self.__class__(other / self.value, 1/self.unit)
         # # Following two are actually handled by astropy (correctly), are left
@@ -569,13 +568,13 @@ class MatrixWithUnits:
 
         try:
             # return other * (1/self)
-            return other * MatrixWithUnits(1 / self.value, 1 / self.unit)
+            return other * self.__class__(1 / self.value, 1 / self.unit)
         except:
             raise TypeError(
                 f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
             )
 
-    def __pow__(self, other: Any) -> MatrixWithUnits:
+    def __pow__(self, other: Any) -> Self:
         if isinstance(other, self._allowed_value_types):
             return self.__class__(self.value.__pow__(other), self.unit.__pow__(other))
         else:
@@ -667,7 +666,7 @@ class MatrixWithUnits:
 
     # -- Selected useful numpy functions/attributes ---------------------------
     def __array__(
-        self, copy: Optional[bool] = None, dtype: Optional[bool] = None
+        self, copy: Optional[bool] = None, dtype: Optional[Any] = None
     ) -> np.ndarray:
         """
         Method that handles conversion into an array. We deliberately
@@ -696,7 +695,7 @@ class MatrixWithUnits:
             return self.__class__(self.value.T, self.unit.T)
 
     @property
-    def size(self):
+    def size(self) -> int:
         value_size = self.value.size
 
         try:
@@ -717,7 +716,7 @@ class MatrixWithUnits:
                 )
 
     @property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
         value_shape = self.value.shape
 
         try:
@@ -790,7 +789,7 @@ class MatrixWithUnits:
         """
         return np.asarray(self.value * self.unit, dtype=object)
 
-    def reshape(self, new_shape: Any) -> MatrixWithUnits:
+    def reshape(self, new_shape: SupportsIndex) -> Self:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array
         if isinstance(self.unit, self._pure_unit_types):
@@ -801,7 +800,7 @@ class MatrixWithUnits:
             )
 
     @staticmethod
-    def inv(matrix: MatrixWithUnits) -> MatrixWithUnits:
+    def inv(matrix: MatrixWithUnits) -> Self:
         assert np.all(
             np.equal(matrix.unit, matrix.T.unit)
         ), 'Need symmetric unit for inversion.'
@@ -844,7 +843,7 @@ class MatrixWithUnits:
         return np.linalg.cond(self.value, p=matrix_norm)
 
     # -- Selected useful astropy functions/attributes -------------------------
-    def to_system(self, system: Any) -> MatrixWithUnits:
+    def to_system(self, system: Any) -> Self:
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value, self.unit.to_system(system)[0])
         else:
@@ -854,7 +853,7 @@ class MatrixWithUnits:
 
             return self.__class__(self.value, new_unit)
 
-    def to(self, new_unit: u.Unit) -> MatrixWithUnits:
+    def to(self, new_unit: u.Unit) -> Self:
         new_matrix = self.copy()
 
         for index in np.ndindex(new_matrix.shape):
@@ -862,7 +861,7 @@ class MatrixWithUnits:
 
         return new_matrix
 
-    def decompose(self, bases: Any) -> MatrixWithUnits:
+    def decompose(self, bases: Any) -> Self:
         new_matrix = self.copy()
 
         for index in np.ndindex(new_matrix.shape):
@@ -871,11 +870,11 @@ class MatrixWithUnits:
         return new_matrix
 
     # -- Some custom additions ------------------------------------------------
-    def to_row(self) -> MatrixWithUnits:
+    def to_row(self) -> Self:
         """Reshape this matrix into a row vector."""
         return self.reshape((1, self.size))
 
-    def to_col(self) -> MatrixWithUnits:
+    def to_col(self) -> Self:
         """Reshape this matrix into a column vector."""
         return self.reshape((self.size, 1))
 

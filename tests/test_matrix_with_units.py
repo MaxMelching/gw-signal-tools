@@ -15,10 +15,14 @@ from gw_signal_tools.test_utils import (
 from gw_signal_tools import preferred_unit_system
 
 
-example_values = np.array([[42, 24], [18, 96]])
-example_units = np.array([[u.s, u.m], [u.m, u.s]])
-example_non_si_units = np.array([[2.0 * u.s, u.m], [u.m**2, u.s]])
-example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)], [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)]], dtype=object)
+example_values = np.array([[42., 24.],
+                           [18., 96.]])
+example_units = np.array([[u.s, u.m],
+                          [u.m, u.s]])
+example_non_si_units = np.array([[2.0 * u.s, u.m],
+                                 [u.m**2, u.s]])
+example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)],
+                                 [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)]], dtype=object)
 
 
 #%% -- Test cornerstone properties, value and unit ----------------------------
@@ -40,6 +44,13 @@ def test_different_inits():
     assert_allequal_MatrixWithUnits(matrix_1, matrix_3)
 
 
+@pytest.mark.parametrize('quant', [u.Quantity(42., u.s), u.Quantity([42., 24.], u.s),
+                                   MatrixWithUnits(example_values, example_units)])
+def test_quant_input(quant):
+    quant_mat = MatrixWithUnits(quant)
+    assert_allequal_MatrixWithUnits(quant, quant_mat)
+
+
 def test_convert_int():
     values = [[42, 24], [18, 96]]
     matrix_float = MatrixWithUnits(values, example_units, convert_int=True)
@@ -49,7 +60,7 @@ def test_convert_int():
 
     assert matrix_float.value.dtype == float
     assert matrix_int.value.dtype == int
-test_convert_int()
+
 
 @pytest.mark.parametrize('units', [example_units, example_non_si_units, example_scaled_units])
 def test_unit_matrix_reading(units):

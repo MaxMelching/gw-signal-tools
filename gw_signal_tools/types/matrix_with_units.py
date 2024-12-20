@@ -181,6 +181,12 @@ class MatrixWithUnits:
         self, value: ArrayLike, unit: ArrayLike = None, convert_int: bool = True
     ) -> None:
         """Initialize a ``MatrixWithUnits``."""
+        if isinstance(value, (u.Quantity, MatrixWithUnits)):
+            # -- Shortcut is possible
+            self.value = value.value
+            self.unit = value.unit
+            return  # To break __init__ at this point
+
         _value_dtype = self._infer_dtype(value)
 
         if convert_int and np.issubdtype(_value_dtype, int):
@@ -191,11 +197,11 @@ class MatrixWithUnits:
                 'might not work properly.'
             )
             _value_dtype = float
-        
-        _input = np.asarray(value, dtype=object)
 
         if unit is None:
             # -- Input is ArrayLike filled with floats or Quantities
+            _input = np.asarray(value, dtype=object)
+
             # try:
             #     # -- Idea: create numpy array, extract single element,
             #     # -- infer type of this element
@@ -243,7 +249,7 @@ class MatrixWithUnits:
             self.value = _value
             self.unit = _unit
 
-            return None  # To break __init__ at this point
+            return  # To break __init__ at this point
         # else:
         #     # self.__init__(value*unit)
         #     self.__init__(np.asarray(value)*np.asarray(unit))

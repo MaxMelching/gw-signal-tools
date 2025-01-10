@@ -162,13 +162,17 @@ class FisherMatrix:
     @property
     def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
         return self._wf_generator
-    
+
     @wf_generator.setter
     def wf_generator(self, wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]) -> None:
-        self._wf_generator = wf_gen
+        self._wf_generator = time_phase_wrapper(wf_gen)
+        # -- Note: at one point, I was concerned this would potentially
+        # -- mess with things like optimize_overlap, where we do not
+        # -- check if some non-zero time/phase shift is in wf_params and
+        # -- just set these quantities. However, this is not an issue
+        # -- since this function calculates RELATIVE shifts. So some
+        # -- shift applied to both waveforms does not change outcome.
 
-        self._wf_gen_time_phase = time_phase_wrapper(wf_gen)
-    
     @property
     def params_to_vary(self) -> list[str]:
         """
@@ -439,15 +443,18 @@ class FisherMatrix:
 
         if new_wf_generator is None:
             new_wf_generator = self.wf_generator
-        
+
         if len(new_metadata) > 0:
             _new_metadata = self.metadata | new_metadata
         else:
             _new_metadata = self.metadata
 
-        return FisherMatrix(new_wf_params_at_point, new_params_to_vary,
-                            new_wf_generator, **_new_metadata)
-    
+        out = FisherMatrix(new_wf_params_at_point, new_params_to_vary,
+                           new_wf_generator, **_new_metadata)
+        out._wf_generator = new_wf_generator  # Avoid it is wrapped again in setter
+
+        return out
+
     def project_fisher(self, params: str | list[str]) -> FisherMatrix:
         """
         Project Fisher matrix so that its components now live in the
@@ -694,12 +701,9 @@ class FisherMatrix:
 
             opt_wf_params = self.wf_params_at_point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
-            # TODO: decide if time, phase should be included in here or not
-            # (I think it does make sense to do so) -> with new wrapper generator it would
 
             # -- Do some potentially interesting mismatch calculations
             optimization_info['remaining_mismatch'] = 1. - overlap(
-                # opt_wf_1, opt_wf_2, **inner_prod_kwargs
                 opt_wf_1, opt_wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
             )
             # -- Either optimize is turned on (i.e. overlap is already
@@ -708,33 +712,35 @@ class FisherMatrix:
             # --    an optimization is only carried out between waveform
             # --    difference and derivative! And remaining_mismatch is
             # --    is concerned with mismatch of waveform difference
+
             # optimization_info['lsa_mismatch'] = 1. - overlap(
-            #     self._wf_gen_time_phase(self.wf_params_at_point),
-            #     self._wf_gen_time_phase(opt_wf_params),
+            #     self.wf_generator(self.wf_params_at_point),
+            #     self.wf_generator(opt_wf_params),
             #     **(inner_prod_kwargs | {'optimize_time_and_phase': False})
             # )  # -- Same argument as for remaining_mismatch
             # TODO: THIS IS NOT LSA MISMATCH!
 
-            # -- Remove parameters that are not used in wf generation
+            # -- Following is done for the test in line below and to
+            # -- store commonly used values
             time_shift = opt_vals.pop('time', 0.*u.s)
             phase_shift = opt_vals.pop('phase', 0.*u.rad)            
 
             if len(opt_vals) == 0:
                 # -- Means that only time and/or phase were optimized
                 # -- over. These do not influence the Fisher values, so
-                # -- no need to recalculate (expensive operation)
-                opt_fisher = self
+                # -- no need to recalculate (expensive operation). We
+                # -- still have to make sure correct waveforms will be
+                # -- produced though, so time and phase shift have to be
+                # -- allowed as parameters!
+                opt_fisher = self.update_attrs(new_wf_params_at_point=opt_wf_params)
             else:
-                opt_wf_params.pop('time', None)
-                opt_wf_params.pop('phase', None)
-
                 opt_fisher = FisherMatrix(
                     opt_wf_params,
                     self.params_to_vary,
                     self.wf_generator,
                     **(self.metadata | inner_prod_kwargs)
                 )
-            
+
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
 
@@ -743,8 +749,6 @@ class FisherMatrix:
                 )
 
                 optimization_info['fisher_opt_params'] = optimize_fisher
-            
-            fisher_inverse = opt_fisher.fisher_inverse
 
             optimization_info['opt_fisher'] = opt_fisher
         elif isinstance(optimize, bool) and not optimize:
@@ -754,11 +758,11 @@ class FisherMatrix:
 
             optimization_info['remaining_mismatch'] = 1. - overlap(
                 wf_1, wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
-            )  # -- Same argument as above
+            )  # -- Same argument as above for remaining_mismatch
 
             if optimize_fisher is not None:
                 opt_fisher = self.project_fisher(optimize_fisher)
-        
+
                 optimization_info['general'] = (
                     'No optimization of the waveform difference was done, '
                     'but Fisher Matrix optimization was carried out.'
@@ -772,31 +776,28 @@ class FisherMatrix:
                 # can make difference in inner product calculation
 
                 optimization_info['general'] = 'No optimization was carried out.'
-            
-            fisher_inverse = opt_fisher.fisher_inverse
 
 
             opt_params = None
         else:  # pragma: no cover
             raise ValueError('Given `optimize` input not accepted.')
-        
+        # -- After this if-case, it is always opt_fisher that we should
+        # -- turn to. It has the correct Fisher matrix, parameters,
+        # -- waveform generators, etc.
+
         # -- Now calculation of systematic error
         derivs = [
             opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
+            # -- Potential time and phase shift from optimization are
+            # -- already incorporated here
         ]
-        
-        if (opt_is_bool and optimize) or isinstance(optimize, list):
-            # -- For Fisher matrix, time and phase shift have no impact,
-            # -- but for pure derivatives, they do!
-            for i, deriv in enumerate(derivs):
-                derivs[i] = apply_time_phase_shift(deriv, time_shift, phase_shift)
-        
+
         vector = MatrixWithUnits.from_numpy_array(np.zeros((opt_fisher.nparams, 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         optimization_info['deriv_vector'] = vector
-        
-        fisher_bias = fisher_inverse @ vector
+
+        fisher_bias = opt_fisher.fisher_inverse @ vector
 
         # -- Bias from Fisher calculation might not be the only one we
         # -- have to account for, some parameters might change in
@@ -819,39 +820,40 @@ class FisherMatrix:
 
             fisher_bias += opt_bias
             optimization_info['opt_bias'] = opt_bias
-        
-        # true_params = self.wf_params_at_point.copy() | {'time': 0.*u.s, 'phase': 0.*u.rad}
-        true_params = {'time': 0.*u.s, 'phase': 0.*u.rad} | self.wf_params_at_point#.copy()
-        # from copy import deepcopy
-        # true_params = deepcopy(self.wf_params_at_point) | {'time': 0.*u.s, 'phase': 0.*u.rad}
+
+        # -- Calculate self-consistency check
+        true_params = {'time': 0.*u.s, 'phase': 0.*u.rad} | self.wf_params_at_point
         for param in opt_fisher.params_to_vary:
             i = opt_fisher.get_param_indices(param)
-            # true_params[param] += MatrixWithUnits.reshape(fisher_bias[i], -1)
-            # true_params[param] = self.wf_params_at_point[param] + fisher_bias[i][0, 0]
             true_params[param] = true_params[param] + fisher_bias[i][0, 0]
-            # true_params[param] += fisher_bias[i][0, 0]  # Requires deepcopy to not modify self.wf_params_at_point
-        
-        optimization_info['true_params'] = true_params
 
-        # -- np.sum does not work for Quantities, thus need manual sum
+        optimization_info['true_params_estimate'] = true_params
+
+        # _linear_contr = np.sum(np.asarray(derivs, dtype=object)*np.asarray(-fisher_bias if opt_params is None else opt_bias - fisher_bias, dtype=object))
+        # -- Trying to use np.sum turns out to be more complicated than
+        # -- simply doing sum manually.
         _linear_contr = 0.
         for i in range(opt_fisher.nparams):
             _linear_contr += derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0]
-        
+
+        # -- Now we are able to calculate mismatch between waveforms
+        # -- that LSA assumes to be reasonably equal.
         try:
             optimization_info['lsa_mismatch'] = 1. - overlap(
-                opt_fisher._wf_gen_time_phase(true_params),
-                # opt_fisher._wf_gen_time_phase(opt_wf_params if opt_params is not None else opt_fisher.wf_params_at_point),
-                opt_fisher._wf_gen_time_phase(opt_fisher.wf_params_at_point if optimize is False else opt_wf_params)
+                opt_fisher.wf_generator(true_params),
+                # opt_fisher.wf_generator(opt_wf_params if opt_params is not None else opt_fisher.wf_params_at_point),
+                opt_fisher.wf_generator(opt_fisher.wf_params_at_point)
                 # + np.sum(derivs*np.array([true_params[param] - (opt_fisher.wf_params_at_point | {'time': 0.*u.s, 'phase': 0.*u.rad} if optimize is False else opt_wf_params)[param] for param in self.params_to_vary])),
                 # + np.sum(derivs*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)),
                 # + np.sum([derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0] for i in range(opt_fisher.nparams)]),
                 + _linear_contr,
                 **(inner_prod_kwargs | {'optimize_time_and_phase': False})
-            )  # -- Same argument as for remaining_mismatch
+                # -- Same argument as for remaining_mismatch
+            )
         except ValueError as err:
             if 'Input domain error' in str(err):
                 # -- Estimate is bad, pushes out of valid param range
+                # -- (error must come from generation with true_params)
                 optimization_info['lsa_mismatch'] = np.nan
             else:
                 raise ValueError(err)
@@ -863,6 +865,7 @@ class FisherMatrix:
         # difference. Currently, we are looking at mismatch that has to be
         # approximated over by the linear approximation, but this gives no
         # statement about how well it works in this particular case
+        # -> uhm, is this comment still recent? Actually, I don't thnik so...
 
 
         # -- Check which params shall be returned

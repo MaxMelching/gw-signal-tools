@@ -1,6 +1,9 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any, Literal, Callable
+# from functools import cached_property
+# TODO: use for .fisher and .fisher_inverse?
+# -> ah, would perhaps not work if we project it for example
 
 # -- Third Party Imports
 import numpy as np
@@ -12,9 +15,14 @@ import astropy.units as u
 from ..units import preferred_unit_system
 from ..logging import logger
 from ..waveform import (
-    get_wf_generator, inner_product, norm, overlap, optimize_overlap,
-    get_default_opt_params, _INNER_PROD_ARGS, time_phase_wrapper,
-    apply_time_phase_shift
+    get_wf_generator,
+    inner_product,
+    norm,
+    overlap,
+    optimize_overlap,
+    get_default_opt_params,
+    _INNER_PROD_ARGS,
+    time_phase_wrapper,
 )
 from ..types import MatrixWithUnits
 from .fisher_utils import fisher_matrix
@@ -24,7 +32,7 @@ __doc__ = """
 Module for the ``FisherMatrix`` class.
 """
 
-__all__ = ('FisherMatrix', )
+__all__ = ('FisherMatrix',)
 
 
 class FisherMatrix:
@@ -45,7 +53,7 @@ class FisherMatrix:
         computed, the norms of which constitute the Fisher matrix.
         Must be a key in :code:`wf_params_at_point` or one of
         :code:`'time'`, :code:`'phase'`.
-        
+
         For the latter, analytical derivatives are applied. This is
         possible because they contribute only to a factor
         :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`
@@ -106,6 +114,7 @@ class FisherMatrix:
     operations/calls return attributes related only to the actual matrix
     stored in ``FisherMatrix.fisher`` (for example array-conversion).
     """
+
     default_metadata = {
         'deriv_routine': 'gw_signal_tools',
     }
@@ -125,7 +134,7 @@ class FisherMatrix:
         params_to_vary: str | list[str],
         wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         direct_computation: bool = True,
-        **metadata
+        **metadata,
     ) -> None:
         """Initialize a ``FisherMatrix``."""
         self.wf_params_at_point = wf_params_at_point
@@ -135,7 +144,7 @@ class FisherMatrix:
         # -- We rely on return_info = True, thus set it now
         self.metadata['return_info'] = True
 
-        if len(self.metadata) > len(self.default_metadata)+1:  # +1 for return_info
+        if len(self.metadata) > len(self.default_metadata) + 1:  # +1 for return_info
             # -- Arguments for inner product may be given, extract
             self._inner_prod_kwargs = {}
             for key in _INNER_PROD_ARGS:
@@ -145,14 +154,14 @@ class FisherMatrix:
                     self._inner_prod_kwargs[key] = self.metadata[key]
         else:
             self._inner_prod_kwargs = {}
-    
+
         if direct_computation:
             self._calc_fisher()
-    
+
     # @property
     # def wf_params_at_point(self) -> dict[str, u.Quantity]:
     #     return self._wf_params_at_point
-    
+
     # @wf_params_at_point.setter
     # def wf_params_at_point(self, wf_params: dict[str, u.Quantity]) -> None:
     #     # Do some parameter checks?
@@ -164,7 +173,9 @@ class FisherMatrix:
         return self._wf_generator
 
     @wf_generator.setter
-    def wf_generator(self, wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]) -> None:
+    def wf_generator(
+        self, wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]
+    ) -> None:
         self._wf_generator = time_phase_wrapper(wf_gen)
         # -- Note: at one point, I was concerned this would potentially
         # -- mess with things like optimize_overlap, where we do not
@@ -177,22 +188,20 @@ class FisherMatrix:
     def params_to_vary(self) -> list[str]:
         """
         Parameters constituting the Fisher matrix.
-        
+
         :type: `list[str]`
         """
         return self._params_to_vary
-    
+
     @params_to_vary.setter
     def params_to_vary(self, params: str | list[str]) -> None:
         if isinstance(params, str):
             _params = [params]
         else:
             _params = params.copy()  # We potentially remove later on
-        
+
         # -- Assert no degenerate parameters are given
-        # assert not ('time' in _params and 'tc' in _params)
-        # assert not ('phase' in _params and 'psi' in _params)
-        # Build in some phi_ref check too? Maybe even based on hm_or_precessing?
+        # Build in some phi_ref check? Maybe even based on hm_or_precessing?
         # from gw_signal_tools.inner_product import test_hm, test_precessing
         # assert not (
         #     (('phase' in _params and 'psi' in _params))
@@ -208,23 +217,23 @@ class FisherMatrix:
         self._param_indices = {
             param: i for i, param in enumerate(_params)
         }  # Avoid linear search through parameters, instead hashing
-    
+
     @property
     def nparams(self):
         """
         Number of parameters constituting the Fisher matrix.
-        
+
         :type: `int`
         """
         return self._nparams
-        
+
     def _calc_fisher(self):
         """Calculate the Fisher matrix for this instance."""
         self._fisher, self._deriv_info = fisher_matrix(
             wf_params_at_point=self.wf_params_at_point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
-            **self.metadata
+            **self.metadata,
         )
 
         if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
@@ -251,7 +260,7 @@ class FisherMatrix:
             self._calc_fisher()
 
             return self._fisher
-    
+
     @property
     def fisher_inverse(self) -> MatrixWithUnits:
         """
@@ -259,10 +268,8 @@ class FisherMatrix:
 
         :type: `~gw_signal_tools.types.MatrixWithUnits`
         """
-        # TODO: decide if it shall be computed upon call or upon calculation of Fisher
         try:
-            self._fisher_inverse
-            # return self._fisher_inverse  # type: ignore
+            return self._fisher_inverse  # type: ignore
             # Explanation of ignore: neither can type be inferred nor hinted
         except AttributeError:
             # -- Inverse is called for the first time or has been deleted
@@ -276,14 +283,14 @@ class FisherMatrix:
                     'meaning it is ill-conditioned. Results of matrix inversion '
                     'might not be reliable.'
                 )
-        
-        return self._fisher_inverse
-    
+
+            return self._fisher_inverse
+
     @property
     def covariance_matrix(self) -> MatrixWithUnits:
         """Alias for `self.fisher_inverse`, with a more intuitive name."""
         return self.fisher_inverse
-    
+
     def __getattr__(self, name: str) -> Any:
         # -- To enable calls like self.value, self.unit, self.cond()
         if name == '_fisher':
@@ -295,7 +302,7 @@ class FisherMatrix:
         elif name == '_deriv_info':
             # -- Analogous case as for _fisher
             return {}
-    
+
         return self.fisher.__getattribute__(name)
 
     @property
@@ -310,13 +317,10 @@ class FisherMatrix:
             self._deriv_info
         except AttributeError:  # pragma: no cover
             self._deriv_info = {}
-        
+
         return self._deriv_info
-    
-    def get_param_indices(
-        self,
-        params: Optional[str | list[str]] = None
-    ) -> list[int]:
+
+    def get_param_indices(self, params: Optional[str | list[str]] = None) -> list[int]:
         """
         Get indices that correspond to certain parameter names in
         :code:`self.params_to_vary`.
@@ -332,14 +336,13 @@ class FisherMatrix:
             Indices of :code:`params` in :code:`self.params_to_vary`.
         """
         if params is None:
-            # -- Take all parameters
-            return self.nparams*[True]
-        
+            return self.nparams * [True]  # Simply take all parameters
+
         if isinstance(params, str):
             params = [params]
 
         param_indices = np.empty(len(params), dtype=int)
-        
+
         for i, param in enumerate(params):
             try:
                 param_indices[i] = self._param_indices[param]
@@ -352,8 +355,7 @@ class FisherMatrix:
 
         return param_indices
 
-    def get_sub_matrix_indices(self, params: str | list[str]
-                               ) -> tuple[np.ndarray, ...]:
+    def get_sub_matrix_indices(self, params: str | list[str]) -> tuple[np.ndarray, ...]:
         """
         Get indices for all matrix components of this instance that
         contain the given set of parameters. In other words, one can
@@ -369,7 +371,7 @@ class FisherMatrix:
         -------
         tuple[np.ndarray, ...]
             Index grid of :code:`params`.
-        
+
         See Also
         --------
         gw_signal_tools.fisher.fisher.FisherMatrix.get_param_indices :
@@ -384,12 +386,14 @@ class FisherMatrix:
 
         return index_grid
 
-    def update_attrs(self,
+    def update_attrs(
+        self,
         new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
-        new_wf_generator: Optional[Callable[[dict[str, u.Quantity]],
-                                            FrequencySeries]] = None,
-        **new_metadata
+        new_wf_generator: Optional[
+            Callable[[dict[str, u.Quantity]], FrequencySeries]
+        ] = None,
+        **new_metadata,
     ) -> FisherMatrix:
         """
         Generate a Fisher matrix with properties like the current
@@ -449,8 +453,12 @@ class FisherMatrix:
         else:
             _new_metadata = self.metadata
 
-        out = FisherMatrix(new_wf_params_at_point, new_params_to_vary,
-                           new_wf_generator, **_new_metadata)
+        out = FisherMatrix(
+            new_wf_params_at_point,
+            new_params_to_vary,
+            new_wf_generator,
+            **_new_metadata,
+        )
         out._wf_generator = new_wf_generator  # Avoid it is wrapped again in setter
 
         return out
@@ -485,19 +493,21 @@ class FisherMatrix:
             out._deriv_info.pop(param, None)
         # -- To update indices, we have to set params_to_vary again
         out.params_to_vary = out.params_to_vary
-        
+
         # -- Perform projection
         fisher_val = self.value
         index_grid = self.get_sub_matrix_indices(params)
         sub_matrix = fisher_val[index_grid]
-        if (cond_numb := np.linalg.cond(sub_matrix, p='fro')) > 1e15:  # pragma: no cover
+        if (
+            cond_numb := np.linalg.cond(sub_matrix, p='fro')
+        ) > 1e15:  # pragma: no cover
             logger.info(
                 'Submatrix used for projection has a condition number of '
                 f'{cond_numb}, meaning it is ill-conditioned.'
             )
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
-        full_inv = np.zeros(2*(self.nparams, ))
+        full_inv = np.zeros(2 * (self.nparams,))
         full_inv[index_grid] = sub_matrix_inv
         full_inv = MatrixWithUnits(full_inv, self.unit**-1)
 
@@ -509,7 +519,7 @@ class FisherMatrix:
         # -- Inverse must be set, otherwise it is self.fisher_inverse
 
         return out
-    
+
     @property
     def is_projected(self):
         """
@@ -525,8 +535,10 @@ class FisherMatrix:
         except AttributeError:
             self._is_projected = False
             return False
-    
-    def statistical_error(self, params: Optional[str | list[str]] = None) -> MatrixWithUnits:
+
+    def statistical_error(
+        self, params: Optional[str | list[str]] = None
+    ) -> MatrixWithUnits:
         r"""
         Calculates the :math:`1-\sigma` statistical error
 
@@ -555,17 +567,18 @@ class FisherMatrix:
         Calculating this does not make sense if a PSD for no noise is
         used during the Fisher matrix calculations.
         """
-        param_indices = self.get_param_indices(params)        
+        param_indices = self.get_param_indices(params)
         return MatrixWithUnits.sqrt(self.fisher_inverse.diagonal()[param_indices])
         # TODO: make it return column vector, is more natural, right?
 
-    def systematic_error(self,
+    def systematic_error(
+        self,
         reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
         return_opt_info: bool = False,
-        **inner_prod_kwargs
+        **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
         Calculates the systematic error between two waveform models.
@@ -617,7 +630,7 @@ class FisherMatrix:
         return_opt_info : bool, optional, default = False
             Whether to return information on the calculations along with
             result.
-        inner_prod_kwargs : 
+        inner_prod_kwargs :
             Key word arguments used for the calculations here, i.e. for
             waveform difference and more. These will be combined with
             the inner product arguments that have been passed to the
@@ -630,7 +643,7 @@ class FisherMatrix:
         ~gw_signal_tools.types.MatrixWithUnits | tuple[~gw_signal_tools.types.MatrixWithUnits, dict[str, Any]]
             Column vector containing the systematic errors and
             dictionary with information about the calculation.
-        
+
         Notes
         -----
         The formula evaluated by this function is basically
@@ -644,7 +657,7 @@ class FisherMatrix:
         instance and :math:`h_2` is a second model, with respect to
         which the systematic error
         :math:`\Delta \theta = \theta - \theta_2` is computed/estimated.
-        
+
         Here :math:`\theta_2` are the parameters that correspond to the
         "real"/injected signal :math:`h_2(\theta_2)`, whose recovery
         using the second model :math:`h` yielded "best-fitting" signal
@@ -663,26 +676,28 @@ class FisherMatrix:
         """
         if isinstance(optimize, str):
             optimize = [optimize]
-        
+
         if isinstance(optimize_fisher, str):
             optimize_fisher = [optimize_fisher]
 
         optimization_info = {}
-        
+
         # -- Update keywords from initial input to the instance
         inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
 
         # -- Get Fisher matrix and delta h to use. This depends on
         # -- whether or not optimization of them over certain parameters
         # -- shall be carried out
-        if ((opt_is_bool := isinstance(optimize, bool) and optimize)
-            or isinstance(optimize, list)):
+        if (opt_is_bool := isinstance(optimize, bool) and optimize) or isinstance(
+            optimize, list
+        ):
             # -- Order is crucial, opt_is_bool needs to be defined
             if opt_is_bool:
-                opt_params = get_default_opt_params(self.wf_params_at_point,
-                                                    self.wf_generator)
+                opt_params = get_default_opt_params(
+                    self.wf_params_at_point, self.wf_generator
+                )
                 # -- Not leaving at none is important, we check for this
-                
+
                 optimization_info['general'] = 'Default optimization was carried out.'
             else:
                 # -- Is list
@@ -695,7 +710,7 @@ class FisherMatrix:
                 fixed_wf_generator=reference_wf_generator,
                 vary_wf_generator=self.wf_generator,
                 opt_params=opt_params,
-                **inner_prod_kwargs
+                **inner_prod_kwargs,
             )
             delta_h = opt_wf_1 - opt_wf_2
 
@@ -703,8 +718,10 @@ class FisherMatrix:
             optimization_info['opt_params'] = opt_wf_params.copy()
 
             # -- Do some potentially interesting mismatch calculations
-            optimization_info['remaining_mismatch'] = 1. - overlap(
-                opt_wf_1, opt_wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+            optimization_info['remaining_mismatch'] = 1.0 - overlap(
+                opt_wf_1,
+                opt_wf_2,
+                **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
             )
             # -- Either optimize is turned on (i.e. overlap is already
             # -- optimized, or the relevant mismatch is non-optimized one)
@@ -722,8 +739,8 @@ class FisherMatrix:
 
             # -- Following is done for the test in line below and to
             # -- store commonly used values
-            time_shift = opt_vals.pop('time', 0.*u.s)
-            phase_shift = opt_vals.pop('phase', 0.*u.rad)            
+            time_shift = opt_vals.pop('time', 0.0 * u.s)
+            phase_shift = opt_vals.pop('phase', 0.0 * u.rad)
 
             if len(opt_vals) == 0:
                 # -- Means that only time and/or phase were optimized
@@ -738,15 +755,15 @@ class FisherMatrix:
                     opt_wf_params,
                     self.params_to_vary,
                     self.wf_generator,
-                    **(self.metadata | inner_prod_kwargs)
+                    **(self.metadata | inner_prod_kwargs),
                 )
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
 
-                optimization_info['general'] += (
-                    ' Fisher Matrix optimization was carried out as well.'
-                )
+                optimization_info[
+                    'general'
+                ] += ' Fisher Matrix optimization was carried out as well.'
 
                 optimization_info['fisher_opt_params'] = optimize_fisher
 
@@ -756,7 +773,7 @@ class FisherMatrix:
             wf_2 = self.wf_generator(self.wf_params_at_point)
             delta_h = wf_1 - wf_2
 
-            optimization_info['remaining_mismatch'] = 1. - overlap(
+            optimization_info['remaining_mismatch'] = 1.0 - overlap(
                 wf_1, wf_2, **(inner_prod_kwargs | {'optimize_time_and_phase': False})
             )  # -- Same argument as above for remaining_mismatch
 
@@ -777,7 +794,6 @@ class FisherMatrix:
 
                 optimization_info['general'] = 'No optimization was carried out.'
 
-
             opt_params = None
         else:  # pragma: no cover
             raise ValueError('Given `optimize` input not accepted.')
@@ -786,11 +802,12 @@ class FisherMatrix:
         # -- waveform generators, etc.
 
         # -- Now calculation of systematic error
-        opt_fisher.fisher;  # Make sure has been computed (might not be
-                            # the case for optimize=False, if
-                            # direct_computation=False was passed to self)
+        opt_fisher.fisher
+        # -- Makes sure has been computed (might not be the case e.g. if
+        # -- optimize=False, direct_computation=False in self)
         derivs = [
-            opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
+            opt_fisher.deriv_info[param]['deriv']
+            for param in opt_fisher.params_to_vary
             # -- Potential time and phase shift from optimization are
             # -- already incorporated here
         ]
@@ -806,7 +823,7 @@ class FisherMatrix:
         # -- have to account for, some parameters might change in
         # -- optimization procedure (has to be taken into account too).
         if opt_params is not None:
-            opt_bias = 0.*fisher_bias  # Get correct shape+units with value of zero
+            opt_bias = 0.0 * fisher_bias  # Get correct shape+units with value of zero
 
             # -- Do not loop over params, some of them might have been
             # -- projected out of opt_fisher
@@ -825,7 +842,10 @@ class FisherMatrix:
             optimization_info['opt_bias'] = opt_bias
 
         # -- Calculate self-consistency check
-        true_params = {'time': 0.*u.s, 'phase': 0.*u.rad} | self.wf_params_at_point
+        true_params = {
+            'time': 0.0 * u.s,
+            'phase': 0.0 * u.rad,
+        } | self.wf_params_at_point
         for param in opt_fisher.params_to_vary:
             i = opt_fisher.get_param_indices(param)
             true_params[param] = true_params[param] + fisher_bias[i][0, 0]
@@ -835,14 +855,17 @@ class FisherMatrix:
         # _linear_contr = np.sum(np.asarray(derivs, dtype=object)*np.asarray(-fisher_bias if opt_params is None else opt_bias - fisher_bias, dtype=object))
         # -- Trying to use np.sum turns out to be more complicated than
         # -- simply doing sum manually.
-        _linear_contr = 0.
+        _linear_contr = 0.0
         for i in range(opt_fisher.nparams):
-            _linear_contr += derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0]
+            _linear_contr += (
+                derivs[i]
+                * (-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0]
+            )
 
         # -- Now we are able to calculate mismatch between waveforms
         # -- that LSA assumes to be reasonably equal.
         try:
-            optimization_info['lsa_mismatch'] = 1. - overlap(
+            optimization_info['lsa_mismatch'] = 1.0 - overlap(
                 opt_fisher.wf_generator(true_params),
                 # opt_fisher.wf_generator(opt_wf_params if opt_params is not None else opt_fisher.wf_params_at_point),
                 opt_fisher.wf_generator(opt_fisher.wf_params_at_point)
@@ -850,7 +873,7 @@ class FisherMatrix:
                 # + np.sum(derivs*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)),
                 # + np.sum([derivs[i]*(-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0] for i in range(opt_fisher.nparams)]),
                 + _linear_contr,
-                **(inner_prod_kwargs | {'optimize_time_and_phase': False})
+                **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
                 # -- Same argument as for remaining_mismatch
             )
         except ValueError as err:
@@ -870,7 +893,6 @@ class FisherMatrix:
         # statement about how well it works in this particular case
         # -> uhm, is this comment still recent? Actually, I don't thnik so...
 
-
         # -- Check which params shall be returned
         if params is not None:
             param_indices = opt_fisher.get_param_indices(params)
@@ -880,7 +902,7 @@ class FisherMatrix:
             return fisher_bias
         else:
             return fisher_bias, optimization_info
-    
+
     def snr(self, **inner_prod_kwargs):
         """
         Calculate the signal-to-noise ratio (SNR) of the signal that
@@ -901,8 +923,14 @@ class FisherMatrix:
         signal = self.wf_generator(self.wf_params_at_point)
         return norm(signal, **(self._inner_prod_kwargs | inner_prod_kwargs))
 
-    def plot_matrix(self, matrix: MatrixWithUnits, xticks: bool = True,
-                    yticks: bool = True, *args, **kwargs) -> mpl.axes.Axes:
+    def plot_matrix(
+        self,
+        matrix: MatrixWithUnits,
+        xticks: bool = True,
+        yticks: bool = True,
+        *args,
+        **kwargs,
+    ) -> mpl.axes.Axes:
         """
         Plotting routine specifically for matrices in a ``FisherMatrix``
         instance. Extends `MatrixWithUnits.plot` by adding labels for
@@ -928,22 +956,39 @@ class FisherMatrix:
         """
         ax = MatrixWithUnits.plot(matrix, *args, **kwargs)
 
-        tick_labels = self.params_to_vary if not isinstance(self.params_to_vary, str) else [self.params_to_vary]
+        tick_labels = (
+            self.params_to_vary
+            if not isinstance(self.params_to_vary, str)
+            else [self.params_to_vary]
+        )
+
         from ..plotting import latexparams
         tick_labels = [latexparams.get(param, param) for param in tick_labels]
         tick_locs = np.arange(0, len(tick_labels)) + 0.5
 
         if xticks:
-            ax.set_xticks(tick_locs, tick_labels, rotation=45,
-                        horizontalalignment='right', rotation_mode='anchor')
+            ax.set_xticks(
+                tick_locs,
+                tick_labels,
+                rotation=45,
+                horizontalalignment='right',
+                rotation_mode='anchor',
+            )
         if yticks:
-            ax.set_yticks(tick_locs, tick_labels, rotation=45,
-                        verticalalignment='baseline', rotation_mode='anchor')
+            ax.set_yticks(
+                tick_locs,
+                tick_labels,
+                rotation=45,
+                verticalalignment='baseline',
+                rotation_mode='anchor',
+            )
         ax.tick_params(length=0)
 
         return ax
 
-    def plot(self, only_fisher: bool = False, only_fisher_inverse: bool = False) -> None:
+    def plot(
+        self, only_fisher: bool = False, only_fisher_inverse: bool = False
+    ) -> None:
         # NOT final version
 
         if only_fisher:
@@ -962,7 +1007,8 @@ class FisherMatrix:
     def get_wf_generator(
         approximant: str,
         domain: Literal['frequency', 'time'] = 'frequency',
-        *args, **kwargs
+        *args,
+        **kwargs,
     ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
         """
         Generates a function that fulfils the requirements of the
@@ -997,18 +1043,19 @@ class FisherMatrix:
             (just like `domain` is as well).
         """
         return get_wf_generator(approximant, domain, *args, **kwargs)
-    
+
     # -- Some Python class related goodies
     def __repr__(self) -> str:
         # return self.fisher.__repr__()
         # TODO: make custom one with more information
 
         from shutil import get_terminal_size
+
         terminal_width = get_terminal_size()[0]
 
         def get_name_header(name: str) -> str:
             return f"{' ' + name + ' ':-^{terminal_width}}"
-        
+
         return f'''
 {get_name_header('Generation Parameters')}
 {self.params_to_vary.__repr__()}
@@ -1019,14 +1066,14 @@ class FisherMatrix:
 {get_name_header('Fisher Matrix Inverse')}
 {self.fisher_inverse.__repr__()}
         '''
-    
+
     def __copy__(self) -> FisherMatrix:
         new_matrix = FisherMatrix(
             wf_params_at_point=self.wf_params_at_point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             direct_computation=False,
-            **self.metadata
+            **self.metadata,
         )
         new_matrix._fisher = self.fisher.copy()
         new_matrix._fisher_inverse = self.fisher_inverse.copy()
@@ -1034,6 +1081,6 @@ class FisherMatrix:
         new_matrix._is_projected = self.is_projected
 
         return new_matrix
-    
+
     def copy(self) -> FisherMatrix:
         return self.__copy__()

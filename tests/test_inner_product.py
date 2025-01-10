@@ -13,7 +13,8 @@ import pytest
 # -- Local Package Imports
 from gw_signal_tools.waveform import (
     td_to_fd, pad_to_target_df, get_signal_at_target_frequs,
-    inner_product, norm, overlap, optimize_overlap, optimized_inner_product
+    inner_product, norm, overlap, optimize_overlap, optimized_inner_product,
+    time_phase_wrapper, apply_time_phase_shift
 )
 from gwpy.testing.utils import assert_quantity_equal
 from gw_signal_tools.PSDs import psd_no_noise
@@ -666,7 +667,7 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
     
     def shifted_wf_gen(wf_params):
         wf = wf_gen(wf_params)
-        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 1.j*phic)
+        return apply_time_phase_shift(wf, tc, phic)
     
     wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
         wf_params,
@@ -684,6 +685,40 @@ def test_time_phase_arg_interplay(opt_time, opt_phase):
     assert_allclose_quantity(tc, opt_params['time'], atol=1e-5, rtol=0.)
     assert_allclose_quantity(phic, opt_params['phase'], atol=1e-3, rtol=1e-2)
     assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)
+
+
+@pytest.mark.parametrize('tc', [0.*u.s, 1e-3*u.s, -0.2*u.s, 0.5*u.s])
+@pytest.mark.parametrize('phic', [0.*u.rad, 0.12*u.rad, -0.3*np.pi*u.rad])
+def test_time_phase_gen_handling(tc, phic):
+    # -- See what happens when time and phase are in wf_params
+    common_tc, common_phic = tc/3., phic/3.
+    # tc_diff, phic_diff = tc - common_tc, phic - common_phic
+    tc_diff, phic_diff = tc, phic
+
+    def wf_gen(wf_params):
+        return fd_wf_gen(wf_params)[0]
+
+    wrapped_wf_gen = time_phase_wrapper(wf_gen)
+
+    def shifted_wf_gen(wf_params):
+        wf = wrapped_wf_gen(wf_params)
+        return apply_time_phase_shift(wf, tc_diff, phic_diff)
+
+    wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
+        wf_params | {'time': common_tc, 'phase': common_phic},
+        shifted_wf_gen,
+        wrapped_wf_gen,
+        opt_params=['time', 'phase'],
+        df=2**-3,  # Not required, but speeds up calculations
+        min_dt_prec=1e-5
+    )
+
+    assert_allclose_quantity(common_tc + tc_diff, opt_params['time'], atol=1e-5, rtol=0.)
+    assert_allclose_quantity(common_phic + phic_diff, opt_params['phase'], atol=1e-3, rtol=1e-2)
+    assert_allclose(1., overlap(wf1_shifted, wf2_shifted), atol=1e-4, rtol=0.)
+    # -- Overlap threshold slightly higher than in previous functions,
+    # -- but still tolerable. And this situation is much trickier, we
+    # -- deliberately introduce a degeneracy, so this is ok.
 
 
 @pytest.mark.slow  # Because mass1 is involved, time and phase are fast

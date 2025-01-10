@@ -1001,10 +1001,15 @@ def optimize_overlap(
             phase = opt_info['peak_phase']
 
             if time_index is not None:
-                opt_params_results['time'] = time
+                opt_params_results['time'] = time + wf_params.get('time', 0.*u.s)
 
             if phase_index is not None:
-                opt_params_results['phase'] = phase
+                opt_params_results['phase'] = phase + wf_params.get('phase', 0.*u.rad)
+            # -- Important distinction: results contain the "absolute"
+            # -- time and phase shifts, that have to be put into the
+            # -- waveform generator. For the shift we apply now, part
+            # -- of this absolute shift is already applied and we only
+            # -- want to add the relative shift on top!
 
             return wf1, apply_time_phase_shift(wf2, time, phase), opt_params_results
             # -- Note: redefining wf2 with the phase factor using *=
@@ -1075,11 +1080,16 @@ def optimize_overlap(
         time = opt_info['peak_time']
         phase = opt_info['peak_phase']
 
-        if time_index is not None:            
-            opt_params_results['time'] = time
+        if time_index is not None:
+            opt_params_results['time'] = time + wf_params.get('time', 0.*u.s)
 
         if phase_index is not None:
-            opt_params_results['phase'] = phase
+            opt_params_results['phase'] = phase + wf_params.get('phase', 0.*u.rad)
+        # -- Important distinction: results contain the "absolute"
+        # -- time and phase shifts, that have to be put into the
+        # -- waveform generator. For the shift we apply now, part
+        # -- of this absolute shift is already applied and we only
+        # -- want to add the relative shift on top!
 
         wf2 = apply_time_phase_shift(wf2, time, phase)
         # -- Using *= here would be bad because the result of the call

@@ -12,8 +12,12 @@ import astropy.units as u
 # ----- Local Package Imports -----
 from ..logging import logger
 from ..waveform import (
-    inner_product, norm, _INNER_PROD_ARGS, WaveformDerivativeGWSignaltools,
-    WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
+    inner_product,
+    norm,
+    _INNER_PROD_ARGS,
+    WaveformDerivativeGWSignaltools,
+    WaveformDerivativeNumdifftools,
+    WaveformDerivativeAmplitudePhase,
 )
 from ..types import MatrixWithUnits
 from ..test_utils import allclose_quantity
@@ -28,8 +32,7 @@ __all__ = ('num_diff', 'fisher_matrix')
 
 
 def num_diff(  # TODO: move this to deriv file?
-    signal: Series | np.ndarray,
-    h: Optional[float | u.Quantity] = None
+    signal: Series | np.ndarray, h: Optional[float | u.Quantity] = None
 ) -> Series | np.ndarray:
     """
     Implementation of five-point stencil method for numerical
@@ -53,37 +56,40 @@ def num_diff(  # TODO: move this to deriv file?
     -------
     ~gwpy.types.series.Series or ~numpy.ndarray
         Derivative of `signal`.
-    """    
+    """
     if isinstance(signal, Series):
         if h is None:
             h = signal.dx
         elif not isinstance(h, u.Quantity):
             h = u.Quantity(h, signal.xindex.unit)
 
-        if not allclose_quantity(h.value, signal.dx.value,
-                                 atol=0., rtol=1e-3):  # pragma: no cover
-            warnings.warn(
-                'Given `h` does not coincide with `signal.dx`.'
-            )
+        if not allclose_quantity(
+            h.value, signal.dx.value, atol=0.0, rtol=1e-3
+        ):  # pragma: no cover
+            warnings.warn('Given `h` does not coincide with `signal.dx`.')
     else:
         # -- Make sure signal is array, we utilize numpy operations
         signal = np.asarray(signal)
 
         # -- Check if h is set
         if h is None:
-            h = 1.
+            h = 1.0
         else:
             if isinstance(h, u.Quantity):
                 signal = u.Quantity(signal, u.dimensionless_unscaled)
 
-    signal_deriv = (np.roll(signal, 2) - 8.*np.roll(signal, 1)
-                    + 8.*np.roll(signal, -1) - np.roll(signal, -2))
-    signal_deriv /= 12.*h
+    signal_deriv = (
+        np.roll(signal, 2)
+        - 8.0 * np.roll(signal, 1)
+        + 8.0 * np.roll(signal, -1)
+        - np.roll(signal, -2)
+    )
+    signal_deriv /= 12.0 * h
 
     signal_deriv[0] = (signal[1] - signal[0]) / h  # Forward difference
-    signal_deriv[1] = (signal[2] - signal[0]) / (2.*h)  # Central difference
+    signal_deriv[1] = (signal[2] - signal[0]) / (2.0 * h)  # Central difference
 
-    signal_deriv[-2] = (signal[-1] - signal[-3]) / (2.*h)  # Central difference
+    signal_deriv[-2] = (signal[-1] - signal[-3]) / (2.0 * h)  # Central difference
     signal_deriv[-1] = (signal[-1] - signal[-2]) / h  # Backward difference
 
     return signal_deriv
@@ -95,7 +101,7 @@ def fisher_matrix(
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     deriv_routine: Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'],
     return_info: bool = False,
-    **deriv_and_inner_prod_kwargs
+    **deriv_and_inner_prod_kwargs,
 ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
     r"""
     Compute Fisher matrix at a fixed point.
@@ -111,7 +117,7 @@ def fisher_matrix(
         computed, the norms of which constitute the Fisher matrix.
         Must be a key in :code:`wf_params_at_point` or one of
         :code:`'time'`, :code:`'phase'`.
-        
+
         For the latter, analytical derivatives are applied. This is
         possible because they contribute only to a factor
         :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`
@@ -139,8 +145,10 @@ def fisher_matrix(
         :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
         generates a suitable function from a few arguments.
     deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'], optional, default = 'gw_signal_tools'
-        Determines the class used for numerical differentiation. Is, in
-        principle, part of deriv_and_inner_prod_kwargs, 
+        Determines the class used for numerical differentiation
+        (``WaveformDerivativeGWSignaltools``,
+        ``WaveformDerivativeNumdifftools`` or
+        ``WaveformDerivativeAmplitudePhase``).
     return_info : boolean, optional, default = True
         Whether to return information collected during the derivative
         calculations. Can be used as a sort of custom cache to also
@@ -159,7 +167,7 @@ def fisher_matrix(
         index :math:`(i, j)` corresponds to the inner product of
         derivatives with respect to the parameters
         :code:`params_to_vary[i]`, :code:`params_to_vary[j]`.
-    
+
     Notes
     -----
     The main reason behind choosing ``MatrixWithUnits`` as the data
@@ -171,9 +179,9 @@ def fisher_matrix(
 
     See Also
     --------
-    gw_signal_tools.waveform.WaveformDerivative :
-        Class used for numerical differentiation. Almost all arguments
-        are passed straight to this function.
+    gw_signal_tools.waveform :
+        Contains the classes used for numerical differentiation (names
+        are listed above, see the description of `deriv_routine`).
     """
     # -- Separate deriv and inner_prod kwargs, check defaults
     _deriv_kw_args = {}
@@ -193,8 +201,8 @@ def fisher_matrix(
 
     # -- Initialize Fisher Matrix as MatrixWithUnits instance
     fisher_matrix = MatrixWithUnits(
-        np.zeros(2*(param_numb, ), dtype=float),
-        np.full(2*(param_numb, ), u.dimensionless_unscaled, dtype=object)
+        np.zeros(2 * (param_numb,), dtype=float),
+        np.full(2 * (param_numb,), u.dimensionless_unscaled, dtype=object),
     )
 
     # -- Compute relevant derivatives in frequency domain
@@ -209,7 +217,7 @@ def fisher_matrix(
                     wf_params_at_point=wf_params_at_point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
-                    **deriv_and_inner_prod_kwargs
+                    **deriv_and_inner_prod_kwargs,
                 )
 
                 deriv, info = full_deriv.deriv, full_deriv.deriv_info
@@ -220,23 +228,23 @@ def fisher_matrix(
                     wf_params_at_point=wf_params_at_point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
-                    **_deriv_kw_args
+                    **_deriv_kw_args,
                 )
 
                 deriv, info = full_deriv.deriv, full_deriv.deriv_info
                 info['deriv'] = deriv
-                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
+                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
             case 'amplitude_phase':
                 full_deriv = WaveformDerivativeAmplitudePhase(
                     wf_params_at_point=wf_params_at_point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
-                    **_deriv_kw_args
+                    **_deriv_kw_args,
                 )
 
                 deriv, info = full_deriv.deriv, full_deriv.deriv_info
                 info['deriv'] = deriv
-                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs)**2
+                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
             case _:  # pragma: no cover
                 raise ValueError('Invalid `deriv_routine`.')
 
@@ -254,7 +262,7 @@ def fisher_matrix(
                 fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
                     deriv_info[param_i]['deriv'],
                     deriv_info[param_j]['deriv'],
-                    **_inner_prod_kwargs
+                    **_inner_prod_kwargs,
                 )
 
     if return_info:

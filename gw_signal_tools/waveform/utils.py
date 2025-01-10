@@ -653,7 +653,10 @@ def apply_time_phase_shift(
     Apply global time and phase shift to a frequency domain signal, i.e.
     multiply with :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`.
     """
-    return wf*np.exp(-2.j*np.pi*wf.frequencies*time + 1.j*phase)
+    if (time.value == 0.) and (phase.value == 0.):
+        return wf  # Shortcut to avoid operations
+    else:
+        return wf*np.exp(-2.j*np.pi*wf.frequencies*time + 1.j*phase)
 
 
 def time_phase_wrapper(
@@ -664,10 +667,17 @@ def time_phase_wrapper(
     and `'phase'` as keyword arguments for global time, phase shifts.
     """
     def new_wf_gen(params):
-        _params = params.copy()
-        time = _params.pop('time', 0.*u.s)
-        phase = _params.pop('phase', 0.*u.rad)
-        wf = wf_gen(_params)
-        return apply_time_phase_shift(wf, time, phase)
-    
+        if ('time' in params) or ('phase' in params):
+            time = params.pop('time', 0.*u.s)
+            phase = params.pop('phase', 0.*u.rad)
+            wf = wf_gen(params)
+            params |= {'time': time, 'phase': phase}
+            # -- By doing this, we to avoid making a copy of params
+
+            return apply_time_phase_shift(wf, time, phase)
+        else:
+            # -- Without this else case, we would add parameters time,
+            # -- phase to a dictionary that did not have them initially!
+            return wf_gen(params)
+
     return new_wf_gen

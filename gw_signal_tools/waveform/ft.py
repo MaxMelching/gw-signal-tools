@@ -75,7 +75,7 @@ except ImportError:
                 name=('Fourier transform of '
                     + signal.name if signal.name is not None else None),
                 channel=signal.channel,
-                epoch=signal.epoch.value
+                epoch=signal.epoch.gps
             )
         else:
             out = FrequencySeries(
@@ -85,7 +85,7 @@ except ImportError:
                 name=('Fourier transform of '
                     + signal.name if signal.name is not None else None),
                 channel=signal.channel,
-                epoch=signal.epoch.value
+                epoch=signal.epoch.gps
             )
 
         if convention == 'unwrap':
@@ -137,7 +137,7 @@ except ImportError:
         (inverse) Fourier transforms using the `'unwrap'` convention is
         likely to produce inconsistent results!
         """
-        start_time = signal.epoch.value*u.s  # Convert Time to Quantity
+        start_time = signal.epoch.gps*u.s  # Convert Time to Quantity
 
         if convention == 'unwrap':
             # -- Avoid wrap-around of signal by rolling in frequency
@@ -214,7 +214,7 @@ except ImportError:
         l.665ff, respectively; lines are quoted for v2.3.0). It is NOT meant
         to convert between the different Fourier conventions.
         """
-        time_shift = 1./signal.df + signal.epoch.value*u.s
+        time_shift = 1./signal.df + signal.epoch.gps*u.s
         # -- Note: 1/df is duration of IFT signal (T=N*dt=N/(N*df)=1/df)
 
         if time_shift.value == 0.:
@@ -257,10 +257,10 @@ except ImportError:
         elif isinstance(signal, FrequencySeries):
             if convention == 'unwrap':
                 _signal = signal.copy()
-                _signal.epoch = _signal.epoch.value*u.s + time_shift
+                _signal.epoch = _signal.epoch.gps*u.s + time_shift
             elif convention == 'wrap':
                 _signal = signal * np.exp(2.j*np.pi*time_shift*signal.frequencies)
-                _signal.epoch = _signal.epoch.value*u.s + time_shift  # NOT the same as +=
+                _signal.epoch = _signal.epoch.gps*u.s + time_shift  # NOT the same as +=
             else:
                 raise ValueError(f"Invalid convention '{convention}'.")
 
@@ -293,10 +293,10 @@ except ImportError:
         elif isinstance(signal, FrequencySeries):
             if convention == 'unwrap':
                 _signal = signal * np.exp(-2.j*np.pi*time_shift*signal.frequencies)
-                _signal.epoch = _signal.epoch.value*u.s + time_shift  # NOT the same as +=
+                _signal.epoch = _signal.epoch.gps*u.s + time_shift  # NOT the same as +=
             elif convention == 'wrap':
                 _signal = signal.copy()
-                _signal.epoch = _signal.epoch.value*u.s + time_shift
+                _signal.epoch = _signal.epoch.gps*u.s + time_shift
             else:
                 raise ValueError(f"Invalid convention '{convention}'.")
 

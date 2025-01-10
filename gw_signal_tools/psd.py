@@ -8,14 +8,16 @@ __doc__ = """
 Helper functions to read and write power spectral densities.
 """
 
-__all__ = ('psd_to_file', 'psd_from_file', 'psd_from_file_to_FreqSeries',
-           'get_FreqSeries_from_dict')
+__all__ = (
+    'psd_to_file',
+    'psd_from_file',
+    'psd_from_file_to_FreqSeries',
+    'get_FreqSeries_from_dict',
+)
 
 
 def psd_to_file(
-    psd: FrequencySeries,
-    fname: str,
-    is_asd: bool = False
+    psd: FrequencySeries, fname: str, is_asd: bool = False
 ) -> None:  # pragma: no cover
     """
     Save power spectral density (PSD) values from a GWPy
@@ -45,10 +47,7 @@ def psd_to_file(
     np.savetxt(fname, np.transpose([psd.frequencies.value, psd.value]))
 
 
-def psd_from_file(
-    fname: str,
-    is_asd: bool = False
-) -> tuple[np.ndarray, np.ndarray]:
+def psd_from_file(fname: str, is_asd: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """
     Read Power spectral density (PSD) values from a file into numpy
     arrays. The file must be readable by `~numpy.loadtxt`.
@@ -81,9 +80,7 @@ def psd_from_file(
 
 
 def psd_from_file_to_FreqSeries(
-    fname: str,
-    is_asd: bool = False,
-    **kwargs
+    fname: str, is_asd: bool = False, **kwargs
 ) -> FrequencySeries:
     """
     Read Power spectral density (PSD) values from file into a GWpy
@@ -114,19 +111,11 @@ def psd_from_file_to_FreqSeries(
 
     freqs, psd = psd_from_file(fname, is_asd=is_asd)
 
-    return FrequencySeries(
-        psd,
-        frequencies=freqs,
-        unit=u.strain**2/u.Hz,
-        **kwargs
-    )
+    return FrequencySeries(psd, frequencies=freqs, unit=u.strain**2 / u.Hz, **kwargs)
 
 
 def get_FreqSeries_from_dict(
-    psd: dict,
-    psd_vals_key: str,
-    is_asd: bool = False,
-    **kwargs
+    psd: dict, psd_vals_key: str, is_asd: bool = False, **kwargs
 ) -> FrequencySeries:  # pragma: no cover
     """
     Converts dictionary with Power spectral density (PSD) values into a
@@ -152,7 +141,7 @@ def get_FreqSeries_from_dict(
         Data from input dict in a ``FrequencySeries``.
     """
     return FrequencySeries(
-        psd[psd_vals_key]**2 if is_asd else psd[psd_vals_key],
+        psd[psd_vals_key] ** 2 if is_asd else psd[psd_vals_key],
         frequencies=psd['frequencies'],
-        **kwargs
+        **kwargs,
     )

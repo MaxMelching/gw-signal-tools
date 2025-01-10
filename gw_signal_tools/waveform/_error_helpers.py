@@ -71,6 +71,9 @@ def _compare_series(*s: list[Series]) -> None:
 
     # TODO: decide whether to compare whole frequency array or just
     # start and end frequency. But then things in between could go wrong
+    # (and also checking with something like is_contiguous does not make
+    # sense because this operation is also O(n), one can also just use
+    # checks on all frequencies)
 
     if not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
         # -- Note: this atol checks for equality up to sampling accuracy

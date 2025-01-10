@@ -786,6 +786,9 @@ class FisherMatrix:
         # -- waveform generators, etc.
 
         # -- Now calculation of systematic error
+        opt_fisher.fisher;  # Make sure has been computed (might not be
+                            # the case for optimize=False, if
+                            # direct_computation=False was passed to self)
         derivs = [
             opt_fisher.deriv_info[param]['deriv'] for param in opt_fisher.params_to_vary
             # -- Potential time and phase shift from optimization are

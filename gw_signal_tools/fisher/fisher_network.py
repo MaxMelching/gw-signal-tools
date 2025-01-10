@@ -245,9 +245,12 @@ class FisherMatrixNetwork(FisherMatrix):
         else:
             _new_metadata = self.metadata
 
-        return FisherMatrixNetwork(new_wf_params_at_point, new_params_to_vary,
-                                   new_wf_generator, new_detectors, **_new_metadata)
-    
+        out = FisherMatrixNetwork(new_wf_params_at_point, new_params_to_vary,
+                                  new_wf_generator, new_detectors, **_new_metadata)
+        out._wf_generator = new_wf_generator  # Avoid it is wrapped again in setter
+
+        return out
+
     def _prepare_fisher_without_calc(self):
         """Initialize ``FisherMatrix`` instances for each detector."""
         self._fisher_for_dets = []
@@ -320,20 +323,21 @@ class FisherMatrixNetwork(FisherMatrix):
         optimization_info = {}
 
         for i, det in enumerate(self.detectors):
+            self.detector_fisher(i).fisher;
             _, info = self.detector_fisher(i).systematic_error(
-                    reference_wf_generator=reference_wf_generator,
-                    params=None,  # Get all for now, filter before return
-                    optimize=optimize,
-                    optimize_fisher=optimize_fisher,
-                    return_opt_info=True,
-                    **inner_prod_kwargs
-                )
+                reference_wf_generator=reference_wf_generator,
+                params=None,  # Get all for now, filter before return
+                optimize=optimize,
+                optimize_fisher=optimize_fisher,
+                return_opt_info=True,
+                **inner_prod_kwargs
+            )
 
             optimization_info[det.name] = info
 
             if isinstance(optimize, bool) and not optimize:
                 used_opt_bias = 0.
-            
+
                 if optimize_fisher is not None:
                     used_fisher = info['opt_fisher'].fisher
                 else:

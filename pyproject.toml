@@ -135,6 +135,7 @@ omit = [
   '*/_version.py',
   '*/__init__.py',
   '*/test_utils.py',
+  '*/ft.py',
 ]
 
 branch = true

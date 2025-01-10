@@ -14,8 +14,9 @@ import astropy.units as u
 from ..units import preferred_unit_system
 from ..logging import logger
 from .utils import (
-    td_to_fd_waveform, pad_to_get_target_df, get_signal_at_target_frequs
+    pad_to_target_df, get_signal_at_target_frequs
 )
+from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
 from ._error_helpers import _q_convert, _compare_series, _assert_ft_compatible
 
@@ -126,7 +127,7 @@ def inner_product(
 
     See Also
     --------
-    gw_signal_tools.waveform_utils.td_to_fd_waveform :
+    gw_signal_tools.waveform.ft.td_to_fd :
         Used to convert ``TimeSeries`` input to a ``FrequencySeries``.
     gwpy.frequencyseries.frequencyseries.interpolate :
         Function used to get signals to same sampling rate.
@@ -193,14 +194,30 @@ def inner_product(
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
-    # -- If necessary, do fft (padding to ensure
+    # -- If necessary, do Fourier transform (padding to ensure
     # -- sufficient resolution in frequency domain)
     if isinstance(signal1, TimeSeries):
-        signal1 = td_to_fd_waveform(pad_to_get_target_df(signal1, df))
+        logger.info(
+            '`signal1` is a ``TimeSeries``, performing an automatic FFT.'
+            'To safeguard against inconsistent conventions during this '
+            'it is recommended to turn on optimization over time, phase. '
+            'Alternatively, do the FFT manually and make sure the result '
+            'looks reasonable.'
+        )
+
+        signal1 = td_to_fd(pad_to_target_df(signal1, df))
 
     if isinstance(signal2, TimeSeries):
-        signal2 = td_to_fd_waveform(pad_to_get_target_df(signal2, df))
-        
+        logger.info(
+            '`signal2` is a ``TimeSeries``, performing an automatic FFT.'
+            'To safeguard against inconsistent conventions during this '
+            'it is recommended to turn on optimization over time, phase. '
+            'Alternatively, do the FFT manually and make sure the result '
+            'looks reasonable.'
+        )
+
+        signal2 = td_to_fd(pad_to_target_df(signal2, df))
+
     # -- Handling frequency range
     f_lower, f_upper = [
         max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),

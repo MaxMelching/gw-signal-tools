@@ -168,7 +168,7 @@ def test_optimize_match_consistency():
 @pytest.mark.parametrize('phase_shift', [0.*u.rad, 0.12*u.rad, -0.3*np.pi*u.rad])
 def test_optimize_match(time_shift, phase_shift):
     # norm_coarse = norm(hp_f_coarse)**2
-    # hp_f_coarse_shifted = hp_f_coarse * np.exp(2.j*np.pi*hp_f_coarse.frequencies*time_shift + 1.j*phase_shift)
+    # hp_f_coarse_shifted = apply_time_phase_shift(hp_f_coarse, time_shift, phase_shift)
 
     # overlap_coarse, info_coarse = inner_product(
     #     hp_f_coarse,
@@ -188,7 +188,7 @@ def test_optimize_match(time_shift, phase_shift):
     # -- coarse performs REALLY bad, thus omitted for these tests
 
     norm_fine = norm(hp_f_fine)**2
-    hp_f_fine_shifted = hp_f_fine * np.exp(-2.j*np.pi*hp_f_fine.frequencies*time_shift + 1.j*phase_shift)
+    hp_f_fine_shifted = apply_time_phase_shift(hp_f_fine, time_shift, phase_shift)
     overlap_fine, info_fine = inner_product(
         hp_f_fine_shifted,
         hp_f_fine,
@@ -615,7 +615,7 @@ def test_time_phase_opt(tc, phic):
     
     def shifted_wf_gen(wf_params):
         wf = wf_gen(wf_params)
-        return wf * np.exp(-2.j*np.pi*tc*wf.frequencies + 1.j*phic)
+        return apply_time_phase_shift(wf, tc, phic)
     
     wf1_shifted, wf2_shifted, opt_params = optimize_overlap(
         wf_params,

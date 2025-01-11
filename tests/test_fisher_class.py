@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 # -- Local Package Imports
-from gw_signal_tools.waveform import get_wf_generator, norm
+from gw_signal_tools.waveform import get_wf_generator, norm, time_phase_wrapper
 from gw_signal_tools.types import MatrixWithUnits, HashableDict
 from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
 from gw_signal_tools.test_utils import (
@@ -103,9 +103,7 @@ def test_time_and_phase_shift_consistency():
     t_shift = 1e-3 * u.s
     phase_shift = 1e-2 * u.rad
 
-    def shifted_wf_gen(wf_params):
-        wf = phenomx_generator(wf_params)
-        return wf * np.exp(-2.j*np.pi*wf.frequencies*t_shift + 1.j*phase_shift)
+    shifted_wf_gen = time_phase_wrapper(phenomx_generator)
     
     calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
@@ -116,7 +114,7 @@ def test_time_and_phase_shift_consistency():
     )
 
     fisher_v2 = FisherMatrix(
-        wf_params,
+        wf_params | {'time': t_shift, 'phase': phase_shift},
         calc_params,
         shifted_wf_gen
     )

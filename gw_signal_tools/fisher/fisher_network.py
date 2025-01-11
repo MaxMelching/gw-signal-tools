@@ -331,7 +331,7 @@ class FisherMatrixNetwork(FisherMatrix):
         optimization_info = {}
 
         for i, det in enumerate(self.detectors):
-            self.detector_fisher(i).fisher
+            # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
             _, info = self.detector_fisher(i).systematic_error(
                 reference_wf_generator=reference_wf_generator,
                 params=None,  # Get all for now, filter before return

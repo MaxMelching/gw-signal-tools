@@ -729,6 +729,7 @@ class FisherMatrix:
                 # -- allowed as parameters!
 
                 opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
+                opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
                 opt_fisher.wf_params_at_point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
@@ -881,20 +882,12 @@ class FisherMatrix:
                 **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
                 # -- Same argument as for remaining_mismatch
             )
-        except ValueError as err:
-            if 'Input domain error' in str(err):
-                # -- Estimate is bad, pushes out of valid param range
-                # -- (error must come from generation with true_params)
-                optimization_info['lsa_mismatch'] = np.nan
-            else:
-                # -- Something unknown went wrong. We do not want to
-                # -- fail here because this is just helper information.
-                # -- However, at least some info should be given.
-                logger.info(
-                    'There was an unknown error during the LSA mismatch '
-                    'calculation. The error message was:\n' + err
-                )
-                optimization_info['lsa_mismatch'] = np.nan  # TODO: really set this?
+        except Exception:
+            logger.info(
+                'There was an unknown error during the LSA mismatch '
+                'calculation, thus it is set to nan.'
+            )
+            optimization_info['lsa_mismatch'] = np.nan  # TODO: really set this?
 
         # TODO: shouldn't we look at one waveform plus sum over deriv*bias
         # (would then require calculating this mismatch before opt_bias is added
@@ -903,7 +896,16 @@ class FisherMatrix:
         # difference. Currently, we are looking at mismatch that has to be
         # approximated over by the linear approximation, but this gives no
         # statement about how well it works in this particular case
-        # -> uhm, is this comment still recent? Actually, I don't thnik so...
+        # -> uhm, is this comment still recent? Actually, I don't think so...
+
+
+        # TODO: implement indistinguishability criterion mentioned in
+        # https://arxiv.org/pdf/2301.06630 right after Eq.(23)? This is
+        # Fisher estimate of whether or not differences are significant
+        # or if they can be confused with noise
+        # -> or maybe the one from Hannam paper?
+        # -> or the one mentioned here, https://arxiv.org/pdf/1611.07531, 1-overlap<1/(2rho^2)
+
 
         # -- Check which params shall be returned and then return -------------
         if params is not None:
@@ -1088,6 +1090,7 @@ class FisherMatrix:
             direct_computation=False,
             **self.metadata,
         )
+        new_matrix._wf_generator = self.wf_generator  # Avoid another wrapper call
         new_matrix._wf_generator = self.wf_generator  # Avoid another wrapper call
         new_matrix._fisher = self.fisher.copy()
         new_matrix._fisher_inverse = self.fisher_inverse.copy()

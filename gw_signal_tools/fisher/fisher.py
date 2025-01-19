@@ -727,11 +727,8 @@ class FisherMatrix:
                 # -- still have to make sure correct waveforms will be
                 # -- produced though, so time and phase shift have to be
                 # -- allowed as parameters!
-                # opt_fisher = self.update_attrs(new_wf_params_at_point=opt_wf_params)
-                # -- ahhh, this recalculates Fisher already and thus
-                # -- includes correct shifts (but this is not what we want)
 
-                opt_fisher = self.copy()
+                opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
                 opt_fisher.wf_params_at_point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
@@ -749,12 +746,7 @@ class FisherMatrix:
                         deriv, time_shift, phase_shift
                     )
             else:
-                opt_fisher = FisherMatrix(
-                    opt_wf_params,
-                    self.params_to_vary,
-                    self.wf_generator,
-                    **(self.metadata | inner_prod_kwargs),
-                )
+                opt_fisher = self.update_attrs(opt_wf_params, **inner_prod_kwargs)
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
@@ -1096,10 +1088,15 @@ class FisherMatrix:
             direct_computation=False,
             **self.metadata,
         )
+        new_matrix._wf_generator = self.wf_generator  # Avoid another wrapper call
         new_matrix._fisher = self.fisher.copy()
         new_matrix._fisher_inverse = self.fisher_inverse.copy()
-        new_matrix._deriv_info = self.deriv_info.copy()
         new_matrix._is_projected = self.is_projected
+
+        # -- Note: since deriv_info is a dictionary of dictionaries and
+        # -- then has arrays in there, we have to make a deepcopy
+        from copy import deepcopy
+        new_matrix._deriv_info = deepcopy(self.deriv_info)
 
         return new_matrix
 

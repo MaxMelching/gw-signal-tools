@@ -10,8 +10,15 @@ from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 
 
-__all__ = ('FT_CONVENTION_DEFAULT', 'td_to_fd', 'fd_to_td',
-           'correct_for_conditioning', 'shift_signal_cyclic', 'shift_signal')
+__all__ = (
+    'FT_CONVENTION_DEFAULT',
+    'td_to_fd',
+    'fd_to_td',
+    'correct_for_conditioning',
+    'shift_signal_cyclic',
+    'shift_signal',
+    'zero_pad',
+)
 
 
 __doc__ = """
@@ -28,9 +35,10 @@ except ImportError:
 try:
     from lalsimulation.gwsignal.core.utils import td_to_fd
 except ImportError:
+
     def td_to_fd(
         signal: TimeSeries,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
+        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
     ) -> FrequencySeries:
         """
         Transform given :code:`signal` into Fourier domain. Note that the
@@ -69,28 +77,39 @@ except ImportError:
         # -- Check if rfft can be performed or full fft needed
         if np.iscomplexobj(signal):
             out = FrequencySeries(
-                np.fft.fftshift(np.fft.fft(signal)) * signal.dx,  # Discrete -> continuous
-                frequencies=np.fft.fftshift(np.fft.fftfreq(signal.size, d=signal.dx.value)) << 1 / signal.dx.unit,
+                np.fft.fftshift(np.fft.fft(signal))
+                * signal.dx,  # Discrete -> continuous
+                frequencies=np.fft.fftshift(
+                    np.fft.fftfreq(signal.size, d=signal.dx.value)
+                )
+                << 1 / signal.dx.unit,
                 unit=signal.unit * signal.dx.unit,
-                name=('Fourier transform of '
-                    + signal.name if signal.name is not None else None),
+                name=(
+                    'Fourier transform of ' + signal.name
+                    if signal.name is not None
+                    else None
+                ),
                 channel=signal.channel,
-                epoch=signal.epoch.gps
+                epoch=signal.epoch.gps,
             )
         else:
             out = FrequencySeries(
                 np.fft.rfft(signal) * signal.dx,  # Discrete -> continuous
-                frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value) << 1 / signal.dx.unit,
+                frequencies=np.fft.rfftfreq(signal.size, d=signal.dx.value)
+                << 1 / signal.dx.unit,
                 unit=signal.unit * signal.dx.unit,
-                name=('Fourier transform of '
-                    + signal.name if signal.name is not None else None),
+                name=(
+                    'Fourier transform of ' + signal.name
+                    if signal.name is not None
+                    else None
+                ),
                 channel=signal.channel,
-                epoch=signal.epoch.gps
+                epoch=signal.epoch.gps,
             )
 
         if convention == 'unwrap':
             # -- Account for non-zero starting time via phase factor
-            return out*np.exp(-2.j*np.pi*out.frequencies*signal.t0)
+            return out * np.exp(-2.0j * np.pi * out.frequencies * signal.t0)
             # -- Note: for TimeSeries t0=epoch
         elif convention == 'wrap':
             return out
@@ -101,9 +120,10 @@ except ImportError:
 try:
     from lalsimulation.gwsignal.core.utils import fd_to_td
 except ImportError:
+
     def fd_to_td(
         signal: FrequencySeries,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
+        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries:
         """
         Transform given :code:`signal` into time domain. Note that the
@@ -137,7 +157,7 @@ except ImportError:
         (inverse) Fourier transforms using the `'unwrap'` convention is
         likely to produce inconsistent results!
         """
-        start_time = signal.epoch.gps*u.s  # Convert Time to Quantity
+        start_time = signal.epoch.gps * u.s  # Convert Time to Quantity
 
         if convention == 'unwrap':
             # -- Avoid wrap-around of signal by rolling in frequency
@@ -146,7 +166,7 @@ except ImportError:
             # -- (this order is very desirable because otherwise, we
             # -- might be off by a single sample in time when performing
             # -- repeated FFTs, IFFTs and then compare signals)
-            _signal = signal*np.exp(2.j*np.pi*signal.frequencies*start_time)
+            _signal = signal * np.exp(2.0j * np.pi * signal.frequencies * start_time)
         elif convention == 'wrap':
             _signal = signal
         else:
@@ -163,9 +183,12 @@ except ImportError:
                 unit=_signal.unit / dt.unit,
                 t0=start_time,  # t0=epoch for TimeSeries
                 dt=dt,
-                name=('Inverse Fourier transform of '
-                    + _signal.name if _signal.name is not None else None),
-                channel=_signal.channel
+                name=(
+                    'Inverse Fourier transform of ' + _signal.name
+                    if _signal.name is not None
+                    else None
+                ),
+                channel=_signal.channel,
             )
         elif _signal.f0 < 0.0:
             if np.fft.ifftshift(_signal.frequencies)[0] != 0.0:
@@ -184,9 +207,12 @@ except ImportError:
                 unit=_signal.unit / dt.unit,
                 t0=start_time,  # t0=epoch for TimeSeries
                 dt=dt,
-                name=('Inverse Fourier transform of '
-                    + _signal.name if _signal.name is not None else None),
-                channel=_signal.channel
+                name=(
+                    'Inverse Fourier transform of ' + _signal.name
+                    if _signal.name is not None
+                    else None
+                ),
+                channel=_signal.channel,
             )
         else:
             raise ValueError(
@@ -200,6 +226,7 @@ except ImportError:
 try:
     from lalsimulation.gwsignal.core.utils import correct_for_conditioning
 except ImportError:
+
     def correct_for_conditioning(signal: FrequencySeries) -> FrequencySeries:
         """
         Change end time of signal to zero by rolling back the portion at
@@ -214,10 +241,10 @@ except ImportError:
         l.665ff, respectively; lines are quoted for v2.3.0). It is NOT meant
         to convert between the different Fourier conventions.
         """
-        time_shift = 1./signal.df + signal.epoch.gps*u.s
+        time_shift = 1.0 / signal.df + signal.epoch.gps * u.s
         # -- Note: 1/df is duration of IFT signal (T=N*dt=N/(N*df)=1/df)
 
-        if time_shift.value == 0.:
+        if time_shift.value == 0.0:
             return signal
         else:
             return shift_signal_cyclic(signal, -time_shift)
@@ -226,10 +253,11 @@ except ImportError:
 try:
     from lalsimulation.gwsignal.core.utils import shift_signal_cyclic
 except ImportError:
+
     def shift_signal_cyclic(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
+        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries | FrequencySeries:
         """
         Roll `signal` by `amount` to the right (i.e. take part of this
@@ -250,33 +278,39 @@ except ImportError:
         if isinstance(signal, TimeSeries):
             index_shift = int(time_shift / signal.dt)
             _signal = np.roll(signal, -index_shift)
-            _signal.t0 = _signal.t0 + index_shift*_signal.dt  # NOT the same as +=
+            _signal.t0 = _signal.t0 + index_shift * _signal.dt  # NOT the same as +=
             # -- Note: we do not add time_shift because of potential
             # -- round-off errors (index_shift*dt is more accurate)
             return _signal
         elif isinstance(signal, FrequencySeries):
             if convention == 'unwrap':
                 _signal = signal.copy()
-                _signal.epoch = _signal.epoch.gps*u.s + time_shift
+                _signal.epoch = _signal.epoch.gps * u.s + time_shift
             elif convention == 'wrap':
-                _signal = signal * np.exp(2.j*np.pi*time_shift*signal.frequencies)
-                _signal.epoch = _signal.epoch.gps*u.s + time_shift  # NOT the same as +=
+                _signal = signal * np.exp(
+                    2.0j * np.pi * time_shift * signal.frequencies
+                )
+                _signal.epoch = (
+                    _signal.epoch.gps * u.s + time_shift
+                )  # NOT the same as +=
             else:
                 raise ValueError(f"Invalid convention '{convention}'.")
 
             return _signal
         else:
-            raise TypeError('`signal` must be a GWpy `FrequencySeries` or '
-                            '`TimeSeries`.')
+            raise TypeError(
+                '`signal` must be a GWpy `FrequencySeries` or ' '`TimeSeries`.'
+            )
 
 
 try:
     from lalsimulation.gwsignal.core.utils import shift_signal
 except ImportError:
+
     def shift_signal(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT
+        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries | FrequencySeries:
         """
         Shift `signal` by `time_shift` in time.
@@ -288,30 +322,36 @@ except ImportError:
         if isinstance(signal, TimeSeries):
             index_shift = int(time_shift / signal.dt)
             _signal = signal.copy()
-            _signal.t0 = _signal.t0 + index_shift*_signal.dt  # NOT the same as +=
+            _signal.t0 = _signal.t0 + index_shift * _signal.dt  # NOT the same as +=
             return _signal
         elif isinstance(signal, FrequencySeries):
             if convention == 'unwrap':
-                _signal = signal * np.exp(-2.j*np.pi*time_shift*signal.frequencies)
-                _signal.epoch = _signal.epoch.gps*u.s + time_shift  # NOT the same as +=
+                _signal = signal * np.exp(
+                    -2.0j * np.pi * time_shift * signal.frequencies
+                )
+                _signal.epoch = (
+                    _signal.epoch.gps * u.s + time_shift
+                )  # NOT the same as +=
             elif convention == 'wrap':
                 _signal = signal.copy()
-                _signal.epoch = _signal.epoch.gps*u.s + time_shift
+                _signal.epoch = _signal.epoch.gps * u.s + time_shift
             else:
                 raise ValueError(f"Invalid convention '{convention}'.")
 
             return _signal
         else:
-            raise TypeError('`signal` must be a GWpy `FrequencySeries` or '
-                            '`TimeSeries`.')
+            raise TypeError(
+                '`signal` must be a GWpy `FrequencySeries` or ' '`TimeSeries`.'
+            )
 
 
 try:
     from lalsimulation.gwsignal.core.utils import zero_pad
 except ImportError:
+
     def zero_pad(
         signal: TimeSeries,
-        df: float | u.Quantity
+        df: float | u.Quantity,
         # TODO: option to pad beginning and end? Or just beginning because
         # at end we are not consistent with Fourier convention anymore
     ) -> TimeSeries:
@@ -332,7 +372,7 @@ except ImportError:
         padded_signal : ~gwpy.timeseries.TimeSeries
             Padded signal, still in time domain.
         """
-        frequ_unit = 1/signal.times.unit
+        frequ_unit = 1 / signal.times.unit
 
         try:
             df = u.Quantity(df, unit=frequ_unit)
@@ -354,8 +394,8 @@ except ImportError:
             return TimeSeries(
                 np.zeros(number_to_append),
                 unit=signal.unit,
-                t0=signal.times[0] - number_to_append*signal.dt,
-                dt=signal.dt
+                t0=signal.times[0] - number_to_append * signal.dt,
+                dt=signal.dt,
             ).append(signal)
         else:
             # -- No padding required

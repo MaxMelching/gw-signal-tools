@@ -580,17 +580,21 @@ class FisherMatrix:
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
         return_opt_info: bool = False,
+        is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
         Calculates the systematic error between two waveform models.
-        The recovery model is taken to be :code:`self.wf_generator`.
+        The recovery model is taken to be :code:`self.wf_generator`,
+        with :code:`self.reference_wf_generator` taking the role of the
+        injected/reference waveform model.
 
         Parameters
         ----------
         reference_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
             Waveform generator for "reference model" that the systematic
-            error is computed with respect to.
+            error is computed with respect to. Must accept dictionary
+            input like `self.wf_params_at_point`.
         params : str | list[str], optional, default = None
             Parameter(s) to return error for. In case it is None (the
             default), the error for all parameters from :code:`self.
@@ -632,6 +636,14 @@ class FisherMatrix:
         return_opt_info : bool, optional, default = False
             Whether to return information on the calculations along with
             result.
+        is_true_point : bool, optional, default = False
+            Whether :code:``self.wf_params_at_point`` represents the
+            "true", i.e. injected, parameters or not. Default is
+            ``False``, which means the point is assumed to be the
+            maximum-likelihood estimate obtained from
+            :code:``self.wf_generator``. This setting is not relevant
+            for the systematic error calculation itself, only for the
+            diagnostic tools returned in the optimization info.
         inner_prod_kwargs :
             Key word arguments used for the calculations here, i.e. for
             waveform difference and more. These will be combined with
@@ -691,7 +703,9 @@ class FisherMatrix:
         # -- whether or not optimization of them over certain parameters ------
         # -- shall be carried out. --------------------------------------------
         opt_is_bool = isinstance(optimize, bool)
-        if (opt_is_bool and optimize) or isinstance(optimize, list):
+        opt_is_list = isinstance(optimize, list)
+        use_alignment = (opt_is_bool and optimize) or opt_is_list
+        if use_alignment:
             if opt_is_bool:
                 opt_params = get_default_opt_params(
                     self.wf_params_at_point, self.wf_generator
@@ -729,7 +743,6 @@ class FisherMatrix:
                 # -- allowed as parameters!
 
                 opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
-                opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
                 opt_fisher.wf_params_at_point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
@@ -739,7 +752,6 @@ class FisherMatrix:
                 # -- apply_time_phase_shift only multiplies with a
                 # -- number independent of every other parameter, its
                 # -- application qualifies as application of 'factor').
-                # TODO: what about some other parameter that is also equivalent to a time/phase shift? -> is still other parameter, everything ok
                 opt_fisher.fisher  # Make sure derivatives are calculated
                 for param in opt_fisher.params_to_vary:
                     deriv = opt_fisher.deriv_info[param]['deriv']
@@ -759,7 +771,7 @@ class FisherMatrix:
                 optimization_info['fisher_opt_params'] = optimize_fisher
 
             optimization_info['opt_fisher'] = opt_fisher
-        elif isinstance(optimize, bool) and not optimize:
+        elif opt_is_bool and not optimize:
             wf_1 = reference_wf_generator(self.wf_params_at_point)
             wf_2 = self.wf_generator(self.wf_params_at_point)
             delta_h = wf_1 - wf_2
@@ -815,7 +827,8 @@ class FisherMatrix:
         # -- Bias from Fisher calculation might not be the only one we
         # -- have to account for, some parameters might change in
         # -- optimization procedure (has to be taken into account too).
-        if opt_params is not None:
+        # if opt_params is not None:
+        if use_alignment:  # Should be equivalent
             opt_bias = 0.0 * fisher_bias  # Get correct shape+units with value of zero
 
             # -- Do not loop over `params`, some of them might have been
@@ -834,9 +847,18 @@ class FisherMatrix:
             fisher_bias += opt_bias
             optimization_info['opt_bias'] = opt_bias
 
+
+        if not return_opt_info:
+            # -- Check which params shall be returned and then return ---------
+            if params is not None:
+                param_indices = opt_fisher.get_param_indices(params)
+                fisher_bias = fisher_bias[param_indices]
+
+            return fisher_bias
+
         # -- Some calculations diagnostic for diagnostic purposes. We ---------
-        # -- look at mismatches instead of waveform differences here for ------
-        # -- results that can be more readily interpreted. --------------------
+        # -- look at mismatches instead of waveform differences here ----------
+        # -- for results that can be more readily interpreted. ----------------
 
         # -- Calculate mismatch that is estimated over
         optimization_info['remaining_mismatch'] = 1.0 - overlap(
@@ -859,35 +881,78 @@ class FisherMatrix:
             'time': 0.0 * u.s,
             'phase': 0.0 * u.rad,
         } | self.wf_params_at_point
-        for param in opt_fisher.params_to_vary:
-            i = opt_fisher.get_param_indices(param)
-            true_params[param] = true_params[param] + fisher_bias[i][0, 0]
+        bf_params = true_params.copy()
+        aligned_params = true_params.copy()
+        # -- NOT opt_fisher.wf_params since this is potentially point
+        # -- obtained from alignment.
+        if not is_true_point:
+            for param in opt_fisher.params_to_vary:
+                i = opt_fisher.get_param_indices(param)
+                true_params[param] = true_params[param] + fisher_bias[i][0, 0]
+                # -- Nothing to do for bf_params, already has correct value
+                # aligned_params[param] = bf_params[param] - (0 if opt_params is None else opt_bias[i][0, 0])
+                aligned_params[param] = bf_params[param] - (opt_bias[i][0, 0] if use_alignment else 0)
+        elif is_true_point:
+            for param in opt_fisher.params_to_vary:
+                i = opt_fisher.get_param_indices(param)
+                # -- Nothing to do for true_params, already has correct value
+                bf_params[param] = bf_params[param] - fisher_bias[i][0, 0]
+                # aligned_params[param] = true_params[param] - (0 if opt_params is None else opt_bias[i][0, 0])
+                aligned_params[param] = true_params[param] - (opt_bias[i][0, 0] if use_alignment else 0)
+        else:
+            raise ValueError('Invalid value for `is_true_point`.')
 
-        optimization_info['true_params_estimate'] = true_params
-
-        # _linear_contr = np.sum(np.asarray(derivs, dtype=object)*np.asarray(-fisher_bias if opt_params is None else opt_bias - fisher_bias, dtype=object))
-        # -- Trying to use np.sum turns out to be more complicated than
-        # -- simply doing sum manually.
-        _linear_contr = 0.0
-        for i in range(opt_fisher.nparams):
-            _linear_contr += (
-                derivs[i]
-                * (-fisher_bias if opt_params is None else opt_bias - fisher_bias)[i][0]
-            )
+        optimization_info['best_fitting_point'] = bf_params
+        optimization_info['true_point'] = true_params
+        if use_alignment:
+            # -- Only set if optimization is turned on
+            optimization_info['aligned_point'] = aligned_params
 
         try:
-            optimization_info['lsa_mismatch'] = 1.0 - overlap(
-                opt_fisher.wf_generator(true_params),
-                opt_fisher.wf_generator(opt_fisher.wf_params_at_point) + _linear_contr,
-                **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
-                # -- Same argument as for remaining_mismatch
-            )
+            # _linear_contr = np.sum(np.asarray(derivs, dtype=object)*np.asarray(-fisher_bias if opt_params is None else opt_bias - fisher_bias, dtype=object))
+            # -- Trying to use np.sum turns out to be more complicated
+            # -- than simply doing sum manually.
+            _linear_contr = 0.0
+            for i in range(opt_fisher.nparams):
+                _linear_contr += (
+                    derivs[i]
+                    * (opt_bias - fisher_bias if use_alignment else -fisher_bias)[i][0, 0]
+                )
+
+            # if is_true_point:
+            #     ref_wf = self.wf_generator(aligned_params)  # Based on true_params
+            #     taylor_wf = self.wf_generator(bf_params) + _linear_contr
+            # else:
+            #     ref_wf = self.wf_generator(aligned_params)  # Based on bf_params
+            #     taylor_wf = self.wf_generator(true_params) - _linear_contr
+            #     # TODO: verify that this is what we rely on!!!
+
+            # optimization_info['lsa_mismatch'] = 1.0 - overlap(
+            #     ref_wf,
+            #     taylor_wf,
+            #     **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
+            #     # -- Same argument as for remaining_mismatch
+            # )
+
+            if is_true_point:
+                optimization_info['lsa_mismatch'] = 1.0 - overlap(
+                    self.wf_generator(aligned_params),  # Based on true_params
+                    self.wf_generator(bf_params) + _linear_contr,
+                    **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
+                    # -- Same argument as for remaining_mismatch
+                )
+            else:
+                logger.info(
+                    'Cannot calculate LSA mismatch if `is_true_point` is False.'
+                )
+                optimization_info['lsa_mismatch'] = np.nan
+
         except Exception:
             logger.info(
                 'There was an unknown error during the LSA mismatch '
                 'calculation, thus it is set to nan.'
             )
-            optimization_info['lsa_mismatch'] = np.nan  # TODO: really set this?
+            optimization_info['lsa_mismatch'] = np.nan
 
         # TODO: shouldn't we look at one waveform plus sum over deriv*bias
         # (would then require calculating this mismatch before opt_bias is added
@@ -912,10 +977,8 @@ class FisherMatrix:
             param_indices = opt_fisher.get_param_indices(params)
             fisher_bias = fisher_bias[param_indices]
 
-        if return_opt_info is False:
-            return fisher_bias
-        else:
-            return fisher_bias, optimization_info
+        # -- When we are here, return_opt_info=True, no if-clause needed
+        return fisher_bias, optimization_info
 
     def snr(self, **inner_prod_kwargs):
         """

@@ -52,7 +52,7 @@ pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
 fisher_tot_mass = FisherMatrix(
-    wf_params_at_point=wf_params,
+    point=wf_params,
     params_to_vary='total_mass',
     wf_generator=phenomx_generator
 )
@@ -373,24 +373,24 @@ def test_get_wf_generator():
     fisher_tot_mass.get_wf_generator('IMRPhenomXPHM')
 
 
-@pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
+@pytest.mark.parametrize('new_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
-def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
+def test_update_attrs(new_point, new_params_to_vary,
                       new_wf_generator, new_metadata):
     if new_metadata is None:
         new_metadata = {}  # Because ** is used below
 
     fisher_tot_mass_v2 = fisher_tot_mass.update_attrs(
-        new_wf_params_at_point,
+        new_point,
         new_params_to_vary,
         new_wf_generator,
         **new_metadata
     )
 
-    if new_wf_params_at_point is not None:
-        assert fisher_tot_mass_v2.wf_params_at_point == new_wf_params_at_point
+    if new_point is not None:
+        assert fisher_tot_mass_v2.point == new_point
     if new_params_to_vary is not None:
         if isinstance(new_params_to_vary, str):
             assert fisher_tot_mass_v2.params_to_vary == [new_params_to_vary]
@@ -406,13 +406,13 @@ def test_copy():
     
     fisher_copy._fisher = None
     fisher_copy._fisher_inverse = None
-    fisher_copy.wf_params_at_point = None
+    fisher_copy.point = None
     fisher_copy.wf_generator = None
     fisher_copy.metadata = None
     fisher_copy._deriv_info = None
     fisher_copy._is_projected = True
 
-    for attr in ['fisher', 'fisher_inverse', 'wf_params_at_point',
+    for attr in ['fisher', 'fisher_inverse', 'point',
                  'wf_generator', 'metadata', 'deriv_info']:
         assert fisher_tot_mass.__getattribute__(attr) is not None
     

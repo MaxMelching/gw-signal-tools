@@ -46,15 +46,15 @@ class FisherMatrix:
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, ~astropy.units.Quantity]
+    point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
         evaluated, encoded as key-value pairs representing
         parameter-value pairs. Given as input to :code:`wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be a key in :code:`wf_params_at_point` or one of
-        :code:`'time'`, :code:`'phase'`.
+        Must be a key in :code:`point` or one of :code:`'time'`,
+        :code:`'phase'`.
 
         For the latter, analytical derivatives are applied. This is
         possible because they contribute only to a factor
@@ -73,7 +73,7 @@ class FisherMatrix:
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
-        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        :code:`point`, while the output must be a ``~gwpy.
         frequencyseries.FrequencySeries`` (the standard output of
         LAL gwsignal generators) because it carries information about
         value, frequencies and units, which are all required for the
@@ -88,7 +88,7 @@ class FisherMatrix:
         certain cases one might want to save the computation time (e.g.
         if a systematic error shall be computed, where the Fisher
         matrix might be computed in some optimized point and not the one
-        given by :code:`wf_params_at_point`).
+        given by :code:`point`).
     metadata :
         All other keyword arguments will be treated as input for
         metadata of the Fisher matrix. This metadata consists of
@@ -127,19 +127,19 @@ class FisherMatrix:
     # parameter for conversion, the functions will just keep units
     # TODO: make setter etc. for it
     # -> the thing is that one can just pay attention to input units in
-    #    wf_params_at_point, right? So the overhead of implementing all
-    #    this stuff would not be worth it I think
+    #    point, right? So the overhead of implementing all this stuff
+    #    would not be worth it I think
 
     def __init__(
         self,
-        wf_params_at_point: dict[str, u.Quantity],
+        point: dict[str, u.Quantity],
         params_to_vary: str | list[str],
         wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         direct_computation: bool = True,
         **metadata,
     ) -> None:
         """Initialize a ``FisherMatrix``."""
-        self.wf_params_at_point = wf_params_at_point
+        self.point = point
         self.wf_generator = wf_generator
         self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
@@ -161,14 +161,14 @@ class FisherMatrix:
             self._calc_fisher()
 
     # @property
-    # def wf_params_at_point(self) -> dict[str, u.Quantity]:
-    #     return self._wf_params_at_point
+    # def point(self) -> dict[str, u.Quantity]:
+    #     return self._point
 
-    # @wf_params_at_point.setter
-    # def wf_params_at_point(self, wf_params: dict[str, u.Quantity]) -> None:
+    # @point.setter
+    # def point(self, wf_params: dict[str, u.Quantity]) -> None:
     #     # Do some parameter checks?
 
-    #     self._wf_params_at_point = wf_params
+    #     self._point = wf_params
 
     @property
     def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
@@ -208,8 +208,8 @@ class FisherMatrix:
         # assert not (
         #     (('phase' in _params and 'psi' in _params))
         #     or (('phase' in _params or 'psi' in _params) and 'phi_ref' in _params
-        #          if not (test_hm(self.wf_params_at_point, self.wf_generator)
-        #                  or test_precessing(self.wf_params_at_point))
+        #          if not (test_hm(self.point, self.wf_generator)
+        #                  or test_precessing(self.point))
         #          else True)  # phi_ref only degenerate if hm or precessing
         # )
         # TODO: make sure this is at point in __init__ where all self stuff is defined
@@ -232,7 +232,7 @@ class FisherMatrix:
     def _calc_fisher(self):
         """Calculate the Fisher matrix for this instance."""
         self._fisher, self._deriv_info = fisher_matrix(
-            wf_params_at_point=self.wf_params_at_point,
+            point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             **self.metadata,
@@ -390,7 +390,7 @@ class FisherMatrix:
 
     def update_attrs(
         self,
-        new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
+        new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
         new_wf_generator: Optional[
             Callable[[dict[str, u.Quantity]], FrequencySeries]
@@ -405,7 +405,7 @@ class FisherMatrix:
 
         Parameters
         ----------
-        new_wf_params_at_point : dict[str, ~astropy.units.Quantity]
+        new_point : dict[str, ~astropy.units.Quantity]
             Point in parameter space at which the Fisher matrix is
             evaluated, encoded as key-value pairs representing
             parameter-value pairs. Given as input to
@@ -416,7 +416,7 @@ class FisherMatrix:
             Must be compatible with :code:`param_to_vary` input to the
             the derivative classes defined in :code:`~gw_signal_tools.
             waveform`, i.e. either :code:`'time'`, :code:`'phase'` or a
-            key in :code:`wf_params_at_point`.
+            key in :code:`point`.
 
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
@@ -425,11 +425,11 @@ class FisherMatrix:
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
             argument, which is expected to accept the input provided in
-            :code:`wf_params_at_point`, while the output must be a
-            ``~gwpy.frequencyseries.FrequencySeries`` (the standard
-            output of LAL gwsignal generators) because it carries
-            information about value, frequencies and units, which are
-            all required for the calculations that are carried out.
+            :code:`point`, while the output must be a ``~gwpy.
+            frequencyseries.FrequencySeries`` (the standard output of
+            LAL gwsignal generators) because it carries information
+            about value, frequencies and units, which are all required
+            for the calculations that are carried out.
 
             Convenient options are the methods
             :code:`~gw_signal_tools.waveform_utils.get_wf_generator`
@@ -441,8 +441,8 @@ class FisherMatrix:
         ~gw_signal_tools.fisher_matrix.FisherMatrix
             New Fisher matrix, calculated with updated metadata.
         """
-        if new_wf_params_at_point is None:
-            new_wf_params_at_point = self.wf_params_at_point
+        if new_point is None:
+            new_point = self.point
 
         if new_params_to_vary is None:
             new_params_to_vary = self.params_to_vary
@@ -456,7 +456,7 @@ class FisherMatrix:
             _new_metadata = self.metadata
 
         out = FisherMatrix(
-            new_wf_params_at_point,
+            new_point,
             new_params_to_vary,
             new_wf_generator,
             **_new_metadata,
@@ -594,7 +594,7 @@ class FisherMatrix:
         reference_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
             Waveform generator for "reference model" that the systematic
             error is computed with respect to. Must accept dictionary
-            input like `self.wf_params_at_point`.
+            input like `self.point`.
         params : str | list[str], optional, default = None
             Parameter(s) to return error for. In case it is None (the
             default), the error for all parameters from :code:`self.
@@ -616,9 +616,8 @@ class FisherMatrix:
             more reliable in that case, so this is the default.
 
             If it is given as a list, the corresponding parameters must
-            be in the instances ``wf_params_at_point`` dictionary or
-            :code:`'time'`, :code:`'phase'`. They need not be part of
-            :code:`params`.
+            be in the instances ``point`` dictionary or :code:`'time'`,
+            :code:`'phase'`. They need not be part of :code:`params`.
 
             Note that passing any kind of optimization of the inner
             product as a keyword will also result in this parameter
@@ -637,13 +636,13 @@ class FisherMatrix:
             Whether to return information on the calculations along with
             result.
         is_true_point : bool, optional, default = False
-            Whether :code:``self.wf_params_at_point`` represents the
-            "true", i.e. injected, parameters or not. Default is
-            ``False``, which means the point is assumed to be the
-            maximum-likelihood estimate obtained from
-            :code:``self.wf_generator``. This setting is not relevant
-            for the systematic error calculation itself, only for the
-            diagnostic tools returned in the optimization info.
+            Whether :code:``self.point`` represents the "true", i.e.
+            injected, parameters or not. Default is ``False``, which
+            means the point is assumed to be the maximum-likelihood
+            estimate obtained from :code:``self.wf_generator``. This
+            setting is not relevant for the systematic error calculation
+            itself, only for the diagnostic tools returned in the
+            optimization info.
         inner_prod_kwargs :
             Key word arguments used for the calculations here, i.e. for
             waveform difference and more. These will be combined with
@@ -681,9 +680,9 @@ class FisherMatrix:
         calculates the displacement of :code:`self.wf_generators`'s best
         guess from best guess of :code:`reference_model`.
 
-        The point represented by :code:`self.wf_params_at_point` can be
-        both :math:`\theta` and :math:`\theta_2`. The more common way
-        of defining it would be :math:`\theta`, which is where the bias
+        The point represented by :code:`self.point` can be both
+        :math:`\theta` and :math:`\theta_2`. The more common way of
+        defining it would be :math:`\theta`, which is where the bias
         formula above is typically evaluated in the literature. However,
         changing the evaluation point of this formula to
         :math:`\theta_2` is equally valid and will yield almost the same
@@ -710,7 +709,7 @@ class FisherMatrix:
         if use_alignment:
             if opt_is_bool:
                 opt_params = get_default_opt_params(
-                    self.wf_params_at_point, self.wf_generator
+                    self.point, self.wf_generator
                 )  # Not leaving at none is important, we check for this
 
                 optimization_info['general'] = 'Default optimization was carried out.'
@@ -720,7 +719,7 @@ class FisherMatrix:
                 optimization_info['general'] = 'Custom optimization was carried out.'
 
             wf_1, wf_2, opt_vals = optimize_overlap(
-                wf_params=self.wf_params_at_point,
+                wf_params=self.point,
                 fixed_wf_generator=reference_wf_generator,
                 vary_wf_generator=self.wf_generator,
                 opt_params=opt_params,
@@ -728,7 +727,7 @@ class FisherMatrix:
             )
             delta_h = wf_1 - wf_2
 
-            opt_wf_params = self.wf_params_at_point | opt_vals
+            opt_wf_params = self.point | opt_vals
             optimization_info['opt_params'] = opt_wf_params.copy()
 
             # -- Following is done for the test in line below and to
@@ -745,7 +744,7 @@ class FisherMatrix:
                 # -- allowed as parameters!
 
                 opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
-                opt_fisher.wf_params_at_point = opt_wf_params  # Add time, phase shifts
+                opt_fisher.point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
                 # -- to the derivatives. Works because
@@ -762,7 +761,7 @@ class FisherMatrix:
                     )
             else:
                 opt_fisher = self.update_attrs(
-                    new_wf_params_at_point=opt_wf_params,
+                    new_point=opt_wf_params,
                     **inner_prod_kwargs
                 )
 
@@ -777,8 +776,8 @@ class FisherMatrix:
 
             optimization_info['opt_fisher'] = opt_fisher
         elif opt_is_bool and not optimize:
-            wf_1 = reference_wf_generator(self.wf_params_at_point)
-            wf_2 = self.wf_generator(self.wf_params_at_point)
+            wf_1 = reference_wf_generator(self.point)
+            wf_2 = self.wf_generator(self.point)
             delta_h = wf_1 - wf_2
 
             if optimize_fisher is not None:
@@ -846,7 +845,7 @@ class FisherMatrix:
                 elif param == 'phase':
                     opt_bias[i] = phase_shift
                 else:
-                    wf_param_val = self.wf_params_at_point[param]
+                    wf_param_val = self.point[param]
                     opt_bias[i] = opt_vals.get(param, wf_param_val) - wf_param_val
 
             fisher_bias += opt_bias
@@ -885,11 +884,11 @@ class FisherMatrix:
         true_params = {
             'time': 0.0 * u.s,
             'phase': 0.0 * u.rad,
-        } | self.wf_params_at_point.copy()
+        } | self.point.copy()
         bf_params = true_params.copy()
         aligned_params = true_params.copy()
-        # -- NOT opt_fisher.wf_params_at_point since this is potentially
-        # -- point obtained from alignment.
+        # -- NOT opt_fisher.point since this is potentially point
+        # -- obtained from alignment.
         if is_true_point:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
@@ -1071,7 +1070,7 @@ class FisherMatrix:
     def snr(self, **inner_prod_kwargs):
         """
         Calculate the signal-to-noise ratio (SNR) of the signal that
-        `self.wf_generator` produces at `self.wf_params_at_point`.
+        `self.wf_generator` produces at `self.point`.
 
         Parameters
         ----------
@@ -1085,7 +1084,7 @@ class FisherMatrix:
         ~astropy.units.Quantity :
             SNR, i.e. norm of signal.
         """
-        signal = self.wf_generator(self.wf_params_at_point)
+        signal = self.wf_generator(self.point)
         return norm(signal, **(self._inner_prod_kwargs | inner_prod_kwargs))
 
     def plot_matrix(
@@ -1235,7 +1234,7 @@ class FisherMatrix:
 
     def __copy__(self) -> FisherMatrix:
         new_matrix = FisherMatrix(
-            wf_params_at_point=self.wf_params_at_point,
+            point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             direct_computation=False,

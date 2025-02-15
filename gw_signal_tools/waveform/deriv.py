@@ -88,7 +88,7 @@ class WaveformDerivativeGWSignaltools():
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, ~astropy.units.Quantity]
+    point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the derivative is evaluated,
         encoded as key-value pairs representing parameter-value pairs.
 
@@ -100,7 +100,7 @@ class WaveformDerivativeGWSignaltools():
         :code:`params_to_vary` is true).
     param_to_vary : str
         Parameter with respect to which the derivative is taken. Must be
-        a key in :code:`wf_params_at_point` or one of :code:`'time'`,
+        a key in :code:`point` or one of :code:`'time'`,
         :code:`'phase'`.
         
         For time and phase shifts, analytical derivatives are applied.
@@ -120,7 +120,7 @@ class WaveformDerivativeGWSignaltools():
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
-        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        :code:`point`, while the output must be a ``~gwpy.
         frequencyseries.FrequencySeries`` (the standard output of
         LAL gwsignal generators) because it carries information about
         value, frequencies and units, which are all required for the
@@ -201,7 +201,7 @@ class WaveformDerivativeGWSignaltools():
     """
     def __init__(
         self,
-        wf_params_at_point: dict[str, u.Quantity],
+        point: dict[str, u.Quantity],
         param_to_vary: str,
         wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
         step_sizes: Optional[list[float] | np.ndarray] = None,
@@ -215,7 +215,7 @@ class WaveformDerivativeGWSignaltools():
         # return_info: bool = False,
         **inner_prod_kwargs
     ) -> None:
-        self.wf_params_at_point = wf_params_at_point
+        self.point = point
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
 
@@ -247,20 +247,20 @@ class WaveformDerivativeGWSignaltools():
 
     # -- Properties that are set based on input
     @property
-    def wf_params_at_point(self) -> dict[str, u.Quantity]:
+    def point(self) -> dict[str, u.Quantity]:
         """
         Point in parameter space at which waveform is differentiated,
         encoded as key-value pairs representing parameter-value pairs.
 
         :type: `dict[str, ~astropy.units.Quantity]`
         """
-        return self._wf_params_at_point
+        return self._point
     
-    @wf_params_at_point.setter
-    def wf_params_at_point(self, point: dict[str, u.Quantity]) -> None:
-        self._wf_params_at_point = point
+    @point.setter
+    def point(self, point: dict[str, u.Quantity]) -> None:
+        self._point = point
         try:
-            self.wf = self.wf_generator(self.wf_params_at_point)
+            self.wf = self.wf_generator(self.point)
         except AttributeError:
             # Class has just been initialized, no wf_generator yet
             pass
@@ -283,8 +283,8 @@ class WaveformDerivativeGWSignaltools():
         if (param != 'time' and param != 'phase'):
             # TODO: could also add distance here. Has analytical
             # derivative too, so strictly speaking it is not required
-            # to be in wf_params_at_point
-            assert param in self.wf_params_at_point
+            # to be in point
+            assert param in self.point
 
         self._param_to_vary = param
 
@@ -304,7 +304,7 @@ class WaveformDerivativeGWSignaltools():
     @wf_generator.setter
     def wf_generator(self, generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]) -> None:
         self._wf_generator = generator
-        self.wf = generator(self.wf_params_at_point)
+        self.wf = generator(self.point)
 
         if hasattr(self, '_deriv'):
             # -- Derivative that was calculated is not valid anymore
@@ -396,20 +396,19 @@ class WaveformDerivativeGWSignaltools():
 
         :type: `~astropy.units.Quantity`
         """
-        return self.wf_params_at_point[self.param_to_vary]
+        return self.point[self.param_to_vary]
     # TODO: is this required? -> yup, fairly frequently accessed
 
     # @property
     # def wf(self) -> FrequencySeries:
-        # return self.wf_generator(self.wf_params_at_point)
+        # return self.wf_generator(self.point)
     # But then we would loose advantage of storing it, right?
     # -> even cached_property would not be useful
     # -> maybe out own custom cacher would help here. But not used for now
     @property
     def wf(self) -> FrequencySeries | TimeSeries:
         """
-        The waveform produced by `self.wf_generator` at
-        `self.wf_params_at_point`.
+        The waveform produced by `self.wf_generator` at `self.point`.
 
         :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
         """
@@ -454,7 +453,7 @@ class WaveformDerivativeGWSignaltools():
             }
             return deriv
         elif self.param_to_vary == 'distance':
-            deriv = (-1./self.wf_params_at_point['distance']) * self.wf
+            deriv = (-1./self.point['distance']) * self.wf
 
             derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
 
@@ -668,9 +667,9 @@ class WaveformDerivativeGWSignaltools():
     def __call__(self, new_point: Optional[dict[str, u.Quantity]] = None) -> FrequencySeries | TimeSeries:
         if new_point is not None:
             if isinstance(new_point, u.Quantity):
-                self.wf_params_at_point[self.param_to_vary] = new_point
+                self.point[self.param_to_vary] = new_point
             else:
-                self.wf_params_at_point[self.param_to_vary] = new_point*self.param_center_val.unit
+                self.point[self.param_to_vary] = new_point*self.param_center_val.unit
         return self.deriv
     
     _param_bound_storage = param_bounds.copy()
@@ -681,7 +680,7 @@ class WaveformDerivativeGWSignaltools():
 
     def test_point(self, step_size: float) -> None:
         """
-        Check if `self.wf_params_at_point` contains potentially tricky
+        Check if `self.point` contains potentially tricky
         values, e.g. mass ratios close to 1. If yes, a subsequent
         adjustment takes place.
 
@@ -771,7 +770,7 @@ class WaveformDerivativeGWSignaltools():
         """
         Choose relative or absolute step size, based on
         `self.param_center_val` (the value of `self.param_to_vary` in
-        `self.wf_params_at_point`).
+        `self.point`).
         """
         if np.log10(self.param_center_val.value) < 1:
             step_size = np.abs(u.Quantity(step_size,
@@ -789,11 +788,11 @@ class WaveformDerivativeGWSignaltools():
     def forward(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the forward difference of `self.wf_generator` at
-        `self.wf_params_at_point` with respect to `self.param_to_vary`
-        using the given `step_size`.
+        `self.point` with respect to `self.param_to_vary` using the
+        given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        wf_p1 = self.wf_generator(self.wf_params_at_point | {
+        wf_p1 = self.wf_generator(self.point | {
             self.param_to_vary: self.param_center_val + step_size
         })
 
@@ -805,11 +804,11 @@ class WaveformDerivativeGWSignaltools():
     def backward(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the backward difference of `self.wf_generator` at
-        `self.wf_params_at_point` with respect to `self.param_to_vary`
-        using the given `step_size`.
+        `self.point` with respect to `self.param_to_vary` using the
+        given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        wf_m1 = self.wf_generator(self.wf_params_at_point | {
+        wf_m1 = self.wf_generator(self.point | {
             self.param_to_vary: self.param_center_val - step_size
         })
 
@@ -821,15 +820,15 @@ class WaveformDerivativeGWSignaltools():
     def central(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the central difference of `self.wf_generator` at
-        `self.wf_params_at_point` with respect to `self.param_to_vary`
-        using the given `step_size`.
+        `self.point` with respect to `self.param_to_vary` using the
+        given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
         param_vals = self.param_center_val + np.array([-1., 1.])*step_size
 
         waveforms = [
             self.wf_generator(
-                self.wf_params_at_point | {self.param_to_vary: param_val}
+                self.point | {self.param_to_vary: param_val}
             ) for param_val in param_vals
         ]
 
@@ -841,15 +840,15 @@ class WaveformDerivativeGWSignaltools():
     def five_point(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the five point stencil of `self.wf_generator` at
-        `self.wf_params_at_point` with respect to `self.param_to_vary`
-        using the given `step_size`.
+        `self.point` with respect to `self.param_to_vary` using the
+        given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
         param_vals = self.param_center_val + np.array([-2., -1., 1., 2.])*step_size
 
         waveforms = [
             self.wf_generator(
-                self.wf_params_at_point | {self.param_to_vary: param_val}
+                self.point | {self.param_to_vary: param_val}
             ) for param_val in param_vals
         ]
 

@@ -96,7 +96,7 @@ def num_diff(  # TODO: move this to deriv file?
 
 
 def fisher_matrix(
-    wf_params_at_point: dict[str, u.Quantity],
+    point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
     deriv_routine: Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'],
@@ -108,15 +108,15 @@ def fisher_matrix(
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, ~astropy.units.Quantity]
+    point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
         evaluated, encoded as key-value pairs representing
         parameter-value pairs. Given as input to :code:`wf_generator`.
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be a key in :code:`wf_params_at_point` or one of
-        :code:`'time'`, :code:`'phase'`.
+        Must be a key in :code:`point` or one of :code:`'time'`,
+        :code:`'phase'`.
 
         For the latter, analytical derivatives are applied. This is
         possible because they contribute only to a factor
@@ -135,7 +135,7 @@ def fisher_matrix(
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
-        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        :code:`point`, while the output must be a ``~gwpy.
         frequencyseries.FrequencySeries`` (the standard output of
         LAL gwsignal generators) because it carries information about
         value, frequencies and units, which are all required for the
@@ -214,7 +214,7 @@ def fisher_matrix(
             # -- and different usage of _inner_prod_kwargs
             case 'gw_signal_tools':
                 full_deriv = WaveformDerivativeGWSignaltools(
-                    wf_params_at_point=wf_params_at_point,
+                    point=point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
                     **deriv_and_inner_prod_kwargs,
@@ -225,7 +225,7 @@ def fisher_matrix(
                 fisher_matrix[i, i] = info['norm_squared']
             case 'numdifftools':
                 full_deriv = WaveformDerivativeNumdifftools(
-                    wf_params_at_point=wf_params_at_point,
+                    point=point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
                     **_deriv_kw_args,
@@ -236,7 +236,7 @@ def fisher_matrix(
                 fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
             case 'amplitude_phase':
                 full_deriv = WaveformDerivativeAmplitudePhase(
-                    wf_params_at_point=wf_params_at_point,
+                    point=point,
                     param_to_vary=param,
                     wf_generator=wf_generator,
                     **_deriv_kw_args,

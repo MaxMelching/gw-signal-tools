@@ -31,7 +31,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
     Parameters
     ----------
-    wf_params_at_point : dict[str, ~astropy.units.Quantity]
+    point : dict[str, ~astropy.units.Quantity]
         Point in parameter space at which the Fisher matrix is
         evaluated, encoded as key-value pairs representing
         parameter-value pairs. Given as input to :code:`wf_generator`.
@@ -43,7 +43,7 @@ class FisherMatrixNetwork(FisherMatrix):
         get_waveform_derivative_1D_with_convergence`, i.e. either
         :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
         (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a key
-        in :code:`wf_params_at_point`.
+        in :code:`point`.
 
         For time and phase shifts, analytical derivatives are applied.
         This is possible because they contribute only to a factor
@@ -55,7 +55,7 @@ class FisherMatrixNetwork(FisherMatrix):
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
-        :code:`wf_params_at_point`, while the output must be a ``~gwpy.
+        :code:`point`, while the output must be a ``~gwpy.
         frequencyseries.FrequencySeries`` (the standard output of
         LAL gwsignal generators) because it carries information about
         value, frequencies and units, which are all required for the
@@ -80,7 +80,7 @@ class FisherMatrixNetwork(FisherMatrix):
         certain cases one might want to save the computation time (e.g.
         if a systematic error shall be computed, where the Fisher
         matrix might be computed in some optimized point and not the one
-        given by :code:`wf_params_at_point`).
+        given by :code:`point`).
     metadata :
         All other keyword arguments will be treated as input for
         metadata of the Fisher matrix. This metadata consists of
@@ -97,7 +97,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
     def __init__(
         self,
-        wf_params_at_point: dict[str, u.Quantity],
+        point: dict[str, u.Quantity],
         params_to_vary: str | list[str],
         wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
         detectors: Detector | list[Detector],
@@ -126,7 +126,7 @@ class FisherMatrixNetwork(FisherMatrix):
         # -- a network of multiple detectors anyway.
 
         super().__init__(
-            wf_params_at_point=wf_params_at_point,
+            point=point,
             params_to_vary=params_to_vary,
             wf_generator=wf_generator,
             direct_computation=False,  # Avoid call of self._calc_fisher
@@ -176,7 +176,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
     def update_attrs(
         self,
-        new_wf_params_at_point: Optional[dict[str, u.Quantity]] = None,
+        new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
         new_wf_generator: Optional[
             Callable[[dict[str, u.Quantity]], FrequencySeries]
@@ -192,7 +192,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
         Parameters
         ----------
-        new_wf_params_at_point : dict[str, ~astropy.units.Quantity]
+        new_point : dict[str, ~astropy.units.Quantity]
             Point in parameter space at which the Fisher matrices are
             evaluated, encoded as key-value pairs representing
             parameter-value pairs. Given as input to
@@ -205,7 +205,7 @@ class FisherMatrixNetwork(FisherMatrix):
             get_waveform_derivative_1D_with_convergence`, i.e. either
             :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
             (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a
-            key in :code:`wf_params_at_point`.
+            key in :code:`point`.
 
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
@@ -214,7 +214,7 @@ class FisherMatrixNetwork(FisherMatrix):
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
             argument, which is expected to accept the input provided in
-            :code:`wf_params_at_point`, while the output must be a
+            :code:`point`, while the output must be a
             ``~gwpy.frequencyseries.FrequencySeries`` (the standard
             output of LAL gwsignal generators) because it carries
             information about value, frequencies and units, which are
@@ -230,8 +230,8 @@ class FisherMatrixNetwork(FisherMatrix):
         ~gw_signal_tools.fisher_matrix.FisherMatrixNetwork
             New Fisher matrix, calculated with updated metadata.
         """
-        if new_wf_params_at_point is None:
-            new_wf_params_at_point = self.wf_params_at_point
+        if new_point is None:
+            new_point = self.point
 
         if new_params_to_vary is None:
             new_params_to_vary = self.params_to_vary
@@ -248,7 +248,7 @@ class FisherMatrixNetwork(FisherMatrix):
             _new_metadata = self.metadata
 
         out = FisherMatrixNetwork(
-            new_wf_params_at_point,
+            new_point,
             new_params_to_vary,
             new_wf_generator,
             new_detectors,
@@ -265,7 +265,7 @@ class FisherMatrixNetwork(FisherMatrix):
         for det in self.detectors:
             self._fisher_for_dets += [
                 FisherMatrix(
-                    wf_params_at_point=self.wf_params_at_point | {'det': det.name},
+                    point=self.point | {'det': det.name},
                     params_to_vary=self.params_to_vary,
                     wf_generator=self.wf_generator,
                     direct_computation=False,
@@ -306,6 +306,7 @@ class FisherMatrixNetwork(FisherMatrix):
         optimize: bool | str | list[str] = True,
         optimize_fisher: str | list[str] | None = None,
         return_opt_info: bool = False,
+        is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         if isinstance(optimize, str):
@@ -330,6 +331,11 @@ class FisherMatrixNetwork(FisherMatrix):
 
         optimization_info = {}
 
+        # logging.disable(logging.CRITICAL)  # TODO: only switch info stuff off maybe?
+        # -- Disable logging for now, e.g. to avoid calls due to bad
+        # -- condition number in inversion (we do not intend to use the
+        # -- inverse matrices of each detector, calls irrelevant here).
+
         for i, det in enumerate(self.detectors):
             # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
             _, info = self.detector_fisher(i).systematic_error(
@@ -338,6 +344,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 optimize=optimize,
                 optimize_fisher=optimize_fisher,
                 return_opt_info=True,
+                is_true_point=is_true_point,
                 **inner_prod_kwargs,
             )
 
@@ -361,9 +368,11 @@ class FisherMatrixNetwork(FisherMatrix):
             vector += info['deriv_vector']
             fisher += used_fisher
 
+        # logging.disable(logging.NOTSET)
+
         fisher_bias = MatrixWithUnits.inv(fisher) @ (vector + opt_bias)
 
-        # -- Check which params shall be returned
+        # -- Check which params shall be returned and then return -------------
         if params is not None:
             if isinstance(params, str):
                 params = [params]
@@ -394,7 +403,7 @@ class FisherMatrixNetwork(FisherMatrix):
     def snr(self, **inner_prod_kwargs):
         """
         Calculate the signal-to-noise ratio (SNR) of the signal that
-        `self.wf_generator` produces at `self.wf_params_at_point`.
+        `self.wf_generator` produces at `self.point`.
 
         Parameters
         ----------
@@ -413,14 +422,14 @@ class FisherMatrixNetwork(FisherMatrix):
 
         snr = 0.0
         for det in self.detectors:
-            signal = self.wf_generator(self.wf_params_at_point | {'det': det.name})
+            signal = self.wf_generator(self.point | {'det': det.name})
             snr += norm(signal, **(_inner_prod_kwargs | det.inner_prod_kwargs)) ** 2
 
         return snr**0.5
 
     def __copy__(self) -> FisherMatrix:
         new_network = FisherMatrixNetwork(
-            wf_params_at_point=self.wf_params_at_point,
+            point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             detectors=self.detectors,

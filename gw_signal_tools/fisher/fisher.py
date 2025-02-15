@@ -579,7 +579,7 @@ class FisherMatrix:
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
-        return_opt_info: bool = False,
+        return_opt_info: bool = False,  # TODO: rename to "return_diagnostics"?
         params_is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
@@ -761,7 +761,10 @@ class FisherMatrix:
                         deriv, time_shift, phase_shift
                     )
             else:
-                opt_fisher = self.update_attrs(opt_wf_params, **inner_prod_kwargs)
+                opt_fisher = self.update_attrs(
+                    new_wf_params_at_point=opt_wf_params,
+                    **inner_prod_kwargs
+                )
 
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
@@ -869,7 +872,6 @@ class FisherMatrix:
             wf_2,
             **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
         )
-        # TODO: could also calculate between waveforms in true params
         # -- Reason for {'optimize_time_and_phase': False}:
         # -- Either optimize is turned on (i.e. overlap is already
         # -- optimized, or the relevant mismatch is non-optimized one)
@@ -886,23 +888,20 @@ class FisherMatrix:
         } | self.wf_params_at_point.copy()
         bf_params = true_params.copy()
         aligned_params = true_params.copy()
-        # -- NOT opt_fisher.wf_params since this is potentially point
-        # -- obtained from alignment.
-        if not params_is_true_point:
+        # -- NOT opt_fisher.wf_params_at_point since this is potentially
+        # -- point obtained from alignment.
+        if params_is_true_point:
+            for param in opt_fisher.params_to_vary:
+                i = opt_fisher.get_param_indices(param)
+                # -- Nothing to do for true_params, already has correct value
+                bf_params[param] = true_params[param] + fisher_bias[i].reshape(-1)[0]  # Clearer what happens
+                aligned_params[param] = true_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
+        elif not params_is_true_point:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
                 true_params[param] = bf_params[param] - fisher_bias[i].reshape(-1)[0]  # Clearer what happens
                 # -- Nothing to do for bf_params, already has correct value
                 aligned_params[param] = bf_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
-                # aligned_params[param] = opt_fisher.wf_params_at_point[param]  # Might not work if opt_fisher=self (no 'time', 'phase')
-        elif params_is_true_point:
-            for param in opt_fisher.params_to_vary:
-                i = opt_fisher.get_param_indices(param)
-                # -- Nothing to do for true_params, already has correct value
-                bf_params[param] = true_params[param] + fisher_bias[i].reshape(-1)[0]  # Clearer what happens
-                # aligned_params[param] = opt_fisher.wf_params_at_point[param]  # Might not work if opt_fisher=self (no 'time', 'phase')
-                # aligned_params[param] = true_params[param] + (0 if opt_params is None else opt_bias[i][0, 0])
-                aligned_params[param] = true_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
         else:
             raise ValueError('Invalid value for `params_is_true_point`.')
 
@@ -919,19 +918,19 @@ class FisherMatrix:
                 left_wf = self.wf_generator(true_params)
                 right_wf = self.wf_generator(bf_params)
                 for i in range(opt_fisher.nparams):
-                    # right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
                     # -- Or is it also nicer to distinguish the two cases?
                     if params_is_true_point:
-                        # -- At least apply time, phase shift to make things more realistic
-                        # right_wf = right_wf + apply_time_phase_shift(derivs[i], bf_params['time'] - true_params['time'], bf_params['phase'] - true_params['phase']) * (-fisher_bias[i].reshape(-1)[0])
-                        # -> nah, not sure if this is good idea. But this
-                        #    here might be nice way to account for different derivative points
-                        # -> observation here: when adding to left, mismatch estimates are a little smaller
-                        left_wf = left_wf + derivs[i] * fisher_bias[i].reshape(-1)[0]
+                        right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
+                        # -- This here might be nice way to account for
+                        # -- different derivative points
+                        # left_wf = left_wf + derivs[i] * fisher_bias[i].reshape(-1)[0]
+                        # -> observation: when adding to left, mismatch
+                        #   estimates are a little smaller. But does that
+                        #   mean more accurate?
                     else:
                         right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
             # -- That was the simplest case. The next cases require a
-            # -- distinction which point the alignment was based on,
+            # -- distinction of which point the alignment was based on,
             # -- making things more complicated (thus two more cases).
             elif params_is_true_point:
                 # -- Easier case of the more complicated ones: we can
@@ -939,16 +938,9 @@ class FisherMatrix:
                 left_wf = self.wf_generator(aligned_params)  # Based on true_params
                 right_wf = self.wf_generator(bf_params)
                 for i in range(opt_fisher.nparams):
-                    # right_wf = right_wf + derivs[i] * (-fisher_bias + opt_bias)[i].reshape(-1)[0]
-                    # right_wf = right_wf + apply_time_phase_shift(derivs[i], true_params['time'] - aligned_params['time'], true_params['phase'] - aligned_params['phase']) * (-fisher_bias + opt_bias)[i].reshape(-1)[0]
-                    # left_wf = left_wf + derivs[i] * (fisher_bias - opt_bias)[i].reshape(-1)[0]
-                    # left_wf = left_wf + apply_time_phase_shift(derivs[i], true_params['time'] - aligned_params['time'], true_params['phase'] - aligned_params['phase']) * (fisher_bias - opt_bias)[i].reshape(-1)[0]
-                    # right_wf = right_wf + apply_time_phase_shift(derivs[i], -opt_vals['time'], -opt_vals['phase']) * (-fisher_bias + opt_bias)[i].reshape(-1)[0]
-                    # -- Ah, here no time and phase shift applied. Deriv in overline{theta'} is better approx of the one in theta_bf than deriv in theta'
-                    # -- -> huh, but with alignment on, we have derivs evaluated in overline{theta'} already... So no need for application
                     param = opt_fisher.params_to_vary[i]
                     right_wf = right_wf + derivs[i] * (aligned_params[param] - bf_params[param])
-
+                    # left_wf = left_wf + derivs[i] * (bf_params[param] - aligned_params[param])
                     # -- Adding to left_wf tends to have lower estimates...
                     # -- But this does not tell us if it is "more correct"
             else:
@@ -998,6 +990,7 @@ class FisherMatrix:
                 if len(opt_params) == 2 and 'time' in opt_params and 'phase' in opt_params:
                     # -- We need deriv in non-aligned point
                     right_wf = apply_time_phase_shift(right_wf, -time_shift, -phase_shift)
+                    # right_wf = right_wf + self.wf_generator(bf_params)
                 else:
                     logger.info(
                         'Cannot reconstruct non-aligned point for this choice '
@@ -1006,7 +999,29 @@ class FisherMatrix:
                     )
                     # TODO: mention derivative in particular (?)
 
+                    # -- Trying same things as above, add deriv to other side
+                    # left_wf = left_wf + right_wf
+                    # right_wf = self.wf_generator(bf_params)
+
                 right_wf = right_wf + self.wf_generator(bf_params)
+
+
+                # -- New idea: optimization in both points should yield
+                # -- very similar results, no need to re-do it
+                # right_wf = self.wf_generator(bf_params)
+                right_wf = 0.
+                theta_overline_tr = true_params.copy()
+                for i in range(opt_fisher.nparams):
+                    param = opt_fisher.params_to_vary[i]
+                    theta_overline_tr[param] = true_params[param] + (opt_bias[i].reshape(-1)[0])
+                    right_wf = right_wf + derivs[i] * (theta_overline_tr[param] - bf_params[param])
+                if len(opt_params) == 2 and 'time' in opt_params and 'phase' in opt_params:
+                    # -- We need deriv in non-aligned point
+                    right_wf = apply_time_phase_shift(right_wf, -time_shift, -phase_shift)
+                right_wf = right_wf + self.wf_generator(bf_params)
+                left_wf = self.wf_generator(theta_overline_tr)
+
+                # THIS SEEMS TO WORK PRETTY WELL!!! Tested for total mass bias when varying total mass + mass ratio (even when estimate goes bonkers, is still fine)
 
             optimization_info['lsa_mismatch'] = 1.0 - overlap(
                 left_wf,

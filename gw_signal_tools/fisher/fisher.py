@@ -580,7 +580,7 @@ class FisherMatrix:
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
         return_opt_info: bool = False,  # TODO: rename to "return_diagnostics"?
-        params_is_true_point: bool = False,
+        is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
@@ -636,7 +636,7 @@ class FisherMatrix:
         return_opt_info : bool, optional, default = False
             Whether to return information on the calculations along with
             result.
-        params_is_true_point : bool, optional, default = False
+        is_true_point : bool, optional, default = False
             Whether :code:``self.wf_params_at_point`` represents the
             "true", i.e. injected, parameters or not. Default is
             ``False``, which means the point is assumed to be the
@@ -890,13 +890,13 @@ class FisherMatrix:
         aligned_params = true_params.copy()
         # -- NOT opt_fisher.wf_params_at_point since this is potentially
         # -- point obtained from alignment.
-        if params_is_true_point:
+        if is_true_point:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
                 # -- Nothing to do for true_params, already has correct value
                 bf_params[param] = true_params[param] + fisher_bias[i].reshape(-1)[0]  # Clearer what happens
                 aligned_params[param] = true_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
-        elif not params_is_true_point:
+        elif not is_true_point:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
                 true_params[param] = bf_params[param] - fisher_bias[i].reshape(-1)[0]  # Clearer what happens
@@ -919,7 +919,7 @@ class FisherMatrix:
                 right_wf = self.wf_generator(bf_params)
                 for i in range(opt_fisher.nparams):
                     # -- Or is it also nicer to distinguish the two cases?
-                    if params_is_true_point:
+                    if is_true_point:
                         right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
                         # -- This here might be nice way to account for
                         # -- different derivative points
@@ -932,7 +932,7 @@ class FisherMatrix:
             # -- That was the simplest case. The next cases require a
             # -- distinction of which point the alignment was based on,
             # -- making things more complicated (thus two more cases).
-            elif params_is_true_point:
+            elif is_true_point:
                 # -- Easier case of the more complicated ones: we can
                 # -- use aligned theta_tr and the estimate for theta_bf.
                 left_wf = self.wf_generator(aligned_params)  # Based on true_params

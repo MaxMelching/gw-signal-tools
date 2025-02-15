@@ -10,6 +10,7 @@ from typing import Optional, Any, Literal, Callable
 import numpy as np
 import matplotlib as mpl
 from gwpy.frequencyseries import FrequencySeries
+from gwpy.types import Array
 import astropy.units as u
 
 # -- Local Package Imports
@@ -1210,27 +1211,10 @@ class FisherMatrix:
         return get_wf_generator(approximant, domain, *args, **kwargs)
 
     # -- Some Python class related goodies
-    def __repr__(self) -> str:
-        # return self.fisher.__repr__()
-        # TODO: make custom one with more information
-
-        from shutil import get_terminal_size
-
-        terminal_width = get_terminal_size()[0]
-
-        def get_name_header(name: str) -> str:
-            return f"{' ' + name + ' ':-^{terminal_width}}"
-
-        return f'''
-{get_name_header('Generation Parameters')}
-{self.params_to_vary.__repr__()}
-\n
-{get_name_header('Fisher Matrix')}
-{self.fisher.__repr__()}
-\n
-{get_name_header('Fisher Matrix Inverse')}
-{self.fisher_inverse.__repr__()}
-        '''
+    _print_slots = ('params_to_vary', )#'point', )#'is_projected', )
+    _repr_helper = Array._repr_helper
+    __repr__ = Array.__repr__
+    __str__ = Array.__str__
 
     def __copy__(self) -> FisherMatrix:
         new_matrix = FisherMatrix(

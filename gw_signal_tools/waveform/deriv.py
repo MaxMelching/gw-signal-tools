@@ -13,9 +13,7 @@ import matplotlib as mpl
 # -- Local Package Imports
 from ..logging import logger
 from .inner_product import norm, inner_product, param_bounds
-from .nd_deriv import (
-    WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
-)
+from .nd_deriv import WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
 from ..types import WFGen
 
 
@@ -27,7 +25,7 @@ Module for the ``WaveformDerivative`` and
 __all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')
 
 
-class WaveformDerivative():
+class WaveformDerivative:
     r"""
     Constructor class for numerical derivative of waveforms. This class
     allows to choose between different implementations by passing the
@@ -38,7 +36,7 @@ class WaveformDerivative():
     ----------
     deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase']
         Available routines.
-    
+
     Returns
     -------
     Instance of requested class.
@@ -55,7 +53,7 @@ class WaveformDerivative():
         frequencies where convergence is slower, making it potentially
         more reliable than the previous routine. However, this also
         requires more waveform calls, making the calculation slower.
-        
+
         - 'amplitude_phase': may be beneficial for accuracy in case
         strain oscillates fast and thus has steep derivative. Then,
         looking at amplitude and phase separately should yield much more
@@ -66,6 +64,7 @@ class WaveformDerivative():
         worth a try. Moreover, this issue depends on whether waveform
         caching is activated or not.
     """
+
     def __new__(cls, *args, **kw_args):
         deriv_routine = kw_args.pop('deriv_routine', 'gw_signal_tools')
 
@@ -80,7 +79,7 @@ class WaveformDerivative():
                 raise ValueError(f"Invalid deriv_routine '{deriv_routine}'.")
 
 
-class WaveformDerivativeGWSignaltools():
+class WaveformDerivativeGWSignaltools:
     r"""
     Calculate the derivative of an arbitrary waveform with respect to
     an arbitrary input parameter in frequency domain, using a selection
@@ -103,7 +102,7 @@ class WaveformDerivativeGWSignaltools():
         Parameter with respect to which the derivative is taken. Must be
         a key in :code:`point` or one of :code:`'time'`,
         :code:`'phase'`.
-        
+
         For time and phase shifts, analytical derivatives are applied.
         This is possible because they contribute only to a factor
         :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`
@@ -187,7 +186,7 @@ class WaveformDerivativeGWSignaltools():
         If an invalid value for convergence_check is provided.
     AssertionError
         If an invalid :code:`params_to_vary` is provided.
-    
+
     See Also
     --------
     gw_signal_tools.inner_product.norm :
@@ -200,6 +199,7 @@ class WaveformDerivativeGWSignaltools():
     lengths that change when waveforms for multiple parameter values are
     generated. In that case, the required operations are not possible.
     """
+
     def __init__(
         self,
         point: dict[str, u.Quantity],
@@ -214,27 +214,29 @@ class WaveformDerivativeGWSignaltools():
         double_convergence: bool = True,  # Whether to demand double convergence or not
         deriv_formula: str = 'five_point',
         # return_info: bool = False,
-        **inner_prod_kwargs
+        **inner_prod_kwargs,
     ) -> None:
         self.point = point
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
 
         if step_sizes is None:
-            self.step_sizes = np.reshape(np.outer([start_step_size/10**i for i in range(5)], [5, 1]), -1)[1:]
+            self.step_sizes = np.reshape(
+                np.outer([start_step_size / 10**i for i in range(5)], [5, 1]), -1
+            )[1:]
             # Indexing makes sure we do not start at 5*start_step_size
         else:
             if isinstance(step_sizes, float):
                 step_sizes = [step_sizes]
-            
+
             if len(step_sizes) == 1:
                 self.max_refine_numb = max_refine_numb = 1
 
             self.step_sizes = step_sizes
-        
+
         self.convergence_check = convergence_check
         self.convergence_threshold = convergence_threshold
-        
+
         self.break_upon_convergence = break_upon_convergence
         self.double_convergence = double_convergence
 
@@ -256,7 +258,7 @@ class WaveformDerivativeGWSignaltools():
         :type: `dict[str, ~astropy.units.Quantity]`
         """
         return self._point
-    
+
     @point.setter
     def point(self, point: dict[str, u.Quantity]) -> None:
         self._point = point
@@ -278,10 +280,10 @@ class WaveformDerivativeGWSignaltools():
         :type: `str`
         """
         return self._param_to_vary
-    
+
     @param_to_vary.setter
     def param_to_vary(self, param: str):
-        if (param != 'time' and param != 'phase'):
+        if param != 'time' and param != 'phase':
             # TODO: could also add distance here. Has analytical
             # derivative too, so strictly speaking it is not required
             # to be in point
@@ -301,7 +303,7 @@ class WaveformDerivativeGWSignaltools():
         :type: `~gw_signal_tools.types.WFGen`
         """
         return self._wf_generator
-    
+
     @wf_generator.setter
     def wf_generator(self, generator: WFGen) -> None:
         self._wf_generator = generator
@@ -310,14 +312,14 @@ class WaveformDerivativeGWSignaltools():
         if hasattr(self, '_deriv'):
             # -- Derivative that was calculated is not valid anymore
             del self._deriv
-    
+
     # @property
     # def step_size(self):
     #     return self._step_size
     # @property
     # def step_sizes(self):
     #     return self._step_size_collection[-1]
-    
+
     # @step_sizes.setter
     # def step_sizes(self, steps):
     #     # -- Make sure _step_size_collection is already defined
@@ -325,42 +327,40 @@ class WaveformDerivativeGWSignaltools():
     #         self._step_size_collection
     #     except AttributeError:
     #         self._step_size_collection = []
-        
+
     #     self._step_size_collection += steps
     #     # TODO: do we have to make sure it is list that we append here?
 
     @property
     def step_sizes(self) -> dict[int, list[int]]:
         return self._step_sizes
-    
+
     @step_sizes.setter
     def step_sizes(self, step_sizes: list[int]):
         self._step_sizes = step_sizes
-    
+
     @property
     def convergence_check(self) -> str:
         return self._convergence_check
-    
+
     @convergence_check.setter
     def convergence_check(self, convergence_check: Optional[str]) -> None:
         if convergence_check is None:
             convergence_check = 'diff_norm'
         else:
             if convergence_check not in ['mismatch', 'diff_norm']:
-                raise ValueError(
-                        'Invalid value for `convergence_check`.'
-                    )
-        
+                raise ValueError('Invalid value for `convergence_check`.')
+
         self._convergence_check = convergence_check
 
         if hasattr(self, '_deriv'):
             # -- Derivative that was calculated is not valid anymore
             del self._deriv
-    
+
     @property
     def convergence_threshold(self) -> float:
         return self._convergence_threshold
-    
+
     @convergence_threshold.setter
     def convergence_threshold(self, convergence_threshold: Optional[float]) -> None:
         if convergence_threshold is None:
@@ -369,7 +369,7 @@ class WaveformDerivativeGWSignaltools():
                     convergence_threshold = 0.001
                 case 'mismatch':
                     convergence_threshold = 0.001
-        
+
         self._convergence_threshold = convergence_threshold
 
         if hasattr(self, '_deriv'):
@@ -379,7 +379,7 @@ class WaveformDerivativeGWSignaltools():
     @property
     def max_refine_numb(self) -> int:
         return self._max_refine_numb
-    
+
     @max_refine_numb.setter
     def max_refine_numb(self, num: int) -> None:
         self._max_refine_numb = int(num)
@@ -387,7 +387,7 @@ class WaveformDerivativeGWSignaltools():
         if hasattr(self, '_deriv'):
             # -- Derivative that was calculated is not valid anymore
             del self._deriv
-    
+
     # -- Internally used properties
     @property
     def param_center_val(self):
@@ -398,11 +398,12 @@ class WaveformDerivativeGWSignaltools():
         :type: `~astropy.units.Quantity`
         """
         return self.point[self.param_to_vary]
+
     # TODO: is this required? -> yup, fairly frequently accessed
 
     # @property
     # def wf(self) -> FrequencySeries:
-        # return self.wf_generator(self.point)
+    # return self.wf_generator(self.point)
     # But then we would loose advantage of storing it, right?
     # -> even cached_property would not be useful
     # -> maybe out own custom cacher would help here. But not used for now
@@ -414,7 +415,7 @@ class WaveformDerivativeGWSignaltools():
         :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
         """
         return self._wf
-    
+
     @wf.setter
     def wf(self, wf: FrequencySeries | TimeSeries) -> None:
         self._wf = wf
@@ -431,44 +432,44 @@ class WaveformDerivativeGWSignaltools():
             # -- sure that all relevant settings remained the same in
             # -- the corresponding setters, otherwise _deriv deleted
             return self._deriv
-        
+
         # -- Check if parameter has analytical derivative
         if self.param_to_vary == 'time':
-            deriv = self.wf * (-1.j * 2. * np.pi * self.wf.frequencies)
+            deriv = self.wf * (-1.0j * 2.0 * np.pi * self.wf.frequencies)
 
-            derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
+            derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
             self.deriv_info = {
                 'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
+                'description': 'This derivative is exact.',
             }
             return deriv
         elif self.param_to_vary == 'phase':
-            deriv = self.wf * 1.j / u.rad
-            
-            derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
+            deriv = self.wf * 1.0j / u.rad
+
+            derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
             self.deriv_info = {
                 'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
+                'description': 'This derivative is exact.',
             }
             return deriv
         elif self.param_to_vary == 'distance':
-            deriv = (-1./self.point['distance']) * self.wf
+            deriv = (-1.0 / self.point['distance']) * self.wf
 
-            derivative_norm = norm(deriv, **self.inner_prod_kwargs)**2
+            derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
             self.deriv_info = {
                 'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.'
+                'description': 'This derivative is exact.',
             }
             return deriv
-        
+
         # TODO: automatically adjust deriv_formula here if needed
         # -> of course with logger.info output
 
         # -- Test for valid point
-        self.test_point(0.)
+        self.test_point(0.0)
 
         self.is_converged = False
         self.refine_numb = 0
@@ -481,13 +482,13 @@ class WaveformDerivativeGWSignaltools():
             # TODO: then maybe we should reset the step sizes as well?
 
             self._iterate_through_step_sizes()
-            
+
             # Check if step sizes shall be refined. This is be done if no breaking
             # upon convergence is wanted or if no convergence was reached yet
             if not self.break_upon_convergence or not self.is_converged:
                 # TODO: remove break_upon_convergence and just handle that via convergence_threshold?
                 # I.e. set to 0.0 if no breaking wanted
-                
+
                 if np.all(np.equal(self._convergence_vals, np.inf)):
                     # Only invalid step sizes for this parameter, we
                     # have to decrease further
@@ -531,19 +532,19 @@ class WaveformDerivativeGWSignaltools():
             # TODO: rewrite this text. Also make sure that self._convergence_vals etc are all defined
             # -> maybe make them properties and there we check this, set them
             #    otherwise?
-        
+
         self.deriv_info = {
             'norm_squared': self._deriv_norms[self.min_dev_index],
             'final_step_size': self.step_sizes[self.min_dev_index],
             'final_convergence_val': self._convergence_vals[self.min_dev_index],
             'number_of_refinements': self.refine_numb,
             'final_set_of_step_sizes': self.step_sizes,
-            'deriv_formula': self.deriv_formula
+            'deriv_formula': self.deriv_formula,
         }
-        
+
         self._deriv = self._derivative_vals[self.min_dev_index]
-        return self._deriv    
-    
+        return self._deriv
+
     def _check_converged(self):
         """
         Check if derivative has converged, according to the selected
@@ -551,20 +552,21 @@ class WaveformDerivativeGWSignaltools():
         convergence checker must be below `self.convergence_threshold`).
         """
         if self.double_convergence:
-            if (len(self._convergence_vals) >= 2
+            if (
+                len(self._convergence_vals) >= 2
                 and (self._convergence_vals[-1] <= self.convergence_threshold)
-                and (self._convergence_vals[-2] <= self.convergence_threshold)):
+                and (self._convergence_vals[-2] <= self.convergence_threshold)
+            ):
                 # Double checking is more robust
                 self.is_converged = True  # Remains true, is never set to False again
         else:
-            if (self._convergence_vals[-1] <= self.convergence_threshold):
+            if self._convergence_vals[-1] <= self.convergence_threshold:
                 self.is_converged = True  # Remains true, is never set to False again
                 # We use five-point stencil, which converges fast, so
                 # that it is justified to interpret two consecutive
                 # results being very similar as convergence
                 # -> testing revealed that double_convergence leads to more
                 #    consistent results, thus we leave for now
-
 
     def _update_step_sizes(self):
         """
@@ -585,14 +587,11 @@ class WaveformDerivativeGWSignaltools():
         else:
             # Refine in same way that we do with start_step_size
             self.step_sizes = np.reshape(
-                np.outer(
-                    [current_best_step/10**i for i in range(4)],
-                    [5, 1]
-                ),
-                -1
-            )[1:]  # Indexing makes sure we do not start at 5*start_step_size
+                np.outer([current_best_step / 10**i for i in range(4)], [5, 1]), -1
+            )[
+                1:
+            ]  # Indexing makes sure we do not start at 5*start_step_size
 
-    
     def _iterate_through_step_sizes(self):
         """
         Calculate derivatives for current `self.step_sizes`, checking
@@ -623,7 +622,7 @@ class WaveformDerivativeGWSignaltools():
                 else:
                     raise ValueError(err_msg)
 
-            derivative_norm = norm(deriv_param, **self.inner_prod_kwargs)**2
+            derivative_norm = norm(deriv_param, **self.inner_prod_kwargs) ** 2
 
             self._derivative_vals += [deriv_param]
             self._deriv_norms += [derivative_norm]
@@ -646,33 +645,34 @@ class WaveformDerivativeGWSignaltools():
                 case 'diff_norm':
                     crit_val = norm(
                         self._derivative_vals[-1] - self._derivative_vals[-2],
-                        **self.inner_prod_kwargs
+                        **self.inner_prod_kwargs,
                     ) / np.sqrt(self._deriv_norms[-1])
                 case 'mismatch':
                     # Compute mismatch, using that we already know norms
-                    crit_val = 1. - inner_product(
+                    crit_val = 1.0 - inner_product(
                         self._derivative_vals[-1],
                         self._derivative_vals[-2],
-                        **self.inner_prod_kwargs
+                        **self.inner_prod_kwargs,
                     ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
         else:
             crit_val = np.inf
-        
+
         self._convergence_vals += [crit_val]
-            
-    
+
     # Idea: this is what we call and what actually returns the derivative
     # TODO: maybe we can create fancy __call__ logic? Where params_at_point are passed?
     # -> could make this optional argument in __init__ then? Nah, this
-    # is not possible. 
-    def __call__(self, new_point: Optional[dict[str, u.Quantity]] = None) -> FrequencySeries | TimeSeries:
+    # is not possible.
+    def __call__(
+        self, new_point: Optional[dict[str, u.Quantity]] = None
+    ) -> FrequencySeries | TimeSeries:
         if new_point is not None:
             if isinstance(new_point, u.Quantity):
                 self.point[self.param_to_vary] = new_point
             else:
-                self.point[self.param_to_vary] = new_point*self.param_center_val.unit
+                self.point[self.param_to_vary] = new_point * self.param_center_val.unit
         return self.deriv
-    
+
     _param_bound_storage = param_bounds.copy()
     param_bounds = WaveformDerivativeNumdifftools.param_bounds
 
@@ -696,16 +696,18 @@ class WaveformDerivativeGWSignaltools():
 
         default_bounds = (-np.inf, np.inf)
         lower_bound, upper_bound = self._param_bound_storage.get(
-            self.param_to_vary, default_bounds)
+            self.param_to_vary, default_bounds
+        )
         if self.param_to_vary == 'mass_ratio':
             # -- Depending on chosen convention, bounds might have to be corrected
             if self.param_center_val > 1:
                 lower_bound, upper_bound = self._param_bound_storage.get(
-                    self.param_to_vary, default_bounds)
-        
+                    self.param_to_vary, default_bounds
+                )
+
         lower_violation = self._lower_point_checker(step_size, lower_bound)
         upper_violation = self._upper_point_checker(step_size, upper_bound)
-        
+
         if lower_violation and upper_violation:
             # -- Step size simply too large, no need to change
             # -- deriv_routine here, we just wait for next iteration
@@ -714,19 +716,21 @@ class WaveformDerivativeGWSignaltools():
             self.deriv_formula = 'forward'
         elif not lower_violation and upper_violation:
             self.deriv_formula = 'backward'
-    
+
     def _lower_point_checker(self, step_size: float, boundary: float) -> bool:
         # TODO: maybe use value of step size here?
         if self.deriv_formula == 'five_point':
-            return ((self.param_center_val - 2.*step_size <= boundary)
-                    or (self.param_center_val - step_size <= boundary))
+            return (self.param_center_val - 2.0 * step_size <= boundary) or (
+                self.param_center_val - step_size <= boundary
+            )
         else:
             return self.param_center_val - step_size <= boundary
 
     def _upper_point_checker(self, step_size: float, boundary: float) -> bool:
         if self.deriv_formula == 'five_point':
-            return ((self.param_center_val + 2.*step_size >= boundary)
-                    or (self.param_center_val + step_size >= boundary))
+            return (self.param_center_val + 2.0 * step_size >= boundary) or (
+                self.param_center_val + step_size >= boundary
+            )
         else:
             return self.param_center_val + step_size >= boundary
 
@@ -738,7 +742,7 @@ class WaveformDerivativeGWSignaltools():
         :type: `str`
         """
         return self._deriv_formula
-    
+
     @deriv_formula.setter
     def deriv_formula(self, formula: str) -> None:
         # -- Check for valid formula, then set it
@@ -758,7 +762,7 @@ class WaveformDerivativeGWSignaltools():
         if hasattr(self, '_deriv'):
             # -- Derivative that was calculated is not valid anymore
             del self._deriv
-    
+
     def deriv_routine(self, *args, **kw_args):
         """Caller that allows access to currently set derivative formula."""
         # return self.__getattribute__(self.deriv_formula)(self, *args, **kw_args)
@@ -774,14 +778,15 @@ class WaveformDerivativeGWSignaltools():
         `self.point`).
         """
         if np.log10(self.param_center_val.value) < 1:
-            step_size = np.abs(u.Quantity(step_size,
-                                          unit=self.param_center_val.unit))
+            step_size = np.abs(u.Quantity(step_size, unit=self.param_center_val.unit))
         else:
-            step_size = np.abs(u.Quantity(step_size * self.param_center_val,
-                                          unit=self.param_center_val.unit))
-        
-        return step_size
+            step_size = np.abs(
+                u.Quantity(
+                    step_size * self.param_center_val, unit=self.param_center_val.unit
+                )
+            )
 
+        return step_size
 
     # TODO: check again if this implementation is really most efficient.
     # Something like "return (wf2 - wf1) / step_size" seems like nice option too
@@ -793,15 +798,15 @@ class WaveformDerivativeGWSignaltools():
         given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        wf_p1 = self.wf_generator(self.point | {
-            self.param_to_vary: self.param_center_val + step_size
-        })
+        wf_p1 = self.wf_generator(
+            self.point | {self.param_to_vary: self.param_center_val + step_size}
+        )
 
         deriv_series = wf_p1 - self.wf
         deriv_series /= step_size
 
         return deriv_series
-    
+
     def backward(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the backward difference of `self.wf_generator` at
@@ -809,15 +814,15 @@ class WaveformDerivativeGWSignaltools():
         given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        wf_m1 = self.wf_generator(self.point | {
-            self.param_to_vary: self.param_center_val - step_size
-        })
+        wf_m1 = self.wf_generator(
+            self.point | {self.param_to_vary: self.param_center_val - step_size}
+        )
 
         deriv_series = self.wf - wf_m1
         deriv_series /= step_size
 
         return deriv_series
-    
+
     def central(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the central difference of `self.wf_generator` at
@@ -825,19 +830,18 @@ class WaveformDerivativeGWSignaltools():
         given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        param_vals = self.param_center_val + np.array([-1., 1.])*step_size
+        param_vals = self.param_center_val + np.array([-1.0, 1.0]) * step_size
 
         waveforms = [
-            self.wf_generator(
-                self.point | {self.param_to_vary: param_val}
-            ) for param_val in param_vals
+            self.wf_generator(self.point | {self.param_to_vary: param_val})
+            for param_val in param_vals
         ]
 
         deriv_series = waveforms[1] - waveforms[0]
-        deriv_series /= 2.*step_size
+        deriv_series /= 2.0 * step_size
 
         return deriv_series
-    
+
     def five_point(self, step_size: float) -> FrequencySeries | TimeSeries:
         """
         Calculates the five point stencil of `self.wf_generator` at
@@ -845,20 +849,21 @@ class WaveformDerivativeGWSignaltools():
         given `step_size`.
         """
         step_size = self.abs_or_rel_step_size(step_size)
-        param_vals = self.param_center_val + np.array([-2., -1., 1., 2.])*step_size
+        param_vals = (
+            self.param_center_val + np.array([-2.0, -1.0, 1.0, 2.0]) * step_size
+        )
 
         waveforms = [
-            self.wf_generator(
-                self.point | {self.param_to_vary: param_val}
-            ) for param_val in param_vals
+            self.wf_generator(self.point | {self.param_to_vary: param_val})
+            for param_val in param_vals
         ]
 
-        deriv_series = (waveforms[0] - 8.*waveforms[1]
-                        + 8.*waveforms[2] - waveforms[3])
-        deriv_series /= 12.*step_size
+        deriv_series = (
+            waveforms[0] - 8.0 * waveforms[1] + 8.0 * waveforms[2] - waveforms[3]
+        )
+        deriv_series /= 12.0 * step_size
 
         return deriv_series
-
 
     # -- Information related properties
     @property
@@ -869,15 +874,15 @@ class WaveformDerivativeGWSignaltools():
         as a class attribute.
         """
         return self._deriv_info
-    
+
     @deriv_info.setter
     def deriv_info(self, info: dict[str, Any]):
         for key, val in info.items():
             # -- Make each key from deriv_info available as attribute
             setattr(self, key, val)
-        
+
         self._deriv_info = info
-    
+
     def convergence_plot(self) -> mpl.axes.Axes:
         """
         Plot estimates for the different step sizes that have been
@@ -894,31 +899,25 @@ class WaveformDerivativeGWSignaltools():
             If no derivates have been calculated.
         """
         from ..plotting import latexparams
+
         # -- Note: importing here is nice because then, custom additions
         # -- will not cause an error
 
         if len(self._derivative_vals) == 0:
-            raise RuntimeError('No derivative was calculated. '
-                               'Cannot generate plot.')
+            raise RuntimeError('No derivative was calculated. ' 'Cannot generate plot.')
 
         fig = plt.figure()
         ax = fig.subplots(nrows=2, sharex=True)
 
         for i, deriv_val in enumerate(self._derivative_vals):
-            ax[0].plot(
-                deriv_val.real,
-                '--',
-                label=f'{self.step_sizes[i]:.3e}'
-            )
+            ax[0].plot(deriv_val.real, '--', label=f'{self.step_sizes[i]:.3e}')
             ax[1].plot(deriv_val.imag, '--')
 
-        fig.legend(
-            title='Step Sizes',
-            bbox_to_anchor=(0.96, 0.5),
-            loc='center left'
+        fig.legend(title='Step Sizes', bbox_to_anchor=(0.96, 0.5), loc='center left')
+
+        fig.suptitle(
+            f'Parameter: {latexparams.get(self.param_to_vary, self.param_to_vary)}'
         )
-        
-        fig.suptitle(f'Parameter: {latexparams.get(self.param_to_vary, self.param_to_vary)}')
         if isinstance(deriv_val, TimeSeries):
             ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
         elif isinstance(deriv_val, FrequencySeries):

@@ -822,7 +822,7 @@ class FisherMatrix:
             # -- already incorporated here
         ]
 
-        vector = MatrixWithUnits.from_numpy_array(np.zeros((opt_fisher.nparams, 1)))
+        vector = MatrixWithUnits(np.zeros((opt_fisher.nparams, 1)))
         for i, deriv in enumerate(derivs):
             vector[i] = inner_product(delta_h, deriv, **inner_prod_kwargs)
         optimization_info['deriv_vector'] = vector

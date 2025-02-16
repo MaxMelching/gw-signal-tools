@@ -1,12 +1,10 @@
 # ----- Standard Lib Imports -----
 import warnings
-from typing import Optional, Any, Literal, Callable
+from typing import Optional, Any, Literal
 
 # ----- Third Party Imports -----
 import numpy as np
-import matplotlib.pyplot as plt
 from gwpy.types import Series
-from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # ----- Local Package Imports -----
@@ -19,7 +17,7 @@ from ..waveform import (
     WaveformDerivativeNumdifftools,
     WaveformDerivativeAmplitudePhase,
 )
-from ..types import MatrixWithUnits
+from ..types import MatrixWithUnits, FDWFGen
 from ..test_utils import allclose_quantity
 
 
@@ -98,7 +96,7 @@ def num_diff(  # TODO: move this to deriv file?
 def fisher_matrix(
     point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    wf_generator: FDWFGen,
     deriv_routine: Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'],
     return_info: bool = False,
     **deriv_and_inner_prod_kwargs,
@@ -131,7 +129,7 @@ def fisher_matrix(
         distance :math:`D_L`, which enters in waveforms only as an
         amplitude factor :math:`1/D_L`. Note that can only be done
         if the parameter recognized, i.e. if it is called `'distance'`.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in

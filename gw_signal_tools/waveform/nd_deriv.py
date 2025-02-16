@@ -5,11 +5,10 @@ from typing import Callable, Any
 import numdifftools as nd
 import astropy.units as u
 import numpy as np
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
 
 # -- Local Package Imports
 from .inner_product import param_bounds
+from ..types import WFGen
 
 
 __doc__ = """
@@ -55,7 +54,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         distance :math:`D_L`, which enters in waveforms only as an
         amplitude factor :math:`1/D_L`. Note that can only be done
         if the parameter recognized, i.e. if it is called `'distance'`.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
@@ -92,7 +91,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         self,
         point: dict[str, u.Quantity],
         param_to_vary: str,
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
+        wf_generator: WFGen,
         *args,
         **kwds
     ) -> None:
@@ -302,11 +301,11 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         return self._param_center_val
     
     @property
-    def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]:
+    def wf_generator(self) -> WFGen:
         """
         Generator for waveform model that is differentiated.
 
-        :type: `Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries | ~gwpy.timeseries.TimeSeries]`
+        :type: `~gw_signal_tools.types.WFGen`
         """
         return self._wf_generator
     
@@ -414,7 +413,7 @@ class WaveformDerivativeAmplitudePhase():
         distance :math:`D_L`, which enters in waveforms only as an
         amplitude factor :math:`1/D_L`. Note that can only be done
         if the parameter recognized, i.e. if it is called `'distance'`.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
@@ -452,7 +451,7 @@ class WaveformDerivativeAmplitudePhase():
         self,
         point: dict[str, u.Quantity],
         param_to_vary: str,
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
+        wf_generator: WFGen,
         *args,
         **kwds
     ) -> None:

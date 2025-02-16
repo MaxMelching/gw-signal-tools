@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 # from functools import cached_property  # TODO: use for some stuff?
-from typing import Callable, Optional, Literal, Any
+from typing import Optional, Literal, Any
 
 # -- Third Party Imports
 import numpy as np
@@ -16,6 +16,7 @@ from .inner_product import norm, inner_product, param_bounds
 from .nd_deriv import (
     WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
 )
+from ..types import WFGen
 
 
 __doc__ = """
@@ -116,7 +117,7 @@ class WaveformDerivativeGWSignaltools():
         distance :math:`D_L`, which enters in waveforms only as an
         amplitude factor :math:`1/D_L`. Note that can only be done
         if the parameter recognized, i.e. if it is called `'distance'`.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
@@ -203,7 +204,7 @@ class WaveformDerivativeGWSignaltools():
         self,
         point: dict[str, u.Quantity],
         param_to_vary: str,
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries],
+        wf_generator: WFGen,
         step_sizes: Optional[list[float] | np.ndarray] = None,
         start_step_size: Optional[float] = 1e-2,
         convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
@@ -297,12 +298,12 @@ class WaveformDerivativeGWSignaltools():
         """
         Generator for waveform model that is differentiated.
 
-        :type: `Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries | ~gwpy.timeseries.TimeSeries]`
+        :type: `~gw_signal_tools.types.WFGen`
         """
         return self._wf_generator
     
     @wf_generator.setter
-    def wf_generator(self, generator: Callable[[dict[str, u.Quantity]], FrequencySeries | TimeSeries]) -> None:
+    def wf_generator(self, generator: WFGen) -> None:
         self._wf_generator = generator
         self.wf = generator(self.point)
 

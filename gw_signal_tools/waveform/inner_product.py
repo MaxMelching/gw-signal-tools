@@ -19,6 +19,7 @@ from .utils import (
 from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
 from ._error_helpers import _q_convert, _compare_series, _assert_ft_compatible
+from ..types import FDWFGen
 
 
 __doc__ = """
@@ -720,7 +721,7 @@ def overlap(
 # TODO: put this into waveform_utils?
 def test_hm(
     wf_params: dict[str, u.Quantity],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries]
+    wf_generator: FDWFGen
 ) -> bool:
     """
     Perform test whether or not higher modes are relevant for the chosen
@@ -735,7 +736,7 @@ def test_hm(
     ----------
     wf_params : dict[str, ~astropy.units.Quantity]
         Point in parameter space that waveform is generated at.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Routine to generate waveforms.
 
     Returns
@@ -830,7 +831,7 @@ param_bounds: dict[str, tuple[float, float]] = {
 
 def get_default_opt_params(
     wf_params: dict[str, u.Quantity],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries]
+    wf_generator: FDWFGen
 ) -> list[str]:
     """
     Determine external parameters to optimize over for the given
@@ -843,7 +844,7 @@ def get_default_opt_params(
     ----------
     wf_params : dict[str, ~astropy.units.Quantity]
         Point in parameter space that waveform is generated at.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Routine to generate waveforms.
 
     Returns
@@ -866,8 +867,8 @@ def get_default_opt_params(
 
 def optimize_overlap(
     wf_params: dict[str, u.Quantity],
-    fixed_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
-    vary_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    fixed_wf_generator: FDWFGen,
+    vary_wf_generator: FDWFGen,
     opt_params: Optional[str | list[str]] = None,
     **inner_prod_kwargs
 ) -> tuple[FrequencySeries, FrequencySeries, dict[str, u.Quantity]]:
@@ -889,10 +890,10 @@ def optimize_overlap(
     wf_params : dict[str, ~astropy.units.Quantity]
         Set of parameters, some of which will be fixed while others are
         varied.
-    fixed_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    fixed_wf_generator : ~gw_signal_tools.types.FDWFGen
         Waveform generator for the first waveform that is fixed, i.e. it
         is only generated once.
-    vary_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    vary_wf_generator : ~gw_signal_tools.types.FDWFGen
         Waveform generator for which the parameters will be varied, i.e.
         it will be called many times.
     opt_params : Optional[str | list[str]], optional, default = None

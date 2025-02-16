@@ -27,7 +27,7 @@ from ..waveform import (
     time_phase_wrapper,
     apply_time_phase_shift,
 )
-from ..types import MatrixWithUnits
+from ..types import MatrixWithUnits, FDWFGen
 from .fisher_utils import fisher_matrix
 
 
@@ -70,7 +70,7 @@ class FisherMatrix:
         distance :math:`D_L`, which enters in waveforms only as an
         amplitude factor :math:`1/D_L`. Note that can only be done
         if the parameter recognized, i.e. if it is called `'distance'`.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Arbitrary function that is used for waveform generation. The
         required signature means that it has one non-optional argument,
         which is expected to accept the input provided in
@@ -135,7 +135,7 @@ class FisherMatrix:
         self,
         point: dict[str, u.Quantity],
         params_to_vary: str | list[str],
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        wf_generator: FDWFGen,
         direct_computation: bool = True,
         **metadata,
     ) -> None:
@@ -172,12 +172,12 @@ class FisherMatrix:
     #     self._point = wf_params
 
     @property
-    def wf_generator(self) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+    def wf_generator(self) -> FDWFGen:
         return self._wf_generator
 
     @wf_generator.setter
     def wf_generator(
-        self, wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]
+        self, wf_gen: FDWFGen
     ) -> None:
         self._wf_generator = time_phase_wrapper(wf_gen)
         # -- Note: at one point, I was concerned this would potentially
@@ -394,7 +394,7 @@ class FisherMatrix:
         new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
         new_wf_generator: Optional[
-            Callable[[dict[str, u.Quantity]], FrequencySeries]
+            FDWFGen
         ] = None,
         **new_metadata,
     ) -> FisherMatrix:
@@ -422,7 +422,7 @@ class FisherMatrix:
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
             suppported.
-        new_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        new_wf_generator : ~gw_signal_tools.types.FDWFGen
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
             argument, which is expected to accept the input provided in
@@ -576,7 +576,7 @@ class FisherMatrix:
 
     def systematic_error(
         self,
-        reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        reference_wf_generator: FDWFGen,
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
@@ -592,7 +592,7 @@ class FisherMatrix:
 
         Parameters
         ----------
-        reference_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        reference_wf_generator : ~gw_signal_tools.types.FDWFGen
             Waveform generator for "reference model" that the systematic
             error is computed with respect to. Must accept dictionary
             input like `self.point`.
@@ -1174,7 +1174,7 @@ class FisherMatrix:
         domain: Literal['frequency', 'time'] = 'frequency',
         *args,
         **kwargs,
-    ) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+    ) -> FDWFGen:
         """
         Generates a function that fulfils the requirements of the
         :code:`wf_generator` argument of a ``FisherMatrix`` by calling
@@ -1193,7 +1193,7 @@ class FisherMatrix:
 
         Returns
         -------
-        Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        ~gw_signal_tools.types.FDWFGen
             Function that takes dicionary of waveform parameters as
             input and produces a waveform (stored in a GWPy
             ``FrequencySeries``). Can, for example, be used as input

@@ -1,15 +1,15 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal, Callable
+from typing import Optional, Literal
 
 # -- Third Party Imports
 import numpy as np
 import astropy.units as u
 from gwpy.types import Series
-from gwpy.frequencyseries import FrequencySeries
 
 # -- Local Package Imports
 from ..fisher import FisherMatrix
 from ..waveform.inner_product import inner_product, norm, overlap
+from ..types import FDWFGen
 
 
 __doc__ = """
@@ -24,7 +24,7 @@ def distance(
     param_to_vary: str,
     param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    wf_generator: FDWFGen,
     param_step_size: Optional[u.Quantity | float] = None,
     distance_kind: Literal['diff_norm', 'mismatch_norm'] = 'diff_norm',
     **inner_prod_kwargs,
@@ -57,8 +57,7 @@ def distance(
         Waveform parameters specifying the point with respect to which
         the distances are calculated. Will be given as input to
         `wf_generator` and must contain the `param_to_vary` as key.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],
-    FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Function that takes dicionary of waveform parameters as input
         and produces a waveform (stored in a GWpy ``FrequencySeries``).
     param_step_size : ~astropy.units.Quantity | float, default = None
@@ -177,7 +176,7 @@ def linearized_distance(
     param_to_vary: str | list[str],
     param_vals: u.Quantity | float | list[u.Quantity | float],
     wf_params: dict[str, u.Quantity],
-    wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+    wf_generator: FDWFGen,
     params_to_project: Optional[list[str]] = None,
     param_step_size: Optional[u.Quantity] = None,
     **inner_prod_kwargs,
@@ -222,7 +221,7 @@ def linearized_distance(
         the distances are calculated. Will be given as input to
         :code:`wf_generator` and must contain :code:`param_to_vary` as
         a key.
-    wf_generator : Callable[[dict[str, ~astropy.units.Quantity]],FrequencySeries]
+    wf_generator : ~gw_signal_tools.types.FDWFGen
         Function that takes dicionary of waveform parameters as input
         and produces a waveform (stored in a GWpy ``FrequencySeries``).
     params_to_project : str | list[str], optional, default = None

@@ -442,3 +442,5 @@ class FisherMatrixNetwork(FisherMatrix):
         new_network._is_projected = self.is_projected
 
         return new_network
+
+    _print_slots = super()._print_slots + ('detectors',)

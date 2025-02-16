@@ -1210,7 +1210,7 @@ class FisherMatrix:
         return get_wf_generator(approximant, domain, *args, **kwargs)
 
     # -- Some Python class related goodies
-    _print_slots = ('params_to_vary', )#'point', )#'is_projected', )
+    _print_slots = ('params_to_vary', )#'point', )
     _repr_helper = Array._repr_helper
     __repr__ = Array.__repr__
     __str__ = Array.__str__

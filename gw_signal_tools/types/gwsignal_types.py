@@ -6,7 +6,11 @@ from gwpy.timeseries import TimeSeries
 
 __doc__ = """File for custom type definitions."""
 
-__all__ = ('FDWFGen', 'TDWFGen', 'WFGen', )
+__all__ = (
+    'FDWFGen',
+    'TDWFGen',
+    'WFGen',
+)
 
 
 # GWParams: TypeAlias = dict[str, u.Quantity]

@@ -11,7 +11,7 @@ representation of gravitational wave detectors, with all information
 needed by functions in `gw_signal_tools`.
 """
 
-__all__ = ('Detector', )
+__all__ = ('Detector',)
 
 
 class Detector:
@@ -38,41 +38,43 @@ class Detector:
         does not need to be given here (only relevant is `kw_args` is
         passed as a dictionary and not via keyword arguments).
     """
+
     def __init__(self, name: str, psd: FrequencySeries, **kw_args) -> None:
         """Initializa a ``Detector``."""
         self.name = name
         self.psd = psd
         # TODO: make default psd? No noise one?
         self.inner_prod_kwargs = kw_args
-    
+
     @property
     def name(self):
         """Name of the detector."""
         return self._name
-    
+
     @name.setter
     def name(self, name: str) -> None:
         assert isinstance(name, str), 'New `name` must be a string.'
         self._name = name
-    
+
     @name.deleter
     def name(self) -> None:
         try:
             del self._name
         except AttributeError:  # pragma: no cover
             pass
-    
+
     @property
     def psd(self):
         """Power spectral density (PSD) of the detector."""
         return self._psd
-    
+
     @psd.setter
     def psd(self, psd: FrequencySeries) -> None:
-        assert isinstance(psd, FrequencySeries), (
-            'New `psd` must be a GWpy ``FrequencySeries``.')
+        assert isinstance(
+            psd, FrequencySeries
+        ), 'New `psd` must be a GWpy ``FrequencySeries``.'
         self._psd = psd
-    
+
     @psd.deleter
     def psd(self) -> None:
         try:
@@ -86,7 +88,7 @@ class Detector:
         specifically for this detector.
         """
         return self._inner_prod_kwargs
-    
+
     @inner_prod_kwargs.setter
     def inner_prod_kwargs(self, kw_args: dict[str, Any]) -> None:
         self._inner_prod_kwargs = kw_args | {'psd': self.psd}
@@ -97,7 +99,7 @@ class Detector:
             del self._inner_prod_kwargs
         except AttributeError:  # pragma: no cover
             pass
-    
+
     def __repr__(self) -> str:
         # TODO: make better
         return 'Detector name: ' + self.name + '\nPSD description: ' + self.psd.name

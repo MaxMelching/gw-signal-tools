@@ -137,7 +137,7 @@ class FisherMatrixNetwork(FisherMatrix):
         if direct_computation:
             self._calc_fisher()
 
-    # -- Adding Network specific properties
+    # -- Adding Network specific properties -----------------------------------
     @property
     def detectors(self):
         """
@@ -169,7 +169,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 'from the list of detectors.'
             )
 
-    # -- Overwriting certain FisherMatrix properties
+    # -- Overwriting certain FisherMatrix properties --------------------------
     def __getattr__(self, name: str) -> Any:
         return super().__getattr__(name)
 
@@ -177,9 +177,7 @@ class FisherMatrixNetwork(FisherMatrix):
         self,
         new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
-        new_wf_generator: Optional[
-            FDWFGen
-        ] = None,
+        new_wf_generator: Optional[FDWFGen] = None,
         new_detectors: Optional[Detector | list[Detector]] = None,
         **new_metadata,
     ) -> FisherMatrixNetwork:

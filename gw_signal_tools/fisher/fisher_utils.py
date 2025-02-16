@@ -1,13 +1,13 @@
-# ----- Standard Lib Imports -----
+# -- Standard Lib Imports
 import warnings
 from typing import Optional, Any, Literal
 
-# ----- Third Party Imports -----
+# -- Third Party Imports
 import numpy as np
 from gwpy.types import Series
 import astropy.units as u
 
-# ----- Local Package Imports -----
+# -- Local Package Imports
 from ..logging import logger
 from ..waveform import (
     inner_product,

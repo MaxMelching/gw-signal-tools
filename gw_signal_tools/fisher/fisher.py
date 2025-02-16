@@ -176,9 +176,7 @@ class FisherMatrix:
         return self._wf_generator
 
     @wf_generator.setter
-    def wf_generator(
-        self, wf_gen: FDWFGen
-    ) -> None:
+    def wf_generator(self, wf_gen: FDWFGen) -> None:
         self._wf_generator = time_phase_wrapper(wf_gen)
         # -- Note: at one point, I was concerned this would potentially
         # -- mess with things like optimize_overlap, where we do not
@@ -393,9 +391,7 @@ class FisherMatrix:
         self,
         new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
-        new_wf_generator: Optional[
-            FDWFGen
-        ] = None,
+        new_wf_generator: Optional[FDWFGen] = None,
         **new_metadata,
     ) -> FisherMatrix:
         """
@@ -744,7 +740,7 @@ class FisherMatrix:
                 # -- produced though, so time and phase shift have to be
                 # -- allowed as parameters!
 
-                opt_fisher = self.copy()  # Preferred over update_attrs as it copies fisher
+                opt_fisher = self.copy()  # Preferred over update_attrs, copies fisher
                 opt_fisher.point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
@@ -762,8 +758,7 @@ class FisherMatrix:
                     )
             else:
                 opt_fisher = self.update_attrs(
-                    new_point=opt_wf_params,
-                    **inner_prod_kwargs
+                    new_point=opt_wf_params, **inner_prod_kwargs
                 )
 
             if optimize_fisher is not None:
@@ -861,7 +856,6 @@ class FisherMatrix:
 
             return fisher_bias
 
-
         # -- Some calculations for diagnostic purposes. We look at ------------
         # -- mismatches instead of waveform differences here for --------------
         # -- results that can be more readily interpreted. --------------------
@@ -894,14 +888,22 @@ class FisherMatrix:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
                 # -- Nothing to do for true_params, already has correct value
-                bf_params[param] = true_params[param] + fisher_bias[i].reshape(-1)[0]  # Clearer what happens
-                aligned_params[param] = true_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
+                bf_params[param] = (
+                    true_params[param] + fisher_bias[i].reshape(-1)[0]
+                )  # Clearer what happens
+                aligned_params[param] = true_params[param] + (
+                    opt_bias[i].reshape(-1)[0] if use_alignment else 0
+                )
         elif not is_true_point:
             for param in opt_fisher.params_to_vary:
                 i = opt_fisher.get_param_indices(param)
-                true_params[param] = bf_params[param] - fisher_bias[i].reshape(-1)[0]  # Clearer what happens
+                true_params[param] = (
+                    bf_params[param] - fisher_bias[i].reshape(-1)[0]
+                )  # Clearer what happens
                 # -- Nothing to do for bf_params, already has correct value
-                aligned_params[param] = bf_params[param] + (opt_bias[i].reshape(-1)[0] if use_alignment else 0)
+                aligned_params[param] = bf_params[param] + (
+                    opt_bias[i].reshape(-1)[0] if use_alignment else 0
+                )
         else:
             raise ValueError('Invalid value for `params_is_true_point`.')
 
@@ -920,7 +922,9 @@ class FisherMatrix:
                 for i in range(opt_fisher.nparams):
                     # -- Or is it also nicer to distinguish the two cases?
                     if is_true_point:
-                        right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
+                        right_wf = right_wf + derivs[i] * (
+                            -fisher_bias[i].reshape(-1)[0]
+                        )
                         # -- This here might be nice way to account for
                         # -- different derivative points
                         # left_wf = left_wf + derivs[i] * fisher_bias[i].reshape(-1)[0]
@@ -928,7 +932,9 @@ class FisherMatrix:
                         #   estimates are a little smaller. But does that
                         #   mean more accurate?
                     else:
-                        right_wf = right_wf + derivs[i] * (-fisher_bias[i].reshape(-1)[0])
+                        right_wf = right_wf + derivs[i] * (
+                            -fisher_bias[i].reshape(-1)[0]
+                        )
             # -- That was the simplest case. The next cases require a
             # -- distinction of which point the alignment was based on,
             # -- making things more complicated (thus two more cases).
@@ -939,7 +945,9 @@ class FisherMatrix:
                 right_wf = self.wf_generator(bf_params)
                 for i in range(opt_fisher.nparams):
                     param = opt_fisher.params_to_vary[i]
-                    right_wf = right_wf + derivs[i] * (aligned_params[param] - bf_params[param])
+                    right_wf = right_wf + derivs[i] * (
+                        aligned_params[param] - bf_params[param]
+                    )
                     # left_wf = left_wf + derivs[i] * (bf_params[param] - aligned_params[param])
                     # -- Adding to left_wf tends to have lower estimates...
                     # -- But this does not tell us if it is "more correct"
@@ -968,7 +976,9 @@ class FisherMatrix:
                 right_wf = 0  # For single call of apply_time_phase_shift
                 for i in range(opt_fisher.nparams):
                     param = opt_fisher.params_to_vary[i]
-                    right_wf = right_wf + derivs[i] * (theta_overline_tr[param] - bf_params[param])
+                    right_wf = right_wf + derivs[i] * (
+                        theta_overline_tr[param] - bf_params[param]
+                    )
                     # right_wf = right_wf + apply_time_phase_shift(derivs[i], bf_params['time'] - aligned_params['time'], bf_params['phase'] - aligned_params['phase']) * (theta_overline_tr[param] - bf_params[param])
                     # right_wf = right_wf + apply_time_phase_shift(derivs[i], bf_params['time'] - aligned_params['time'], bf_params['phase'] - aligned_params['phase']) * (theta_overline_tr[param] - bf_params[param])
                     # right_wf = right_wf + apply_time_phase_shift(derivs[i], -time_shift, -phase_shift) * (theta_overline_tr[param] - bf_params[param])
@@ -987,9 +997,15 @@ class FisherMatrix:
                     #    argument for putting stuff on the left; where we know
                     #    expression has more sense, namely Taylor expansion)
 
-                if len(opt_params) == 2 and 'time' in opt_params and 'phase' in opt_params:
+                if (
+                    len(opt_params) == 2
+                    and 'time' in opt_params
+                    and 'phase' in opt_params
+                ):
                     # -- We need deriv in non-aligned point
-                    right_wf = apply_time_phase_shift(right_wf, -time_shift, -phase_shift)
+                    right_wf = apply_time_phase_shift(
+                        right_wf, -time_shift, -phase_shift
+                    )
                     # right_wf = right_wf + self.wf_generator(bf_params)
                 else:
                     logger.info(
@@ -1005,19 +1021,28 @@ class FisherMatrix:
 
                 right_wf = right_wf + self.wf_generator(bf_params)
 
-
                 # -- New idea: optimization in both points should yield
                 # -- very similar results, no need to re-do it
                 # right_wf = self.wf_generator(bf_params)
-                right_wf = 0.
+                right_wf = 0.0
                 theta_overline_tr = true_params.copy()
                 for i in range(opt_fisher.nparams):
                     param = opt_fisher.params_to_vary[i]
-                    theta_overline_tr[param] = true_params[param] + (opt_bias[i].reshape(-1)[0])
-                    right_wf = right_wf + derivs[i] * (theta_overline_tr[param] - bf_params[param])
-                if len(opt_params) == 2 and 'time' in opt_params and 'phase' in opt_params:
+                    theta_overline_tr[param] = true_params[param] + (
+                        opt_bias[i].reshape(-1)[0]
+                    )
+                    right_wf = right_wf + derivs[i] * (
+                        theta_overline_tr[param] - bf_params[param]
+                    )
+                if (
+                    len(opt_params) == 2
+                    and 'time' in opt_params
+                    and 'phase' in opt_params
+                ):
                     # -- We need deriv in non-aligned point
-                    right_wf = apply_time_phase_shift(right_wf, -time_shift, -phase_shift)
+                    right_wf = apply_time_phase_shift(
+                        right_wf, -time_shift, -phase_shift
+                    )
                 right_wf = right_wf + self.wf_generator(bf_params)
                 left_wf = self.wf_generator(theta_overline_tr)
 
@@ -1040,7 +1065,6 @@ class FisherMatrix:
             )
             optimization_info['lsa_mismatch'] = np.nan
 
-
         # TODO: shouldn't we look at one waveform plus sum over deriv*bias
         # (would then require calculating this mismatch before opt_bias is added
         # to fisher_bias, or looking at (fisher_bias - opt_bias)[i][0, 0])?
@@ -1050,14 +1074,12 @@ class FisherMatrix:
         # statement about how well it works in this particular case
         # -> uhm, is this comment still recent? Actually, I don't think so...
 
-
         # TODO: implement indistinguishability criterion mentioned in
         # https://arxiv.org/pdf/2301.06630 right after Eq.(23)? This is
         # Fisher estimate of whether or not differences are significant
         # or if they can be confused with noise
         # -> or maybe the one from Hannam paper?
         # -> or the one mentioned here, https://arxiv.org/pdf/1611.07531, 1-overlap<1/(2rho^2)
-
 
         # -- Check which params shall be returned and then return -------------
         if params is not None:
@@ -1210,7 +1232,7 @@ class FisherMatrix:
         return get_wf_generator(approximant, domain, *args, **kwargs)
 
     # -- Some Python class related goodies
-    _print_slots = ('params_to_vary', )#'point', )
+    _print_slots = ('params_to_vary',)  #'point',)
     _repr_helper = Array._repr_helper
     __repr__ = Array.__repr__
     __str__ = Array.__str__
@@ -1232,6 +1254,7 @@ class FisherMatrix:
         # -- Note: since deriv_info is a dictionary of dictionaries and
         # -- then has arrays in there, we have to make a deepcopy
         from copy import deepcopy
+
         new_matrix._deriv_info = deepcopy(self.deriv_info)
 
         return new_matrix

@@ -305,7 +305,7 @@ class FisherMatrixNetwork(FisherMatrix):
         params: str | list[str] | None = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: str | list[str] | None = None,
-        return_opt_info: bool = False,
+        return_diagnostics: bool = False,
         is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
@@ -343,7 +343,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 params=None,  # Get all for now, filter before return
                 optimize=optimize,
                 optimize_fisher=optimize_fisher,
-                return_opt_info=True,
+                return_diagnostics=True,
                 is_true_point=is_true_point,
                 **inner_prod_kwargs,
             )
@@ -393,7 +393,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
             fisher_bias = fisher_bias[param_indices]
 
-        if return_opt_info is False:
+        if return_diagnostics is False:
             return fisher_bias
         else:
             return fisher_bias, optimization_info

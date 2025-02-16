@@ -332,7 +332,7 @@ def test_sys_error(params):
                             optimize_fisher='total_mass')
 
     fisher.systematic_error(phenomd_generator, optimize=False,
-                            optimize_fisher='phase', return_opt_info=True)
+                            optimize_fisher='phase', return_diagnostics=True)
 
     fisher = fisher.update_attrs(deriv_routine='numdifftools')
     

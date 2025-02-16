@@ -580,7 +580,7 @@ class FisherMatrix:
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
-        return_opt_info: bool = False,  # TODO: rename to "return_diagnostics"?
+        return_diagnostics: bool = False,
         is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
@@ -633,7 +633,7 @@ class FisherMatrix:
             Note that they will not appear in the returned error anymore
             because they do not appear in the Fisher matrix used for the
             calculation that determines the output.
-        return_opt_info : bool, optional, default = False
+        return_diagnostics : bool, optional, default = False
             Whether to return information on the calculations along with
             result.
         is_true_point : bool, optional, default = False
@@ -852,7 +852,7 @@ class FisherMatrix:
             fisher_bias += opt_bias
             optimization_info['opt_bias'] = opt_bias
 
-        if not return_opt_info:
+        if not return_diagnostics:
             # -- Check which params shall be returned and then return
             # -- (no need to conduct extra calculations).
             if params is not None:

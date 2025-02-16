@@ -89,7 +89,7 @@ def test_single_det_consistency():
         sys_error_2 = fisher_v2.systematic_error(
             phenomd_generator,
             optimize=opt,
-            return_opt_info=False
+            return_diagnostics=False
         )
 
         assert sys_error_1 == sys_error_2

@@ -308,7 +308,6 @@ def test_sys_error(params):
         wf_params,
         ['total_mass', 'time', 'phase'],
         wf_generator=phenomx_generator,
-        return_info=True
     )
 
     fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False)
@@ -337,6 +336,22 @@ def test_sys_error(params):
     fisher = fisher.update_attrs(deriv_routine='numdifftools')
     
     fisher.systematic_error(phenomd_generator, optimize='phase')
+
+
+def test_return_diagnostic():
+    fisher = FisherMatrix(
+        wf_params,
+        ['total_mass', 'time', 'phase'],
+        wf_generator=phenomx_generator,
+    )
+
+    for bool1 in [True, False]:
+        for bool2 in [True, False]:
+            fisher.systematic_error(
+                phenomd_generator,
+                return_diagnostics=bool1,
+                is_true_point=bool2,
+            )
 
 
 @pytest.mark.parametrize('inner_prod_kwargs', [

@@ -1029,12 +1029,11 @@ class FisherMatrix:
                 **(inner_prod_kwargs | {'optimize_time_and_phase': False}),
                 # -- Same argument as for remaining_mismatch
             )
-
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             try:
                 err_msg = '\nThe exception was: ' + str(e)
             except Exception:
-                pass
+                err_msg = ''
             logger.info(
                 'There was an error during the LSA mismatch '
                 'calculation, so it is set to `nan`.' + err_msg

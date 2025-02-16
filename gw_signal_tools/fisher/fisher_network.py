@@ -441,4 +441,4 @@ class FisherMatrixNetwork(FisherMatrix):
 
         return new_network
 
-    _print_slots = super()._print_slots + ('detectors',)
+    _print_slots = FisherMatrix._print_slots + ('detectors',)

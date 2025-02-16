@@ -1,40 +1,30 @@
-from lalsimulation.gwsignal.core.waveform import GravitationalWaveGenerator
+# -- Standard Lib Imports
+from typing import Any
+
+# -- Third Party Imports
+import numpy as np
+import astropy.units as u
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
-import numpy as np
+from lalsimulation.gwsignal.core.waveform import GravitationalWaveGenerator
+
+# -- Local Package Imports
+from gw_signal_tools.types import WFGen, FDWFGen, TDWFGen  # To run as py file
+# from ..types import WFGen, FDWFGen, TDWFGen
+
+
+__doc__ = """
+Module for waveform generators that allow application of systematic
+error corrections.
+"""
+
+__all__ = ('CalibrationWrapper', 'CalibrationGenerator', )  # TODO: rename?
 
 
 # class CalibrationGenerator(GravitationalWaveGenerator):
 class CalibrationWrapper(GravitationalWaveGenerator):
-    # -- Inherit from most basic class
-    # -- -> intended usage: call CalibrationGenerator(phenom_gen)
-    # def __init__(self, *args, **kwargs):
-    #     # self.mod_type = kwargs.pop('mod_type')
-    #     ...
-    #     # super().__init__(*args, **kwargs)
-    #     super().__init__()
-
-    # TODO: this is not the place to extract mod_type etc, should be
-    # done in generate_f(t)d_waveform
-
-    # def __new__(cls, *args, **kwargs):
-    #     return super().__new__()
-
-    # def __init__(self, gen):
-    #     # gen.__init__()
-    #     self = gen
-
-    # def __new__(cls, gen):
-    #     return gen.__new__()
-
-    # def __new__(cls, gen):
-    #     return gen.__new__(cls)
-
     def __init__(self, gen):
         self.gen = gen
-        # self.__getattribute__ = self.gen.__getattribute__
-        # self.__getattr__ = self.gen.__getattr__
-        # self.__setattr__ = self.gen.__setattr__
 
     @staticmethod
     def _get_fd_amplitude(hf: FrequencySeries) -> FrequencySeries:
@@ -85,6 +75,13 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
         return NotImplemented
 
+    def _extract_calib_kwds(
+        self, **kwargs
+    ) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
+        wf_params = {}
+        calib_params = {}
+        return wf_params, calib_params
+
     def generate_fd_waveform(self, **kwargs):
         # TODO: apply calibration
         # return super().generate_fd_waveform(**kwargs)
@@ -95,47 +92,30 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         # return super().generate_td_waveform(**kwargs)
         return self.gen.generate_td_waveform(**kwargs)
 
+    def generate_fd_waveform(self, **kwargs):
+        return NotImplemented
+
+    def generate_td_waveform(self, **kwargs):
+        return NotImplemented
+
     @property
-    def gen(self):
+    def gen(self) -> FDWFGen:
+        """
+        Generator that is wrapper around in this class, i.e. that the
+        calibration is applied to.
+        """
         return self._gen
 
     @gen.setter
-    def gen(self, value):
+    def gen(self, value: FDWFGen) -> None:
         self._gen = value
 
-    def __getattr__(self, name):
-        if name == 'gen':
-            return self._gen
-        else:
-            try:
-                return self.__getattribute__(name)
-            except AttributeError as e:
-                # -- Maybe gen had this defined. If not, throw error
-                return self.gen.__getattribute__(name)
-                # -- Thought following might be required, but is not
-                # try:
-                #     return self.gen.__getattribute__(name)
-                # except AttributeError as e:
-                #     raise AttributeError(
-                #         # f'Class ``{self.__class__.__name__}`` has no attribute {name}.'
-                #         f'``{self.__class__.__name__}`` has no attribute {name}.'
-                #     )
-
-    # def __setattr__(self, name, value):
-    #     if name == 'gen':
-    #     # if name in ['gen', '_gen']:
-    #         self._gen = value
-    #     else:
-    #         return self._gen.__setattr__(name, value)
-
-    # We do not need that, right? We can simply set on this here
-
-    # def __getattribute__(self, name):
-    #     if name == 'gen':
-    #         return self._gen
-    #     else:
-    #         return self._gen.__getattribute__(name)
-
+    def __getattr__(self, name) -> Any:
+        try:
+            return self.__getattribute__(name)
+        except AttributeError:
+            # -- Maybe gen had this defined. If not, throw error
+            return self.gen.__getattribute__(name)
 
 
 # -- How to adjust GWPolarizations based on this
@@ -173,16 +153,23 @@ from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
 
 # class CalibrationGenerator(GravitationalWaveGenerator):
 class CalibrationGenerator:
-    # def __init__(self, **kwargs):
-    def __new__(cls, *args, **kwargs):
-        # super().__init__()
-        # _appr = kwargs.pop('baseline_approximant')
-        # gen = gwsignal_get_waveform_generator(_appr, **kwargs)
-        if not isinstance(args[0], str):
-            args = [kwargs.pop('baseline_approximant')].append(args)
-        gen = gwsignal_get_waveform_generator(*args, **kwargs)
+    # # def __init__(self, **kwargs):
+    # def __new__(cls, *args, **kwargs):
+    #     # super().__init__()
+    #     # _appr = kwargs.pop('baseline_approximant')
+    #     # gen = gwsignal_get_waveform_generator(_appr, **kwargs)
+    #     if not isinstance(args[0], str):
+    #         args = [kwargs.pop('baseline_approximant')].append(args)
+    #     gen = gwsignal_get_waveform_generator(*args, **kwargs)
+    #     return CalibrationWrapper(gen)
+    #     # return CalibrationWrapper.__new__(gen)
+
+    # def __new__(cls, baseline_approximant, *args, **kwargs):
+    #     gen = gwsignal_get_waveform_generator(baseline_approximant, *args, **kwargs)
+    #     return CalibrationWrapper(gen)
+    def __new__(cls, approximant, *args, **kwargs):
+        gen = gwsignal_get_waveform_generator(approximant, *args, **kwargs)
         return CalibrationWrapper(gen)
-        # return CalibrationWrapper.__new__(gen)
 
 
 if __name__ == '__main__':
@@ -204,12 +191,8 @@ if __name__ == '__main__':
     # f_ref = 0.8*f_min  # Frequency where we specify spins
     # f_ref = 1.2*f_min  # Frequency where we specify spins
 
-
     wf_params = {
-        # 'total_mass': 50.*u.Msun,
-        'total_mass': 100.*u.Msun,  # To get into range of NRSur validity (above 60)
-        # 'mass_ratio': 0.05*u.dimensionless_unscaled,
-        # 'mass_ratio': 0.15*u.dimensionless_unscaled,
+        'total_mass': 100.*u.Msun,
         'mass_ratio': 0.5*u.dimensionless_unscaled,
         'f22_start': f_min,
         'f_max': f_max,
@@ -238,7 +221,24 @@ if __name__ == '__main__':
 
     cal_gen.another_attr = 96
     print(cal_gen.another_attr)
-    print(cal_gen.invalid_attr)  # To test error message
+    # print(cal_gen.invalid_attr)  # To test error message
+
+    print(cal_gen.gen)
 
     # print(gen.generate_fd_waveform(**wf_params))
     # print(cal_gen.generate_fd_waveform(**wf_params))
+
+    # from importlib.metadata import entry_points
+    # for model in entry_points(group='gwsignal_models'):
+    #     print(model.name)
+    # print('These are all models')
+
+    from lalsimulation.gwsignal.models import list_models_plugins
+
+    print(list_models_plugins())
+
+    # gwsignal_get_waveform_generator('wferror', baseline_approximant=appr)
+    gwsignal_get_waveform_generator('wferror', plugin=True, approximant=appr)
+    # gwsignal_get_waveform_generator('wferrors')
+
+    from gw_signal_tools.waveform import inner_product

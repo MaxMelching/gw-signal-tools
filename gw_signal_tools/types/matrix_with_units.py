@@ -166,19 +166,24 @@ class MatrixWithUnits:
 
     @staticmethod
     def _infer_dtype(val: ArrayLike) -> DTypeLike:
+        """Infer datatype of arbitrary input."""
         val = np.asarray(val, dtype=object).reshape(-1)
-        dtypes = [type(el.value) if isinstance(el, u.Quantity) else type(el) for el in val]
-        # print(val)
-        # print(dtypes)
-        if all(dt == dtypes[0] for dt in dtypes):
-            return dtypes[0] if len(dtypes) > 0 else float
-        elif complex in dtypes:
-            return complex
-        else:
-            return float
+        dtypes = [
+            (
+                np.dtype(type(el.value))
+                if isinstance(el, u.Quantity)
+                else np.dtype(type(el))
+            )
+            for el in val
+        ]
+        return np.max(dtypes) if len(dtypes) > 0 else np.dtype(float)  # Default float
 
     def __init__(
-        self, value: ArrayLike, unit: ArrayLike = None, convert_int: bool = True
+        self,
+        value: ArrayLike,
+        unit: ArrayLike = None,
+        dtype: DTypeLike = None,
+        convert_int: bool = True,
     ) -> None:
         """Initialize a ``MatrixWithUnits``."""
         if isinstance(value, (u.Quantity, MatrixWithUnits)):
@@ -187,49 +192,19 @@ class MatrixWithUnits:
             self.unit = value.unit
             return  # To break __init__ at this point
 
-        _value_dtype = self._infer_dtype(value)
+        # -- Internally, value and unit are stored as numpy arrays due
+        # -- to their versatility. Now we have to make sure that the
+        # -- conversion works. Mainly involves inferring dtype, shape
+        _value_dtype = self._infer_dtype(value) if dtype is None else dtype
 
         if convert_int and np.issubdtype(_value_dtype, int):
-            logger.info(
-                'By default, the input type ``int`` is converted to'
-                '``float`` because otherwise, subsequent operations on '
-                'the ``MatrixWithUnits`` instance (for example .to()) '
-                'might not work properly.'
-            )
-            _value_dtype = float
+            _value_dtype = np.dtype(float)
 
         if unit is None:
             # -- Input is ArrayLike filled with floats or Quantities
             _input = np.asarray(value, dtype=object)
-
-            # try:
-            #     # -- Idea: create numpy array, extract single element,
-            #     # -- infer type of this element
-            #     _input = np.asarray(value, dtype=object)
-            #     _dtype_arr = _input.reshape(-1)[0]
-            #     _value_dtype = type(_dtype_arr)
-            #     if isinstance(_dtype_arr, u.Quantity):
-            #         # -- Manually overwrite object to float
-            #         _value_dtype = type(_dtype_arr.value)
-            # except IndexError:
-            #     # -- Empty array, choose default dtype float
-            #     _value_dtype = float
-
-            # if convert_int and np.issubdtype(_value_dtype, int):
-            #     logger.info(
-            #         'By default, the input type ``int`` is converted to'
-            #         '``float`` because otherwise, subsequent operations on '
-            #         'the ``MatrixWithUnits`` instance (for example .to()) '
-            #         'might not work properly.'
-            #     )
-            #     _value_dtype = float
-
             _value = np.zeros(np.shape(_input), dtype=_value_dtype)
             _unit = np.empty(np.shape(_input), dtype=object)
-
-
-            # _value = np.zeros(np.shape(value), dtype=_value_dtype)
-            # _unit = np.empty(np.shape(value), dtype=object)
 
             for index, val in np.ndenumerate(_input):
                 try:
@@ -243,54 +218,29 @@ class MatrixWithUnits:
                         raise ValueError(
                             'If a ``MatrixWithUnits`` shall be initialized '
                             'from a list/array, each element must either be a '
-                            'float or an astropy Quantity.'
+                            '``float`` or an astropy ``Quantity``.'
                         )
 
             self.value = _value
             self.unit = _unit
-
-            return  # To break __init__ at this point
-        # else:
-        #     # self.__init__(value*unit)
-        #     self.__init__(np.asarray(value)*np.asarray(unit))
-        # TODO: would require less code, but also be slower, right?
-
-        # -- Internally, value and unit are stored as numpy arrays due
-        # -- to their versatility. Now we have to make sure that the
-        # -- conversion works
-        # try:
-        #     _dtype_arr = np.asarray(value).reshape(-1)[0]
-        #     # _value_dtype = _dtype_arr.dtype
-        #     _value_dtype = type(_dtype_arr)
-        #     if isinstance(_dtype_arr, u.Quantity):
-        #         # -- Manually overwrite object to float
-        #         _value_dtype = type(_dtype_arr.value)
-        # except IndexError:
-        #     # -- Empty array, choose default dtype float
-        #     _value_dtype = float
-
-        # if convert_int and np.issubdtype(_value_dtype, int):
-        #     _value_dtype = float
-
-        value = np.asarray(value, dtype=_value_dtype)
-
-        if isinstance(unit, self._allowed_unit_types):
-            # -- Scalar unit given
-            unit = u.Unit(unit)
         else:
-            assert np.shape(value) == np.shape(unit), (
-                '`value` and `unit` must have equal shape if unit is an '
-                'array of astropy units.'
-            )
+            value = np.asarray(value, dtype=_value_dtype)
 
-            unit = np.asarray(unit, dtype=object)
+            if isinstance(unit, self._allowed_unit_types):
+                # -- Scalar unit given
+                unit = u.Unit(unit)
+            else:
+                assert np.shape(value) == np.shape(unit), (
+                    '`value` and `unit` must have equal shape if unit is an '
+                    'array of astropy units and not a scalar unit.'
+                )
 
-        # -- Set properties, more care with checking for types etc is
-        # -- done in the setters
-        self.value = value
-        self.unit = unit
-        # NOTE: setting "private" properties here already is not good practice.
-        # Instead go through setters of attributes, where these are set
+                unit = np.asarray(unit, dtype=object)
+
+            # -- Set properties, more care with checking for types etc
+            # -- is done in the setters
+            self.value = value
+            self.unit = unit
 
     # -- Define cornerstone properties, value and unit ------------------------
     # TODO: add deleters?
@@ -741,7 +691,7 @@ class MatrixWithUnits:
                 raise ValueError(
                     'Instance is invalid, `value` and `unit` have incompatible shapes.'
                 )
-    
+
     # -- Following function copied from astropy Quantity class
     @property
     def isscalar(self):
@@ -756,7 +706,6 @@ class MatrixWithUnits:
             since quantities cannot represent true numpy scalars.
         """
         return not self.shape
-
 
     @property
     def ndim(self) -> int:
@@ -957,7 +906,7 @@ class MatrixWithUnits:
         return ax
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  # pragma: no cover
     # -- Run doctests
     import doctest
 

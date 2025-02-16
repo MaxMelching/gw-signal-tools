@@ -89,7 +89,7 @@ def test_single_det_consistency():
         sys_error_2 = fisher_v2.systematic_error(
             phenomd_generator,
             optimize=opt,
-            return_opt_info=False
+            return_diagnostics=False
         )
 
         assert sys_error_1 == sys_error_2
@@ -195,26 +195,26 @@ def test_snr(inner_prod_kwargs):
     assert snr**.5 == fisher_tot_mass.snr(**inner_prod_kwargs)
 
 
-@pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
+@pytest.mark.parametrize('new_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_detectors', [None, [hanford]])
 @pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
-def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
+def test_update_attrs(new_point, new_params_to_vary,
                       new_wf_generator, new_detectors, new_metadata):
     if new_metadata is None:
         new_metadata = {}  # Because ** is used below
 
     fisher_tot_mass_v2 = fisher_tot_mass.update_attrs(
-        new_wf_params_at_point,
+        new_point,
         new_params_to_vary,
         new_wf_generator,
         new_detectors,
         **new_metadata
     )
 
-    if new_wf_params_at_point is not None:
-        assert fisher_tot_mass_v2.wf_params_at_point == new_wf_params_at_point
+    if new_point is not None:
+        assert fisher_tot_mass_v2.point == new_point
     if new_params_to_vary is not None:
         assert fisher_tot_mass_v2.params_to_vary == new_params_to_vary
     if new_wf_generator is not None:
@@ -229,14 +229,14 @@ def test_copy():
     
     fisher_copy._fisher = None
     fisher_copy._fisher_inverse = None
-    fisher_copy.wf_params_at_point = None
+    fisher_copy.point = None
     fisher_copy.wf_generator = None
     fisher_copy._detectors = None
     fisher_copy.metadata = None
     fisher_copy._deriv_info = None
     fisher_copy._is_projected = True
 
-    for attr in ['fisher', 'fisher_inverse', 'wf_params_at_point',
+    for attr in ['fisher', 'fisher_inverse', 'point',
                  'wf_generator', 'detectors', 'metadata', 'deriv_info']:
         assert fisher_tot_mass.__getattribute__(attr) is not None
     

@@ -546,6 +546,9 @@ class MatrixWithUnits:
                   dtype: Optional[bool] = None) -> np.ndarray:
         return np.asarray(self.value, copy=copy, dtype=dtype)
 
+    def view(self, *args) -> Any:
+        return self.value.view(*args)  # Or use array somehow?
+
     @property
     def T(self):
         """

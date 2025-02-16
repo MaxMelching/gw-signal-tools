@@ -1,16 +1,15 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Callable
+from typing import Optional, Any
 
 # -- Third Party Imports
-from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
 
 # -- Local Package Imports
 from ..logging import logger
 from ..waveform.inner_product import norm
 from .fisher import FisherMatrix
-from ..types import MatrixWithUnits, Detector
+from ..types import MatrixWithUnits, Detector, FDWFGen
 
 
 __doc__ = """
@@ -99,7 +98,7 @@ class FisherMatrixNetwork(FisherMatrix):
         self,
         point: dict[str, u.Quantity],
         params_to_vary: str | list[str],
-        wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        wf_generator: FDWFGen,
         detectors: Detector | list[Detector],
         direct_computation: bool = True,
         **metadata,
@@ -179,7 +178,7 @@ class FisherMatrixNetwork(FisherMatrix):
         new_point: Optional[dict[str, u.Quantity]] = None,
         new_params_to_vary: Optional[str | list[str]] = None,
         new_wf_generator: Optional[
-            Callable[[dict[str, u.Quantity]], FrequencySeries]
+            FDWFGen
         ] = None,
         new_detectors: Optional[Detector | list[Detector]] = None,
         **new_metadata,
@@ -210,7 +209,7 @@ class FisherMatrixNetwork(FisherMatrix):
             Note that for this function, it is not required to specify a
             completely novel set. Updating only selected parameters is
             suppported
-        new_wf_generator : Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+        new_wf_generator : ~gw_signal_tools.types.FDWFGen
             Arbitrary function that is used for waveform generation. The
             required signature means that it has one non-optional
             argument, which is expected to accept the input provided in
@@ -301,7 +300,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
     def systematic_error(
         self,
-        reference_wf_generator: Callable[[dict[str, u.Quantity]], FrequencySeries],
+        reference_wf_generator: FDWFGen,
         params: str | list[str] | None = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: str | list[str] | None = None,

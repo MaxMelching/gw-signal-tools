@@ -1,5 +1,5 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal, Callable
+from typing import Optional, Literal
 
 # -- Third Party Imports
 import numpy as np
@@ -15,6 +15,7 @@ import lalsimulation.gwsignal.core.waveform as wfm
 from ..logging import logger
 from ..test_utils import allclose_quantity
 from ._error_helpers import _q_convert
+from ..types import WFGen, FDWFGen
 
 
 __all__ = ('pad_to_target_df', 'restrict_f_range', 'fill_f_range',
@@ -581,7 +582,7 @@ def get_wf_generator(
     domain: Literal['frequency', 'time'] = 'frequency',
     cache: Optional[bool] = None,
     *args, **kwargs
-) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+) -> WFGen:
     """
     Generates a function that can serve as a convenient waveform
     generator since its only input is a parameter dictionary.
@@ -610,10 +611,10 @@ def get_wf_generator(
 
     Returns
     -------
-    Callable[[dict[str, ~astropy.units.Quantity]], ~gwpy.frequencyseries.FrequencySeries]
+    ~gw_signal_tools.types.WFGen
         Function that takes dicionary of waveform parameters as
-        input and produces a waveform (stored in a GWPy
-        ``FrequencySeries``). Can, for example, be used as input
+        input and produces a waveform (stored in a GWPy ``TimeSeries``
+        or ``FrequencySeries``). Can, for example, be used as input
         to :code:`wf_generator` argument during initialization of a
         ``FisherMatrix``.
 
@@ -660,8 +661,8 @@ def apply_time_phase_shift(
 
 
 def time_phase_wrapper(
-    wf_gen: Callable[[dict[str, u.Quantity]], FrequencySeries]
-) -> Callable[[dict[str, u.Quantity]], FrequencySeries]:
+    wf_gen: FDWFGen
+) -> FDWFGen:
     """
     Given a waveform generator, return a generator that accepts `'time'`
     and `'phase'` as keyword arguments for global time, phase shifts.

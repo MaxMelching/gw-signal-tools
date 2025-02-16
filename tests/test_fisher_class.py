@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 # -- Local Package Imports
-from gw_signal_tools.waveform import get_wf_generator, norm
+from gw_signal_tools.waveform import get_wf_generator, norm, time_phase_wrapper
 from gw_signal_tools.types import MatrixWithUnits, HashableDict
 from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
 from gw_signal_tools.test_utils import (
@@ -52,7 +52,7 @@ pc.default_dict.pop('mass1', None);
 pc.default_dict.pop('mass2', None);
 
 fisher_tot_mass = FisherMatrix(
-    wf_params_at_point=wf_params,
+    point=wf_params,
     params_to_vary='total_mass',
     wf_generator=phenomx_generator
 )
@@ -103,9 +103,7 @@ def test_time_and_phase_shift_consistency():
     t_shift = 1e-3 * u.s
     phase_shift = 1e-2 * u.rad
 
-    def shifted_wf_gen(wf_params):
-        wf = phenomx_generator(wf_params)
-        return wf * np.exp(-2.j*np.pi*wf.frequencies*t_shift + 1.j*phase_shift)
+    shifted_wf_gen = time_phase_wrapper(phenomx_generator)
     
     calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
@@ -116,7 +114,7 @@ def test_time_and_phase_shift_consistency():
     )
 
     fisher_v2 = FisherMatrix(
-        wf_params,
+        wf_params | {'time': t_shift, 'phase': phase_shift},
         calc_params,
         shifted_wf_gen
     )
@@ -310,7 +308,6 @@ def test_sys_error(params):
         wf_params,
         ['total_mass', 'time', 'phase'],
         wf_generator=phenomx_generator,
-        return_info=True
     )
 
     fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False)
@@ -334,11 +331,27 @@ def test_sys_error(params):
                             optimize_fisher='total_mass')
 
     fisher.systematic_error(phenomd_generator, optimize=False,
-                            optimize_fisher='phase', return_opt_info=True)
+                            optimize_fisher='phase', return_diagnostics=True)
 
     fisher = fisher.update_attrs(deriv_routine='numdifftools')
     
     fisher.systematic_error(phenomd_generator, optimize='phase')
+
+
+def test_return_diagnostic():
+    fisher = FisherMatrix(
+        wf_params,
+        ['total_mass', 'time', 'phase'],
+        wf_generator=phenomx_generator,
+    )
+
+    for bool1 in [True, False]:
+        for bool2 in [True, False]:
+            fisher.systematic_error(
+                phenomd_generator,
+                return_diagnostics=bool1,
+                is_true_point=bool2,
+            )
 
 
 @pytest.mark.parametrize('inner_prod_kwargs', [
@@ -375,24 +388,24 @@ def test_get_wf_generator():
     fisher_tot_mass.get_wf_generator('IMRPhenomXPHM')
 
 
-@pytest.mark.parametrize('new_wf_params_at_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
+@pytest.mark.parametrize('new_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
-def test_update_attrs(new_wf_params_at_point, new_params_to_vary,
+def test_update_attrs(new_point, new_params_to_vary,
                       new_wf_generator, new_metadata):
     if new_metadata is None:
         new_metadata = {}  # Because ** is used below
 
     fisher_tot_mass_v2 = fisher_tot_mass.update_attrs(
-        new_wf_params_at_point,
+        new_point,
         new_params_to_vary,
         new_wf_generator,
         **new_metadata
     )
 
-    if new_wf_params_at_point is not None:
-        assert fisher_tot_mass_v2.wf_params_at_point == new_wf_params_at_point
+    if new_point is not None:
+        assert fisher_tot_mass_v2.point == new_point
     if new_params_to_vary is not None:
         if isinstance(new_params_to_vary, str):
             assert fisher_tot_mass_v2.params_to_vary == [new_params_to_vary]
@@ -408,13 +421,13 @@ def test_copy():
     
     fisher_copy._fisher = None
     fisher_copy._fisher_inverse = None
-    fisher_copy.wf_params_at_point = None
+    fisher_copy.point = None
     fisher_copy.wf_generator = None
     fisher_copy.metadata = None
     fisher_copy._deriv_info = None
     fisher_copy._is_projected = True
 
-    for attr in ['fisher', 'fisher_inverse', 'wf_params_at_point',
+    for attr in ['fisher', 'fisher_inverse', 'point',
                  'wf_generator', 'metadata', 'deriv_info']:
         assert fisher_tot_mass.__getattribute__(attr) is not None
     

@@ -14,7 +14,7 @@ import astropy.units as u
 from ..units import preferred_unit_system
 from ..logging import logger
 from .utils import (
-    pad_to_target_df, get_signal_at_target_frequs
+    pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift
 )
 from .ft import td_to_fd
 from ..test_utils import allclose_quantity, assert_allclose_quantity
@@ -907,7 +907,7 @@ def optimize_overlap(
         :math:`\exp(i \cdot phase - i \cdot 2 \pi \cdot f \cdot time)`.
         Beware that the polarization angle :code:`psi` might be
         degenerate with :code:`phase`, if you are using the complex
-        strain combination :math:`h = h_+ + i \, h_{\times}`.
+        strain combination :math:`h = h_+ \pm i \, h_{\times}`.
 
         Note that it is also possible to optimize over phase and/or time
         by enabling optimization over phase and time in the inner
@@ -1001,12 +1001,17 @@ def optimize_overlap(
             phase = opt_info['peak_phase']
 
             if time_index is not None:
-                opt_params_results['time'] = time
+                opt_params_results['time'] = time + wf_params.get('time', 0.*u.s)
 
             if phase_index is not None:
-                opt_params_results['phase'] = phase
+                opt_params_results['phase'] = phase + wf_params.get('phase', 0.*u.rad)
+            # -- Important distinction: results contain the "absolute"
+            # -- time and phase shifts, that have to be put into the
+            # -- waveform generator. For the shift we apply now, part
+            # -- of this absolute shift is already applied and we only
+            # -- want to add the relative shift on top!
 
-            return wf1, wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase), opt_params_results
+            return wf1, apply_time_phase_shift(wf2, time, phase), opt_params_results
             # -- Note: redefining wf2 with the phase factor using *=
             # -- is a very bad idea. That is because the result of the
             # -- call is potentially already cached, and in that case
@@ -1075,13 +1080,18 @@ def optimize_overlap(
         time = opt_info['peak_time']
         phase = opt_info['peak_phase']
 
-        if time_index is not None:            
-            opt_params_results['time'] = time
+        if time_index is not None:
+            opt_params_results['time'] = time + wf_params.get('time', 0.*u.s)
 
         if phase_index is not None:
-            opt_params_results['phase'] = phase
+            opt_params_results['phase'] = phase + wf_params.get('phase', 0.*u.rad)
+        # -- Important distinction: results contain the "absolute"
+        # -- time and phase shifts, that have to be put into the
+        # -- waveform generator. For the shift we apply now, part
+        # -- of this absolute shift is already applied and we only
+        # -- want to add the relative shift on top!
 
-        wf2 = wf2 * np.exp(-2.j*np.pi*time*wf2.frequencies + 1.j*phase)
+        wf2 = apply_time_phase_shift(wf2, time, phase)
         # -- Using *= here would be bad because the result of the call
         # -- is potentially already cached, and in that case the cached
         # -- result would be overwritten (bad)

@@ -156,13 +156,13 @@ nd_deriv = WaveformDerivativeNumdifftools(
 )
 
 gwsignal_deriv = WaveformDerivativeGWSignaltools(
-    wf_params_at_point=wf_params,
+    point=wf_params,
     param_to_vary=test_param,
     wf_generator=wf_generator
 )
 
 amp_phase_deriv = WaveformDerivativeAmplitudePhase(
-    wf_params_at_point=wf_params,
+    point=wf_params,
     param_to_vary=test_param,
     wf_generator=wf_generator,
 )
@@ -228,7 +228,7 @@ plt.close()  # -- Activate when running pytest
 # -- Had following definition in the class for this test
 # def fun(x):
 #     # -- Testing n-dim output
-#     wf = wf_generator(wf_params_at_point | {param_to_vary: x*param_unit})
+#     wf = wf_generator(point | {param_to_vary: x*param_unit})
 
 #     return np.stack([wf, wf])
 

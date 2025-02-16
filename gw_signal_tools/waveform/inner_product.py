@@ -812,21 +812,26 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
     return False
 
 
-# TODO: should this be a constant, i.e. PARAM_BOUNDS? Don't think so
+# -- Preparing optimization function. Some parameters have physical
+# -- bounds that may not be crossed, otherwise waveform error.
 param_bounds: dict[str, tuple[float, float]] = {
-    'total_mass': (0, np.inf),
-    'mass1': (0., np.inf),
-    'mass2': (0., np.inf),
-    'distance': (0., np.inf),
-    'mass_ratio': (0., 1.),
-    'inverse_mass_ratio': (1., np.inf),
-    'sym_mass_ratio': (0., 0.25),
-    'inclination': (0., 2.*np.pi),  # TODO: should this be np.pi?
-    'phi_ref': (-np.pi, np.pi),
-    'f_ref': (0., np.inf),
+    'total_mass': (0.0, np.inf),
+    'mass1': (0.0, np.inf),
+    'mass2': (0.0, np.inf),
+    'mass_ratio': (0.0, 1.0),
+    'inverse_mass_ratio': (1.0, np.inf),
+    'sym_mass_ratio': (0.0, 0.25),
+    'distance': (0.0, np.inf),
+    'spin1x': (0.0, 1.0),
+    'spin1y': (0.0, 1.0),
+    'spin1z': (0.0, 1.0),
+    'spin2x': (0.0, 1.0),
+    'spin2y': (0.0, 1.0),
+    'spin2z': (0.0, 1.0),
+    'f_ref': (0.0, np.inf),
 }
-# TODO: what other parameters are relevant in this regard?
-# Maybe spins?
+# -- Note: we do not add angles here because the waveform will not fail
+# -- to generate if we cross some boundary (periodicity).
 
 
 def get_default_opt_params(

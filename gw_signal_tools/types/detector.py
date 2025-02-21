@@ -101,5 +101,12 @@ class Detector:
             pass
 
     def __repr__(self) -> str:
-        # TODO: make better
-        return 'Detector name: ' + self.name + '\nPSD description: ' + self.psd.name
+        # -- Basically copying what GWpy Array does
+        prefix = f'<{self.__class__.__name__}('
+        indent = ' ' * len(prefix)
+        attr_str = ''
+        for attr in ['name', 'psd']:
+        # for attr in ['name', 'psd', 'inner_prod_kwargs']:
+            attr_str += f'\n{indent}{attr}: {repr(getattr(self, attr))}'
+        attr_str += f'\n{indent}inner_prod_kwargs: ' + repr({k: v for k, v in self.inner_prod_kwargs.items() if k != 'psd'})
+        return prefix + attr_str.lstrip('\n').lstrip(' ') + ')>'

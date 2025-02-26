@@ -9,11 +9,12 @@ from scipy.optimize import minimize
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+from gwpy.types import Index
 
 # -- Local Package Imports
 from ..units import preferred_unit_system
 from ..logging import logger
-from .utils import pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift
+from .utils import pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift, fill_f_range
 from .ft import td_to_fd
 from ._error_helpers import _q_convert, _compare_series, _assert_ft_compatible
 from ..types import FDWFGen
@@ -42,6 +43,8 @@ def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: Optional[FrequencySeries] = None,
+    no_signal_interpolation: bool = False,
+    frequs: Optional[list[float] | list[u.Quantity]] = None,
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
@@ -83,6 +86,18 @@ def inner_product(
         this default PSD is [-2048 Hz, 2048 Hz], so in case larger
         ranges shall be used, a custom PSD with suitable frequencies
         has to be provided.
+    no_signal_interpolation : boolean, optional, default = False
+        Determines whether or not it is ensured that signals have the
+        same frequency range and spacing, with a potential interpolation
+        happening. If you do not want this to happen, set this argument
+        to ``True``, whence all arguments will be directly passed on to
+        the inner product calculators. In principle, one could just
+        resort to `inner_product_calculation`, `optimized_inner_product`
+        without using `inner_product`, but this argument enables the use
+        of wrapper functions like `norm` or `overlap` while providing
+        the same functionality of not changing input signals.
+
+        Note that a PSD must be given if `no_signal_interpolation=True`.
     f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
@@ -154,6 +169,31 @@ def inner_product(
     transform of the involved signals. An indicator this might be
     necessary is a shape mismatch error.
     """
+    if no_signal_interpolation:
+        # -- Restrict f_ranges and return
+        if f_range is not None:
+            signal1 = fill_f_range(signal1, fill_val=0.0*signal1.unit, fill_bounds=f_range)
+            signal2 = fill_f_range(signal2, fill_val=0.0*signal2.unit, fill_bounds=f_range)
+            psd = fill_f_range(psd, fill_val=1.0*psd.unit, fill_bounds=f_range)
+
+        if not (optimize_time_and_phase or optimize_time or optimize_phase):
+            return inner_product_computation(signal1, signal2, psd)
+        else:
+            if optimize_time_and_phase:
+                # -- Overwrite
+                optimize_time = True
+                optimize_phase = True
+
+            return optimized_inner_product(
+                signal1=signal1,
+                signal2=signal2,
+                psd=psd,
+                optimize_time=optimize_time,
+                optimize_phase=optimize_phase,
+                min_dt_prec=min_dt_prec,
+                return_opt_info=return_opt_info,
+            )
+
     # -- Handling of units
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
@@ -207,6 +247,19 @@ def inner_product(
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
+        # if isinstance(df, Index):
+        #     if df.regular:
+        #         pass
+        #     elif (optimize_time_and_phase or optimize_time or optimize_time):
+        #         logger.info(
+        #             'Need scalar or equally-spaced `df` in case optimization '
+        #             'is performed. Proceeding with spacing of `min(df)`.'
+        #         )
+        #         # df = np.min(df)
+        #         df = _q_convert(np.min(df), frequ_unit, 'df', 'signal.frequencies')
+        # else:
+        #     # -- Scalar df is assumed
+        #     df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- If necessary, do Fourier transform (padding to ensure
     # -- sufficient resolution in frequency domain)
@@ -220,6 +273,11 @@ def inner_product(
         )
 
         signal1 = td_to_fd(pad_to_target_df(signal1, df))
+        # if isinstance(df, Index) and df.regular:
+        #     _df = df[1] - df[0]
+        #     signal1 = td_to_fd(pad_to_target_df(signal1, _df))
+        # else:
+        #     signal1 = td_to_fd(pad_to_target_df(signal1, df))
 
     if isinstance(signal2, TimeSeries):
         logger.info(
@@ -393,7 +451,7 @@ def inner_product_computation(
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
     # -- Assure input signals are compatible
-    _compare_series(signal1, signal2, psd)
+    _compare_series(signal1, signal2, psd, enforce_dx=False)
 
     output_unit = (
         signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit

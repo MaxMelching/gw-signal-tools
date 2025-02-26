@@ -5,6 +5,7 @@ from typing import Optional
 import astropy.units as u
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
+import numpy as np
 
 # -- Local Package Imports
 from ..test_utils import allclose_quantity
@@ -45,8 +46,13 @@ def _q_convert(
             )
 
 
-def _compare_series(*s: list[Series]) -> None:
-    """Checks if input is mutually compatible, raises error if not."""
+def _compare_series(*s: list[Series], enforce_dx: bool = True) -> None:
+    """
+    Checks if input is mutually compatible, raises error if not.
+
+    The only argument is `enforce_dx`, which determines whether the `dx`
+    attribute is accessed (bad for signals with unequal sampling).
+    """
     # -- Checks: equal length, sufficiently equal spacing, sufficiently
     # -- equal index (making sure small errors do not accumulate)
     if len(s) < 2:
@@ -61,7 +67,7 @@ def _compare_series(*s: list[Series]) -> None:
 
     # -- Leaves case with len(s)s == 2
     s1, s2 = s
-    if not allclose_quantity(s1.dx, s2.dx, atol=0.0, rtol=1e-5):
+    if enforce_dx and not allclose_quantity(s1.dx, s2.dx, atol=0.0, rtol=1e-5):
         # -- Some arbitrary deviation allowed, in case of numerical differences
         # raise ValueError('Signals must have equal spacing on x-axis.')
         # raise ValueError('Signals do not have equal spacing on x-axis.')
@@ -75,9 +81,16 @@ def _compare_series(*s: list[Series]) -> None:
     # sense because this operation is also O(n), one can also just use
     # checks on all frequencies)
 
-    if not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
+    if enforce_dx and not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
         # -- Note: this atol checks for equality up to sampling accuracy
         # -- Note: this automatically checks for equal size
+        raise ValueError(
+            'Signals must have sufficiently equal xindex. '
+            'Maximum allowed deviation is 0.5*dx.'
+        )
+
+    if not enforce_dx and not abs(s1.index - s2.index) <= 0.5*abs(np.diff(s1.index)):
+        # -- Unequal spacing was given, allowed for inner_product_computation
         raise ValueError(
             'Signals must have sufficiently equal xindex. '
             'Maximum allowed deviation is 0.5*dx.'

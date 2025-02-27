@@ -94,7 +94,9 @@ def restrict_x_range(
     while potentially setting its values in the interval
     :code:`fill_range` to a fixed value.
 
-    This function does not support signals that are unevenly spaced.
+    This function does not support signals that are unevenly spaced if
+    padding is required (i.e. if :code:`x_range` is wider than
+    :code:`signal.xspan`).
 
     Parameters
     ----------
@@ -142,65 +144,102 @@ def restrict_x_range(
         signal, Series
     ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
 
-    try:
-        signal.dx
-    except AttributeError:
-        raise ValueError('`restrict_x_range` only works for equally sampled signals.')
+    # try:
+    #     signal.dx
+    # except AttributeError:
+    #     raise ValueError('`restrict_x_range` only works for equally sampled signals.')
 
     # -- Handling x_range
     xunit = signal.xunit
 
     if x_range is None:
-        x_range = [None, None]
+        # x_range = [None, None]
+        x_lower = signal.xindex[0]
+        x_upper = signal.xindex[-1]
+        pass
     elif len(x_range) != 2:  # pragma: no cover
         raise ValueError(
             '`x_range` must be None or contain one lower and one upper bound.'
         )
+    else:
+        x_lower = x_range[0] if x_range[0] is not None else signal.xindex[0]
+        x_upper = x_range[1] if x_range[1] is not None else signal.xindex[-1]
 
-    x_lower = x_range[0] if x_range[0] is not None else signal.xindex[0]
-    x_upper = x_range[1] if x_range[1] is not None else signal.xindex[-1]
+        x_lower = _q_convert(x_lower, xunit, 'f_lower', 'signal.xindex')
+        x_upper = _q_convert(x_upper, xunit, 'f_upper', 'signal.xindex')
 
-    x_lower = _q_convert(x_lower, xunit, 'f_lower', 'signal.xindex')
-    x_upper = _q_convert(x_upper, xunit, 'f_upper', 'signal.xindex')
+        # -- Following test is taken from GWpy.Series.crop
+        try:
+            signal.dx
+        except AttributeError:
+            _regular = False
+        else:
+            _regular = True
 
-    # -- Handling fill_val
-    signal_unit = signal.unit
-    fill_val = _q_convert(fill_val, signal_unit, 'fill_val', 'signal')
+        # -- Handling fill_val
+        signal_unit = signal.unit
+        fill_val = _q_convert(fill_val, signal_unit, 'fill_val', 'signal')
 
-    # -- Padding/trimming
-    lower_number = abs(int(np.ceil((x_lower - signal.x0) / signal.dx)))
+        # -- Padding/trimming
+        if _regular:
+            lower_number = abs(int(np.ceil((x_lower - signal.x0) / signal.dx)))
+        else:
+            lower_number = np.searchsorted(
+                signal.xindex.value,
+                x_lower,
+                side='left',
+            )
 
-    if x_lower < signal.x0:  # Equivalent to lower_number > 0
-        signal = type(signal)(
-            np.full(lower_number, fill_value=fill_val.value),
-            unit=signal_unit,
-            x0=x_lower,
-            dx=signal.dx,
-            name=signal.name,
-            epoch=signal.epoch,
-            channel=signal.channel,
-            dtype=signal.dtype,
-        ).append(signal, inplace=True, pad=fill_val.value)
-        # -- Properties of first series are taken in append, thus need
-        # -- to paste all necessary properties
-    elif x_lower > signal.x0:
-        signal = signal[lower_number:]
+        if x_lower < signal.x0:  # Equivalent to lower_number > 0
+            if not _regular:
+                raise ValueError(
+                    'The padding features of `restrict_x_range` only works '
+                    'for equally sampled signals.'
+                )
 
-    upper_number = abs(int(np.ceil((x_upper - signal.xindex[-1]) / signal.dx)))
-
-    if x_upper > signal.xindex[-1]:  # Equivalent to upper_number > 0
-        signal = signal.append(
-            type(signal)(
-                np.full(upper_number, fill_value=fill_val.value),
+            signal = type(signal)(
+                np.full(lower_number, fill_value=fill_val.value),
                 unit=signal_unit,
-                x0=signal.xindex[-1] + signal.dx,
+                x0=x_lower,
                 dx=signal.dx,
+                name=signal.name,
+                epoch=signal.epoch,
+                channel=signal.channel,
                 dtype=signal.dtype,
-            ),
-            inplace=False,  # Otherwise error
-        )  # Could avoid copy from beginning, right?
-    elif x_upper < signal.xindex[-1]:
-        signal = signal[: signal.size - upper_number]
+            ).append(signal, inplace=True, pad=fill_val.value)
+            # -- Properties of first series are taken in append, thus need
+            # -- to paste all necessary properties
+        elif x_lower > signal.x0:
+            signal = signal[lower_number:]
+
+        if _regular:
+            upper_number = abs(int(np.ceil((x_upper - signal.xindex[-1]) / signal.dx)))
+        else:
+            upper_number = np.searchsorted(
+                signal.xindex.value,
+                x_upper,
+                side='right',
+            )
+
+        if x_upper > signal.xindex[-1]:  # Equivalent to upper_number > 0
+            if not _regular:
+                raise ValueError(
+                    'The padding features of `restrict_x_range` only works '
+                    'for equally sampled signals.'
+                )
+
+            signal = signal.append(
+                type(signal)(
+                    np.full(upper_number, fill_value=fill_val.value),
+                    unit=signal_unit,
+                    x0=signal.xindex[-1] + signal.dx,
+                    dx=signal.dx,
+                    dtype=signal.dtype,
+                ),
+                inplace=False,  # Otherwise error
+            )  # Could avoid copy from beginning, right?
+        elif x_upper < signal.xindex[-1]:
+            signal = signal[: signal.size - upper_number]
 
     # -- Filling
     if fill_range is None:
@@ -246,15 +285,16 @@ def restrict_x_range(
     # -- Check if fill_x_range will do something and copy if required
     if (
         copy
-        and (lower_number == 0)
-        and (x_fill_lower != x_lower)
-        and (x_fill_upper != x_upper)
+        # and (lower_number == 0)
+        and (x_range is None or x_range[0] is None or x_range[0] != signal.x0)
+        and ((x_fill_lower != x_lower) or (x_fill_upper != x_upper))
     ):
+        logger.info('Copying')
         # -- Signal shall not be edited inplace and has not been copied
         # -- in previous beforehand in function
-        signal = signal.copy()
+        signal = 1.*signal
 
-    signal = fill_x_range(signal, fill_val, [x_fill_lower, x_fill_upper])
+    signal = fill_x_range(signal, fill_val, [x_fill_lower, x_fill_upper], copy=False)
 
     return signal
 
@@ -263,13 +303,11 @@ def fill_x_range(
     signal: Series,
     fill_val: float | u.Quantity,
     fill_bounds: tuple[float, float] | tuple[u.Quantity, u.Quantity],
+    copy: bool = False,
 ) -> Series:
     """
     Fills :code:`signal` with :code:`fill_val` outside of interval
-    provided in :code:`fill_range`. Note that this function operates
-    inplace, i.e. the input is changed. For a function with similar
-    functionality that is not applied inplace, consider using
-    :code:`~gw_signal_tools.waveform.restrict_x_range`.
+    provided in :code:`fill_range`.
 
     This function does support signals that are unevenly spaced.
 
@@ -283,6 +321,9 @@ def fill_x_range(
         Bounds of interval outside of which :code:`signal` is filled.
         Must have length 2, but members can be None to indicate that no
         filling shall be done on the respective end of the interval.
+    copy : bool, optional, default = True
+        Determines if the input signal is copied before performing
+        operations or not.
 
     Returns
     -------
@@ -300,6 +341,9 @@ def fill_x_range(
     assert isinstance(
         signal, Series
     ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+
+    if copy:
+        signal = 1.*signal
 
     fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
 

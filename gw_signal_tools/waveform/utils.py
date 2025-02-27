@@ -407,7 +407,11 @@ def signal_at_dx(
     # -- redefined in terms of the more general function
     # -- signal_at_xindex. Still, it is somewhat useful and thus kept.
 
-    new_index = np.arange(signal.x0, signal.xindex[-1], step=dx) << signal.xunit
+    new_index = np.arange(
+        signal.x0.to_value(signal.xunit),
+        signal.xindex[-1].to_value(signal.xunit),
+        step=dx.to_value(signal.xunit)
+    ) << signal.xunit
 
     return signal_at_xindex(signal, new_index, full_metadata=full_metadata)
 
@@ -417,6 +421,7 @@ def signal_at_xindex(
     target_xindex: np.ndarray | u.Quantity | Index,
     fill_val: float | u.Quantity = np.nan,
     fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
+    full_metadata: bool = False,
 ) -> FrequencySeries:
     """
     Interpolate and pad input :code:`signal` so that it spans the
@@ -445,6 +450,10 @@ def signal_at_xindex(
         :code:`target_xindex` is supposed to not (!) be filled with
         :code:`fill_val`, the boundaries of this region can be specified
         here. Must have length 2 if not None.
+    full_metadata : bool, optional, default = True
+        If True, all metadata of the :code:``Series`` will be copied.
+        If False, only values, unit and xunit are copied (all other
+        metadata like name, epoch are discarded).
 
     Returns
     -------
@@ -479,28 +488,28 @@ def signal_at_xindex(
 
     # -- Actual computations
     if signal.xindex.size == target_xindex.size and allclose_quantity(
-        signal.xindex, target_xindex, atol=0.5 * signal.dx.value, rtol=0.0
+        signal.xindex, target_xindex, atol=0.5 * signal.dx.to_value(signal.xunit), rtol=0.0
     ):
-        logger.info('Not interpolating')
         # -- Basically custom copy, no interpolation required though
         out = type(signal)(
             signal.value, unit=signal.unit, xindex=signal.xindex
         )
     else:
-        out = type(signal)(
-            np.interp(
+        out = np.interp(
                 target_xindex,
                 signal.xindex,
                 signal,
-                left=fill_val.value,
-                right=fill_val.value,
-            ),
-            unit=signal.unit,
-            xindex=target_xindex,
-        )
+                left=fill_val.to_value(signal.unit),
+                right=fill_val.to_value(signal.unit),
+            ).view(type(signal))
+        out.xindex = target_xindex
 
     if fill_bounds is not None:
         out = fill_x_range(out, fill_val=fill_val, fill_bounds=fill_bounds)
+
+    if full_metadata:
+        # -- Copy everything from signal._metadata_slots
+        out.__metadata_finalize__(signal, force=False)
 
     return out
 
@@ -537,7 +546,7 @@ def get_strain(
         on the given :code:`mode`.
     domain : Literal['time', 'frequency']
         Determines domain that waveform is generated in.
-    generator : lalsimulation.gwsignal.core.waveform.GravitationalWaveGenerator
+    generator : ~lalsimulation.gwsignal.core.waveform.GravitationalWaveGenerator
         Instance of :code:`~lalsimulation.gwsignal.core.waveform.
         GravitationalWaveGenerator` class (or a subclass thereof) that
         can be called for waveform generation.

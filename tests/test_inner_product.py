@@ -12,7 +12,7 @@ import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.waveform import (
-    td_to_fd, pad_to_target_df, get_signal_at_target_frequs,
+    td_to_fd, pad_to_dx, signal_at_xindex,
     inner_product, norm, overlap, optimize_overlap, optimized_inner_product,
     time_phase_wrapper, apply_time_phase_shift
 )
@@ -108,7 +108,7 @@ def test_fd_td_match_consistency():
 
     assert_allclose_quantity(norm_td_coarse, norm_fd_coarse, atol=0.0, rtol=0.11)
 
-    norm_td_fine = norm(hp_t, df=2**-4, f_range=[f_min, None])
+    norm_td_fine = norm(pad_to_dx(hp_t, dx=2**-4), df=2**-4, f_range=[f_min, None])
     norm_fd_fine = norm(hp_f_fine, df=2**-4, f_range=[f_min, None])
 
     assert_allclose_quantity(norm_td_fine, norm_fd_fine, atol=0.0, rtol=0.005)
@@ -220,8 +220,7 @@ FrequencySeries(
 @pytest.mark.parametrize('min_dt_prec', [None, 1e-5])   
 def test_even_sample_size(signal, min_dt_prec):
     # psd = psd_no_noise.crop(start=signal.f0, end=signal.frequencies[-1])
-    psd = get_signal_at_target_frequs(psd_no_noise, signal.frequencies,
-                                      1.*psd_no_noise.unit)
+    psd = signal_at_xindex(psd_no_noise, signal.frequencies, 1.*psd_no_noise.unit)
     norm_1, info_1 = optimized_inner_product(
         signal,
         signal,
@@ -234,8 +233,7 @@ def test_even_sample_size(signal, min_dt_prec):
 
     _signal = signal[:-1]
     # _psd = psd_no_noise.crop(start=_signal.f0, end=_signal.frequencies[-1])
-    _psd = get_signal_at_target_frequs(psd_no_noise, _signal.frequencies,
-                                      1.*psd_no_noise.unit)
+    _psd = signal_at_xindex(psd_no_noise, _signal.frequencies, 1.*psd_no_noise.unit)
     norm_2, info_2 = optimized_inner_product(
         _signal,
         _signal,
@@ -303,8 +301,8 @@ def test_f_range_handling(f_range):
 
 
 def test_positive_negative_f_range_consistency():
-    h = td_to_fd(pad_to_target_df(hp_t, df=hp_f_fine.df))
-    h_symm = td_to_fd(pad_to_target_df(hp_t, df=hp_f_fine.df) + 0.j)
+    h = td_to_fd(pad_to_dx(hp_t, dx=hp_f_fine.df))
+    h_symm = td_to_fd(pad_to_dx(hp_t, dx=hp_f_fine.df) + 0.j)
     # -- h_symm has symmetric spectrum around f=0.0 and the same
     # -- spectrum as h for positive frequencies
     assert h.f0 != h_symm.f0  # Make sure they are not the same

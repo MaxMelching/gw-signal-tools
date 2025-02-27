@@ -11,9 +11,9 @@ import numpy as np
 from ..test_utils import allclose_quantity
 
 
-__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series_index', '_assert_ft_compatible')
+__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series_xindex', '_assert_ft_compatible')
 
-__doc__: str = """
+__doc__ = """
 Little helper file containing functions and other definitions that help
 dealing with errors in package functions.
 """
@@ -46,7 +46,7 @@ def _q_convert(
             )
 
 
-def _compare_series_index(*s: list[Series], enforce_dx: bool = True) -> None:
+def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
     """
     Checks if input is mutually compatible, raises error if not.
 
@@ -59,10 +59,10 @@ def _compare_series_index(*s: list[Series], enforce_dx: bool = True) -> None:
         return None
     if len(s) > 2:
         # for val in s[:-1]:
-        #     _compare_series_index(val, s[-1])
+        #     _compare_series_xindex(val, s[-1])
         # -- Idea: performing every mutual comparison is not required
-        _compare_series_index(s[-1], s[-2], enforce_dx=enforce_dx)
-        _compare_series_index(s[:-1], enforce_dx=enforce_dx)
+        _compare_series_xindex(s[-1], s[-2], enforce_dx=enforce_dx)
+        _compare_series_xindex(s[:-1], enforce_dx=enforce_dx)
         return None
 
     # -- Leaves case with len(s)s == 2

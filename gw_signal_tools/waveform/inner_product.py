@@ -16,7 +16,7 @@ from ..units import preferred_unit_system
 from ..logging import logger
 from .utils import signal_at_xindex, apply_time_phase_shift, fill_x_range
 from .ft import td_to_fd
-from ._error_helpers import _q_convert, _compare_series_index, _assert_ft_compatible
+from ._error_helpers import _q_convert, _compare_series_xindex, _assert_ft_compatible
 from ..types import FDWFGen
 
 
@@ -264,7 +264,7 @@ def inner_product(
     if no_signal_interpolation:
         if eval_frequencies is not None:
             try:
-                _compare_series_index(
+                _compare_series_xindex(
                     signal1,
                     FrequencySeries(
                         np.ones(len(eval_frequencies)), frequencies=eval_frequencies
@@ -509,7 +509,7 @@ def inner_product_computation(
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
     # -- Assure input signals are compatible
-    _compare_series_index(signal1, signal2, psd, enforce_dx=False)
+    _compare_series_xindex(signal1, signal2, psd, enforce_dx=False)
 
     output_unit = (
         signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
@@ -616,7 +616,7 @@ def optimized_inner_product(
     # -- First step: ensuring input signals are consistent
     frequ_unit = signal1.frequencies.unit
 
-    _compare_series_index(signal1, signal2, psd)
+    _compare_series_xindex(signal1, signal2, psd)
 
     # -- Second step: make sure all signals start at valid frequencies
     _assert_ft_compatible(signal1, signal2, psd)

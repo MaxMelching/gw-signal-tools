@@ -96,10 +96,6 @@ def _determine_x_range(x_range, *s):
             )
 
     return x_lower, x_upper
-    # return x_lower - 0.5 * (s[0].xindex[1] - s[0].xindex[0]), x_upper + 0.5 * (s[0].xindex[-1] - s[0].xindex[-2])
-    # -- BAD idea, pushes things below zero, changing sign in one_sided
-    # return (x_lower - 0.5 * (s[0].xindex[1] - s[0].xindex[0]) if x_lower.value != 0 else 0*x_unit,
-    #         x_upper + 0.5 * (s[0].xindex[-1] - s[0].xindex[-2]) if x_upper.value != 0 else 0*x_unit)
 
 
 def inner_product(
@@ -134,8 +130,8 @@ def inner_product(
     :math:`\tilde{a}(f), \tilde{b}(f)` in frequency domain.
 
     In case of a :code:`psd` :math:`S_n(f)` that is equal to 1 at all
-    frequencies (the default case), this corresponds to the :math:`L^2`
-    inner product.
+    frequencies (the default case), this corresponds to the standard
+    :math:`L^2` inner product.
 
     Parameters
     ----------
@@ -150,7 +146,7 @@ def inner_product(
         ranges shall be used, a custom PSD with suitable frequencies
         has to be provided.
 
-        -> one-sided is expected
+        Note that this inner product is designed for one-sided PSDs.
     no_signal_interpolation : boolean, optional, default = False
         Determines whether or not it is ensured that signals have the
         same frequency range and spacing, with a potential interpolation
@@ -238,10 +234,8 @@ def inner_product(
     if isinstance(signal1, TimeSeries):
         logger.info(
             '`signal1` is a ``TimeSeries``, performing an automatic FFT. '
-            'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase. '
-            'Alternatively, do the FFT manually and make sure the result '
-            'looks reasonable.'
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
         )
 
         signal1 = td_to_fd(signal1)
@@ -249,16 +243,13 @@ def inner_product(
     if isinstance(signal2, TimeSeries):
         logger.info(
             '`signal2` is a ``TimeSeries``, performing an automatic FFT. '
-            'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase. '
-            'Alternatively, do the FFT manually and make sure the result '
-            'looks reasonable.'
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
         )
 
         signal2 = td_to_fd(signal2)
 
-    # TODO: decide if no_signal_interpolation should be at beginning
-
+    # -- Store frequently accessed, quite lengthy boolean
     _optimize = optimize_time_and_phase or optimize_time or optimize_phase
 
     if no_signal_interpolation:

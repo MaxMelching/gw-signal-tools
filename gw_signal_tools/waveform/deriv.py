@@ -127,7 +127,7 @@ class WaveformDerivativeGWSignaltools:
         calculations that are carried out.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     step_sizes : list[float], optional, default = None
         Step sizes used in the numerical differention. Based on the

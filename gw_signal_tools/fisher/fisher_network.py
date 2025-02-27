@@ -64,7 +64,7 @@ class FisherMatrixNetwork(FisherMatrix):
         multiple detectors does not make sense.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     detectors : ~gw_signal_tools.types.Detector or list[~gw_signal_tools.types.Detector]
         A list of the detectors that constitute the network. They have
@@ -218,7 +218,7 @@ class FisherMatrixNetwork(FisherMatrix):
             all required for the calculations that are carried out.
 
             Convenient options are the methods
-            :code:`~gw_signal_tools.waveform_utils.get_wf_generator`
+            :code:`~gw_signal_tools.waveform.get_wf_generator`
             or :code:`FisherMatrix.get_wf_generator`, which generate a
             suitable function from a few arguments.
 

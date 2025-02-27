@@ -11,7 +11,7 @@ import numpy as np
 from ..test_utils import allclose_quantity
 
 
-__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series', '_assert_ft_compatible')
+__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series_index', '_assert_ft_compatible')
 
 __doc__: str = """
 Little helper file containing functions and other definitions that help
@@ -46,7 +46,7 @@ def _q_convert(
             )
 
 
-def _compare_series(*s: list[Series], enforce_dx: bool = True) -> None:
+def _compare_series_index(*s: list[Series], enforce_dx: bool = True) -> None:
     """
     Checks if input is mutually compatible, raises error if not.
 
@@ -59,10 +59,10 @@ def _compare_series(*s: list[Series], enforce_dx: bool = True) -> None:
         return None
     if len(s) > 2:
         # for val in s[:-1]:
-        #     _compare_series(val, s[-1])
+        #     _compare_series_index(val, s[-1])
         # -- Idea: performing every mutual comparison is not required
-        _compare_series(s[-1], s[-2])
-        _compare_series(s[:-1])
+        _compare_series_index(s[-1], s[-2], enforce_dx=enforce_dx)
+        _compare_series_index(s[:-1], enforce_dx=enforce_dx)
         return None
 
     # -- Leaves case with len(s)s == 2
@@ -89,7 +89,7 @@ def _compare_series(*s: list[Series], enforce_dx: bool = True) -> None:
             'Maximum allowed deviation is 0.5*dx.'
         )
 
-    if not enforce_dx and not abs(s1.index - s2.index) <= 0.5*abs(np.diff(s1.index)):
+    if not enforce_dx and not np.all(abs(s1.xindex - s2.xindex)[:-1] <= 0.5*abs(np.diff(s1.xindex))):
         # -- Unequal spacing was given, allowed for inner_product_computation
         raise ValueError(
             'Signals must have sufficiently equal xindex. '

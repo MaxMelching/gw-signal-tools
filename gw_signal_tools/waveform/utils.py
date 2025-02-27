@@ -6,6 +6,7 @@ import numpy as np
 import astropy.units as u
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
+from gwpy.types import Index
 from lalsimulation.gwsignal import (
     gwsignal_get_waveform_generator,
     GravitationalWaveGenerator,
@@ -143,6 +144,11 @@ def restrict_f_range(
     assert isinstance(
         signal, FrequencySeries
     ), '`signal` has to be a GWPy ``FrequencySeries``.'
+
+    try:
+        signal.dx
+    except AttributeError:
+        raise ValueError('`restrict_f_range` only works for equally sampled signals.')
 
     # -- Handling f_range
     frequ_unit = signal.frequencies.unit
@@ -294,6 +300,14 @@ def fill_f_range(
     """
     fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
 
+    # -- Following test is taken from GWpy.Series.crop
+    try:
+        signal.df
+    except AttributeError:
+        _regular = False
+    else:
+        _regular = True
+
     frequ_unit = signal.frequencies.unit
     f_lower, f_upper = signal.f0, signal.frequencies[-1]
 
@@ -313,7 +327,14 @@ def fill_f_range(
                 'change that, i.e. no padding is applied.'
             )
         else:
-            lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
+            if _regular:
+                lower_number_to_fill = int(np.ceil((f_fill_lower - f_lower) / signal.df))
+            else:
+                lower_number_to_fill = np.searchsorted(
+                    signal.frequencies.value,
+                    f_fill_lower,
+                    side='left',
+                )
             signal[:lower_number_to_fill].fill(fill_val)
 
     if (f_fill_upper := fill_bounds[1]) is not None:
@@ -328,7 +349,14 @@ def fill_f_range(
                 ' i.e. no padding is applied.'
             )
         else:
-            upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
+            if _regular:
+                upper_number_to_fill = int(np.ceil((f_upper - f_fill_upper) / signal.df))
+            else:
+                upper_number_to_fill = np.searchsorted(
+                    signal.frequencies.value,
+                    f_fill_upper,
+                    side='right',
+                )
             signal[signal.size - upper_number_to_fill :].fill(fill_val)
 
     return signal
@@ -390,7 +418,7 @@ def get_signal_at_target_df(
 
 def get_signal_at_target_frequs(
     signal: FrequencySeries,
-    target_frequencies: np.ndarray | u.Quantity,
+    target_frequencies: np.ndarray | u.Quantity | Index,
     fill_val: float | u.Quantity = np.nan,
     fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
 ) -> FrequencySeries:
@@ -407,7 +435,7 @@ def get_signal_at_target_frequs(
     ----------
     signal : FrequencySeries
         Signal to be interpolated.
-    target_frequencies : ~numpy.array or ~astropy.units.Quantity
+    target_frequencies : ~numpy.array or ~astropy.units.Quantity or ~gwpy.types.Index
         Frequency samples to evaluate :code:`signal` in.
     fill_val : float or ~astropy.units.Quantity, optional, default = ~numpy.nan
         Value to fill :code:`signal` with in case
@@ -451,7 +479,8 @@ def get_signal_at_target_frequs(
 
     # -- Actual computations
     if signal.frequencies.size == target_frequencies.size and allclose_quantity(
-        signal.frequencies, target_frequencies, atol=0.5 * signal.df.value, rtol=0.00
+    # if len(signal.frequencies) == len(target_frequencies) and allclose_quantity(  # Ah, we convert to GWpy Index now. Thus size should work
+        signal.frequencies, target_frequencies, atol=0.5 * signal.df.value, rtol=0.0
     ):
         out = FrequencySeries(
             signal.value, unit=signal.unit, frequencies=signal.frequencies

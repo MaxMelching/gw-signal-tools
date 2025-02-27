@@ -369,6 +369,30 @@ def test_df_handling(df1, df2):
     assert_quantity_equal(norm1, norm2)
 
 
+@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
+def test_no_interpolation(f_range):
+    norm1 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=False)
+    norm2 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=True)
+    norm3 = norm(hp_f_fine, eval_frequencies=hp_f_fine.frequencies, f_range=f_range, no_signal_interpolation=False)
+    norm4 = norm(hp_f_fine, eval_frequencies=hp_f_fine.frequencies, f_range=f_range, no_signal_interpolation=True)
+
+    assert_allclose_quantity(norm1, [norm2, norm3, norm4], atol=0.0, rtol=0.008)
+    # -- Have to allow for some deviation here because of different cutoffs for
+    # -- certain f_ranges, when interpolation is there and not
+
+
+@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
+def test_unequal_sampling(f_range):
+    unequal_sampled_frequs = np.concatenate([np.arange(0, f_max.value//2, step=2**-4), np.arange(f_max.value//2, f_max.value, step=2**-6)]) << u.Hz
+    h_interp = signal_at_xindex(hp_f_fine, unequal_sampled_frequs)
+    psd_interp = signal_at_xindex(psd_no_noise, unequal_sampled_frequs)
+
+    norm1 = norm(h_interp, psd=psd_interp, f_range=f_range, no_signal_interpolation=True)
+    norm2 = norm(hp_f_fine, psd=psd_interp, f_range=f_range)
+
+    assert_allclose_quantity(norm1, [norm2], atol=0.0, rtol=0.00)
+
+
 def test_different_units():
     norm2 = norm(hp_f_fine, psd=psd_no_noise)
 

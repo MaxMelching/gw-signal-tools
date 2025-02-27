@@ -14,7 +14,7 @@ from gwpy.types import Index
 # -- Local Package Imports
 from ..units import preferred_unit_system
 from ..logging import logger
-from .utils import pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift, fill_f_range
+from .utils import signal_at_xindex, apply_time_phase_shift, fill_x_range
 from .ft import td_to_fd
 from ._error_helpers import _q_convert, _compare_series_index, _assert_ft_compatible
 from ..types import FDWFGen
@@ -267,8 +267,7 @@ def inner_product(
                 _compare_series_index(
                     signal1,
                     FrequencySeries(
-                        np.ones(len(eval_frequencies)),
-                        frequencies=eval_frequencies
+                        np.ones(len(eval_frequencies)), frequencies=eval_frequencies
                     ),
                     enforce_dx=False,
                 )
@@ -283,9 +282,13 @@ def inner_product(
         # -- Restrict f_ranges and return
         if f_range is not None:
             f_range = _determine_x_range(f_range, signal1, signal2, psd)
-            signal1 = fill_f_range(signal1, fill_val=0.0*signal1.unit, fill_bounds=f_range)
-            signal2 = fill_f_range(signal2, fill_val=0.0*signal2.unit, fill_bounds=f_range)
-            psd = fill_f_range(psd, fill_val=1.0*psd.unit, fill_bounds=f_range)
+            signal1 = fill_x_range(
+                signal1, fill_val=0.0 * signal1.unit, fill_bounds=f_range
+            )
+            signal2 = fill_x_range(
+                signal2, fill_val=0.0 * signal2.unit, fill_bounds=f_range
+            )
+            psd = fill_x_range(psd, fill_val=1.0 * psd.unit, fill_bounds=f_range)
 
         if not _optimize:
             return inner_product_computation(signal1, signal2, psd)
@@ -366,7 +369,6 @@ def inner_product(
                     'Need scalar or equally-spaced `df` in case optimization '
                     'is performed. Proceeding with spacing of `min(df)`.'
                 )
-                # df = np.min(df)
                 df = _q_convert(np.min(df), frequ_unit, 'df', 'signal.frequencies')
         else:
             # -- Scalar df is assumed
@@ -388,51 +390,74 @@ def inner_product(
             fill_bounds = (f_lower, f_upper)
             # fill_bounds = (f_lower - 0.5 * df, f_upper + 0.5 * df)  # Ensure all signals are non-zero on same range
             # -- Filling is done UP TO THIS frequency, but we want it included
+            # TODO: do we need this?
 
-        signal1 = get_signal_at_target_frequs(
-            signal1, target_range, fill_val=0.0 * signal1.unit, fill_bounds=fill_bounds,
+        signal1 = signal_at_xindex(
+            signal1,
+            target_range,
+            fill_val=0.0 * signal1.unit,
+            fill_bounds=fill_bounds,
         )
-        signal2 = get_signal_at_target_frequs(
-            signal2, target_range, fill_val=0.0 * signal2.unit, fill_bounds=fill_bounds,
+        signal2 = signal_at_xindex(
+            signal2,
+            target_range,
+            fill_val=0.0 * signal2.unit,
+            fill_bounds=fill_bounds,
         )
-        psd = get_signal_at_target_frequs(
-            psd, target_range, fill_val=1.0 * psd.unit, fill_bounds=fill_bounds,
+        psd = signal_at_xindex(
+            psd,
+            target_range,
+            fill_val=1.0 * psd.unit,
+            fill_bounds=fill_bounds,
         )
 
         return inner_product_computation(signal1, signal2, psd)
     else:
-        non_zero_range = (f_lower, f_upper)  # Ensure all signals are non-zero on same range
+        # -- Ensure all signals are non-zero on same range and on IFT-compatible range
+        non_zero_range = (f_lower, f_upper)
         # non_zero_range = (f_lower - 0.5*df, f_upper + 0.5*df)  # Ensure all signals are non-zero on same range
         # -- Filling is done UP TO THIS frequency, but we want it included
+        # TODO: do we need this?
 
         if f_lower >= 0.0 * frequ_unit:
             target_range = (
-                np.arange(0.0, f_upper.value + 0.5 * df.value, step=df.value)
+                np.arange(
+                    0.0,
+                    f_upper.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
+                    step=df.to_value(frequ_unit),
+                )
                 << frequ_unit
             )
         else:
             f_limit = max(abs(f_lower), abs(f_upper))
             target_range = (
-                np.arange(-f_limit.value, f_limit.value + 0.5 * df.value, step=df.value)
+                np.arange(
+                    -f_limit.to_value(frequ_unit),
+                    f_limit.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
+                    step=df.to_value(frequ_unit),
+                )
                 << frequ_unit
             )
 
-        signal1 = get_signal_at_target_frequs(
+        signal1 = signal_at_xindex(
             signal1,
             target_range,
             fill_val=0.0 * signal1.unit,
             fill_bounds=non_zero_range,
         )
 
-        signal2 = get_signal_at_target_frequs(
+        signal2 = signal_at_xindex(
             signal2,
             target_range,
             fill_val=0.0 * signal2.unit,
             fill_bounds=non_zero_range,
         )
 
-        psd = get_signal_at_target_frequs(
-            psd, target_range, fill_val=1.0 * psd.unit, fill_bounds=non_zero_range
+        psd = signal_at_xindex(
+            psd,
+            target_range,
+            fill_val=1.0 * psd.unit,
+            fill_bounds=non_zero_range,
         )
 
         if optimize_time_and_phase:

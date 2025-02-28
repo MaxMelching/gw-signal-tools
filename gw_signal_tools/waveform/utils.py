@@ -144,6 +144,8 @@ def restrict_x_range(
         signal, Series
     ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
 
+    _copied = False
+
     # -- Handling x_range
     xunit = signal.xunit
 
@@ -159,8 +161,8 @@ def restrict_x_range(
         x_lower = x_range[0] if x_range[0] is not None else signal.xindex[0]
         x_upper = x_range[1] if x_range[1] is not None else signal.xindex[-1]
 
-        x_lower = _q_convert(x_lower, xunit, 'f_lower', 'signal.xindex')
-        x_upper = _q_convert(x_upper, xunit, 'f_upper', 'signal.xindex')
+        x_lower = _q_convert(x_lower, xunit, 'x_lower', 'signal.xindex')
+        x_upper = _q_convert(x_upper, xunit, 'x_upper', 'signal.xindex')
 
         # -- Following test is taken from GWpy.Series.crop
         try:
@@ -177,6 +179,9 @@ def restrict_x_range(
         # -- Padding/trimming
         if not _regular:
             if (x_lower < signal.x0) or (x_upper > signal.xindex[-1]):
+                # if (x_lower < signal.x0 - 0.5*signal.dx) or (x_upper > signal.xindex[-1] + 0.5*signal.dx):  # Has no dx...
+                # if (x_lower < signal.x0 - 0.5*(signal.xindex[1] - signal.xindex[0])) or (x_upper > signal.xindex[-1] + 0.5*(signal.xindex[-1] - signal.xindex[-2])):
+                # -- Keep as backup, in case this shows up as issue again
                 raise ValueError(
                     'The padding features of `restrict_x_range` only works '
                     'for equally sampled signals.'
@@ -193,7 +198,7 @@ def restrict_x_range(
                 side='right',
             )
 
-            signal = signal[lower_number : upper_number]
+            signal = signal[lower_number:upper_number]
         else:
             lower_number = abs(int(np.ceil((x_lower - signal.x0) / signal.dx)))
 
@@ -210,6 +215,7 @@ def restrict_x_range(
                 ).append(signal, inplace=True, pad=fill_val.value)
                 # -- Properties of first series are taken in append, thus need
                 # -- to paste all necessary properties
+                _copied = True
             elif x_lower > signal.x0:
                 signal = signal[lower_number:]
 
@@ -225,15 +231,17 @@ def restrict_x_range(
                         dtype=signal.dtype,
                     ),
                     inplace=False,  # Otherwise error
-                )  # Could avoid copy from beginning, right?
+                )
             elif x_upper < signal.xindex[-1]:
                 signal = signal[: signal.size - upper_number]
 
     # -- Filling
     if fill_range is None:
-        if copy:
-            signal = 1.*signal
-        return signal
+        if copy and not _copied:
+            return signal.copy()
+        else:
+            return signal
+
     elif len(fill_range) != 2:  # pragma: no cover
         raise ValueError(
             '`fill_range` must be None or contain one lower and one upper bound.'
@@ -273,14 +281,8 @@ def restrict_x_range(
         x_fill_upper = x_upper
 
     # -- Check if fill_x_range will do something and copy if required
-    if (
-        copy
-        and (x_range is None or x_range[0] is None or x_range[0] != signal.x0)
-        and ((x_fill_lower != x_lower) or (x_fill_upper != x_upper))
-    ):
-        # -- Signal shall not be edited inplace and has not been copied
-        # -- in previous beforehand in function
-        signal = 1.*signal
+    if copy and not _copied:
+        signal = signal.copy()
 
     signal = fill_x_range(signal, fill_val, [x_fill_lower, x_fill_upper], copy=False)
 
@@ -331,7 +333,7 @@ def fill_x_range(
     ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
 
     if copy:
-        signal = 1.*signal
+        signal = signal.copy()
 
     fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
 
@@ -351,9 +353,7 @@ def fill_x_range(
 
     # -- Actual filling
     if (x_fill_lower := fill_bounds[0]) is not None:
-        x_fill_lower = _q_convert(
-            x_fill_lower, xunit, 'x_fill_lower', 'signal.xindex'
-        )
+        x_fill_lower = _q_convert(x_fill_lower, xunit, 'x_fill_lower', 'signal.xindex')
         if x_fill_lower < x_lower:
             logger.info(
                 f'Lower bound {x_fill_lower} in `fill_bounds` is '
@@ -363,7 +363,9 @@ def fill_x_range(
             )
         else:
             if _regular:
-                lower_number_to_fill = int(np.ceil((x_fill_lower - x_lower) / signal.dx))
+                lower_number_to_fill = int(
+                    np.ceil((x_fill_lower - x_lower) / signal.dx)
+                )
             else:
                 lower_number_to_fill = np.searchsorted(
                     signal.xindex.value,
@@ -373,9 +375,7 @@ def fill_x_range(
             signal[:lower_number_to_fill].fill(fill_val)
 
     if (x_fill_upper := fill_bounds[1]) is not None:
-        x_fill_upper = _q_convert(
-            x_fill_upper, xunit, 'x_fill_upper', 'signal.xindex'
-        )
+        x_fill_upper = _q_convert(x_fill_upper, xunit, 'x_fill_upper', 'signal.xindex')
         if x_fill_upper > x_upper:
             logger.info(
                 f'Upper bound {x_fill_upper} in `fill_bounds` is larger '
@@ -385,14 +385,16 @@ def fill_x_range(
             )
         else:
             if _regular:
-                upper_number_to_fill = signal.size -  int(np.ceil((x_upper - x_fill_upper) / signal.dx))
+                upper_number_to_fill = signal.size - int(
+                    np.ceil((x_upper - x_fill_upper) / signal.dx)
+                )
             else:
                 upper_number_to_fill = np.searchsorted(
                     signal.xindex.value,
                     x_fill_upper,
                     side='right',
                 )
-            signal[upper_number_to_fill :].fill(fill_val)
+            signal[upper_number_to_fill:].fill(fill_val)
 
     return signal
 
@@ -439,11 +441,14 @@ def signal_at_dx(
     # -- redefined in terms of the more general function
     # -- signal_at_xindex. Still, it is somewhat useful and thus kept.
 
-    new_index = np.arange(
-        signal.x0.to_value(signal.xunit),
-        signal.xindex[-1].to_value(signal.xunit),
-        step=dx.to_value(signal.xunit)
-    ) << signal.xunit
+    new_index = (
+        np.arange(
+            signal.x0.to_value(signal.xunit),
+            signal.xindex[-1].to_value(signal.xunit),
+            step=dx.to_value(signal.xunit),
+        )
+        << signal.xunit
+    )
 
     return signal_at_xindex(signal, new_index, full_metadata=full_metadata)
 
@@ -519,21 +524,28 @@ def signal_at_xindex(
     fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
 
     # -- Actual computations
-    if signal.xindex.size == target_xindex.size and (allclose_quantity(
-        signal.xindex, target_xindex, atol=0.5 * signal.dx.to_value(signal.xunit), rtol=0.0
-    ) if hasattr(signal, 'dx') else np.all(abs(signal.xindex - target_xindex)[:-1] <= 0.5*abs(np.diff(signal.xindex)))):
-        # -- Basically custom copy, no interpolation required though
-        out = type(signal)(
-            signal.value, unit=signal.unit, xindex=signal.xindex
+    if signal.xindex.size == target_xindex.size and (
+        allclose_quantity(
+            signal.xindex,
+            target_xindex,
+            atol=0.5 * signal.dx.to_value(signal.xunit),
+            rtol=0.0,
         )
+        if hasattr(signal, 'dx')
+        else np.all(
+            abs(signal.xindex - target_xindex)[:-1] <= 0.5 * abs(np.diff(signal.xindex))
+        )
+    ):
+        # -- Basically custom copy, no interpolation required though
+        out = type(signal)(signal.value, unit=signal.unit, xindex=signal.xindex)
     else:
         out = np.interp(
-                target_xindex,
-                signal.xindex,
-                signal,
-                left=fill_val.to_value(signal.unit),
-                right=fill_val.to_value(signal.unit),
-            ).view(type(signal))
+            target_xindex,
+            signal.xindex,
+            signal,
+            left=fill_val.to_value(signal.unit),
+            right=fill_val.to_value(signal.unit),
+        ).view(type(signal))
         out.xindex = target_xindex
 
     if fill_bounds is not None:

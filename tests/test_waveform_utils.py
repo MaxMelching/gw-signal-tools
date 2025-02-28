@@ -245,7 +245,49 @@ def test_signal_at_xindex_interp_and_filling(f_low, f_high, df):
 
 
 def test_restrict_x_range_copy():
-    ...
+    hf = type(hp_f_fine)(
+        np.ones(hp_f_fine.size),
+        xindex=hp_f_fine.frequencies.copy(),
+        unit=hp_f_fine.unit,
+    )
+    hf_backup = hf.copy()
+
+    # -- First test: if copy=True, filling must not edit original array
+    # -- (if copy=False, the default, this is not the case, second test)
+    hf_2 = restrict_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=True)
+    assert_allequal_series(hf, hf_backup)
+    hf_2 = restrict_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=False)
+    assert_allequal_series(hf.crop(start=f_min), hf_2.crop(start=f_min))
+
+    # -- If we pad something in beginning, a copy is already made, so
+    # -- filling (even with False) should not edit original array
+    hf = hf_backup.copy()
+    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=[f_min, None], fill_val=42, copy=False)
+    assert_allequal_series(hf, hf_backup)
+
+    # -- If we fill, but on same frequency that padding started, no
+    # -- inplace editing must take place
+    hf = hf_backup.copy()
+    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=[-f_min, None], fill_val=42, copy=False)
+    assert_allequal_series(hf, hf_backup)
+
+    # -- Even for no filling, a copy is made in certain circumstances,
+    # -- e.g. filling.
+    hf = hf_backup.copy()
+    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=None, fill_val=42, copy=False)
+    hf_2[100:] = np.full_like(100, 42) * hf_2.unit
+    assert_allequal_series(hf, hf_backup)
+
+    # -- Make sure copy is always made when true, not just when required
+    # -- due to application of filling (because users will rely on that
+    # -- when passing copy=True)
+    hf = hf_backup.copy()
+    # hf_2 = restrict_x_range(hf, x_range=None, fill_range=None, copy=True)
+    hf_2 = restrict_x_range(hf, x_range=[f_min, None], fill_range=[f_min, None], fill_val=42, copy=True)
+    hf_2[200:420] = np.full_like(-100, 42) * hf_2.unit
+    assert_allequal_series(hf, hf_backup)
+
+test_restrict_x_range_copy()
 
 
 def test_restrict_x_range_none_args():

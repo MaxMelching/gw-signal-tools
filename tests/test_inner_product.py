@@ -300,7 +300,8 @@ def test_f_range_handling(f_range):
     assert_allclose_quantity(norm1, norm2, atol=0., rtol=0.)
 
 
-def test_positive_negative_f_range_consistency():
+@pytest.mark.parametrize('interp', [False, True])
+def test_positive_negative_f_range_consistency(interp):
     h = td_to_fd(pad_to_dx(hp_t, dx=hp_f_fine.df))
     h_symm = td_to_fd(pad_to_dx(hp_t, dx=hp_f_fine.df) + 0.j)
     # -- h_symm has symmetric spectrum around f=0.0 and the same
@@ -310,15 +311,25 @@ def test_positive_negative_f_range_consistency():
     f_upper = f_max
 
     norm1 = norm(h, f_range=[0.0, f_upper])
-    norm1_opt, info1 = norm(h, f_range=[0.0, f_upper],
-                            optimize_time_and_phase=True, return_opt_info=True)
+    norm1_opt, info1 = norm(
+        h,
+        f_range=[0.0, f_upper],
+        signal_interpolation=interp,
+        optimize_time_and_phase=True,
+        return_opt_info=True,
+    )
     time_1 = info1['peak_time']
     assert_allclose_quantity(norm1, norm1_opt, atol=0.0, rtol=1e-12)
     assert_allclose_quantity(0.*u.s, time_1, atol=1e-12, rtol=0.0)
 
     norm2 = norm(h_symm, f_range=[-f_upper, f_upper])
-    norm2_opt, info2 = norm(h_symm, f_range=[-f_upper, f_upper],
-                            optimize_time_and_phase=True, return_opt_info=True)
+    norm2_opt, info2 = norm(
+        h_symm,
+        f_range=[-f_upper, f_upper],
+        signal_interpolation=interp,
+        optimize_time_and_phase=True,
+        return_opt_info=True,
+    )
     time_2 = info2['peak_time']
     assert_allclose_quantity(norm2, norm2_opt, atol=0.0, rtol=1e-12)
     assert_allclose_quantity(0.*u.s, time_2, atol=1e-12, rtol=0.0)
@@ -326,8 +337,8 @@ def test_positive_negative_f_range_consistency():
     assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm1_opt, norm2_opt, atol=0.0, rtol=1e-12)
 
-    norm_plus = norm(h_symm, f_range=[0.0, f_upper])
-    norm_minus = norm(h_symm, f_range=[-f_upper, 0.0])
+    norm_plus = norm(h_symm, f_range=[0.0, f_upper], signal_interpolation=interp)
+    norm_minus = norm(h_symm, f_range=[-f_upper, 0.0], signal_interpolation=interp)
 
     assert_allclose_quantity(norm_plus, norm_minus, atol=0.0, rtol=1e-15)
     assert_allclose_quantity(norm_plus, norm2, atol=0.0, rtol=1e-15)
@@ -382,37 +393,27 @@ def test_calc_modes(f_range, eval_frequs):
         unit=u.strain**2/hp_f_fine.xunit,
     )
 
-    norm1 = norm(h_interp, psd=psd, f_range=f_range, no_signal_interpolation=True)
-    norm2 = norm(h_interp, psd=psd, f_range=f_range, eval_frequencies=eval_frequs)  # Equivalent to no_signal_interpolation
-    norm3 = norm(hp_f_fine, psd=psd, f_range=f_range)
-    assert_allclose_quantity(norm1, [norm2, norm3], atol=0.0, rtol=0.0015)
-
-
-@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
-def test_eval_frequs_w_opt(f_range):
-    psd = FrequencySeries(
-        np.ones(hp_f_fine.size),
-        frequencies=hp_f_fine.xindex,
-        unit=u.strain**2/hp_f_fine.xunit,
-    )
-    for opt in [False, True]:
-        norm1 = norm(hp_f_fine, psd=psd, f_range=f_range, no_signal_interpolation=True, optimize_time_and_phase=opt)
-        norm2 = norm(hp_f_fine, psd=psd, f_range=f_range, eval_frequencies=hp_f_fine.xindex, optimize_time_and_phase=opt)  # Equivalent to no_signal_interpolation
-        norm3 = norm(hp_f_fine, psd=psd, f_range=f_range, optimize_time_and_phase=opt)
-        assert_allclose_quantity(norm1, [norm2, norm3], atol=0.0, rtol=0.0008)
+    norm1 = norm(hp_f_fine, psd=psd, f_range=f_range)  # Reference result
+    norm2 = norm(h_interp, psd=psd, f_range=f_range, signal_interpolation=False)
+    norm3 = norm(h_interp, psd=psd, f_range=f_range, signal_interpolation=True)
+    assert_allclose_quantity(norm1, [norm2, norm3], atol=0.0, rtol=0.003)
+    # -- Some deviation is expected, we compare signals evaluated at different
+    # -- frequencies, i.e. there are different interpolations going on.
+    assert_allclose_quantity(norm2, norm3, atol=0.0, rtol=0.0012)
+    # -- Between signals evaluated on same frequencies, difference is
+    # -- smaller, as it should be the case.
 
 
 @pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
 def test_no_interpolation(f_range):
-    norm1 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=False)
-    norm2 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=True)
-    norm3 = norm(hp_f_fine, eval_frequencies=hp_f_fine.frequencies, f_range=f_range, no_signal_interpolation=False)
-    norm4 = norm(hp_f_fine, eval_frequencies=hp_f_fine.frequencies, f_range=f_range, no_signal_interpolation=True)
+    for opt in [False, True]:
+        norm1 = norm(hp_f_fine, f_range=f_range, signal_interpolation=True, optimize_time_and_phase=opt)
+        norm2 = norm(hp_f_fine, f_range=f_range, signal_interpolation=False, optimize_time_and_phase=opt)
 
-    assert_allclose_quantity(norm1, [norm2, norm3, norm4], atol=0.0, rtol=0.008)
-    # -- Have to allow for some deviation here because of different cutoffs for
-    # -- certain f_ranges, when interpolation is there and not
-
+        assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.0)
+        # -- No deviation at all in this case, since default df is same, so
+        # -- signal interpolation to new frequencies and restriction of
+        # -- current/given frequencies are perfectly equivalent.
 
 
 # TODO: now test for failures!

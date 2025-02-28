@@ -14,7 +14,12 @@ from gwpy.types import Index
 # -- Local Package Imports
 from ..units import preferred_unit_system
 from ..logging import logger
-from .utils import signal_at_xindex, apply_time_phase_shift, fill_x_range, restrict_x_range
+from .utils import (
+    signal_at_xindex,
+    apply_time_phase_shift,
+    fill_x_range,
+    restrict_x_range,
+)
 from .ft import td_to_fd
 from ._error_helpers import _q_convert, _compare_series_xindex, _assert_ft_compatible
 from ..types import FDWFGen
@@ -270,8 +275,6 @@ def inner_product(
     # -- Handling of units
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
-    elif isinstance(signal1, TimeSeries):
-        frequ_unit = signal1.times.unit * u.Hz / u.s
     else:
         raise TypeError(
             '`signal1` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
@@ -284,10 +287,6 @@ def inner_product(
 
     if isinstance(signal2, FrequencySeries):
         assert signal2.frequencies.unit._is_equivalent(
-            frequ_unit
-        ), 'Need consistent frequency/time units for `signal1` and `signal2`.'
-    elif isinstance(signal2, TimeSeries):
-        assert (signal2.times.unit * u.Hz / u.s)._is_equivalent(
             frequ_unit
         ), 'Need consistent frequency/time units for `signal1` and `signal2`.'
     else:
@@ -318,7 +317,6 @@ def inner_product(
     # -- Handling frequency range, needed for every case of return
     f_lower, f_upper = _determine_x_range(f_range, signal1, signal2, psd)
 
-
     if not signal_interpolation:
         # -- Signals are assumed to be on correct frequencies already,
         # -- thus the only things left to do are taking care of
@@ -333,12 +331,20 @@ def inner_product(
             # -- copy=False), inner_product_computation does not edit
             # -- the signals in any way.
             signal1 = restrict_x_range(
-                signal1, x_range=eval_range, copy=False,
+                signal1,
+                x_range=eval_range,
+                copy=False,
             )
             signal2 = restrict_x_range(
-                signal2, x_range=eval_range, copy=False,
+                signal2,
+                x_range=eval_range,
+                copy=False,
             )
-            psd = restrict_x_range(psd, x_range=eval_range, copy=False,)
+            psd = restrict_x_range(
+                psd,
+                x_range=eval_range,
+                copy=False,
+            )
 
             return inner_product_computation(signal1, signal2, psd)
         else:
@@ -387,7 +393,6 @@ def inner_product(
                 return_opt_info=return_opt_info,
             )
 
-
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
         df = 0.0625 * frequ_unit  # Default value of output of FDWaveform (2**-4*u.Hz)
@@ -398,7 +403,11 @@ def inner_product(
     # -- equal (if necessary) and then restrict range
     if not _optimize:
         target_range = (
-            np.arange(f_lower.value, f_upper.value + 0.5 * df.value, step=df.value)
+            np.arange(
+                f_lower.to_value(frequ_unit),
+                f_upper.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
+                step=df.to_value(frequ_unit),
+            )
             << frequ_unit
         )
         fill_bounds = None

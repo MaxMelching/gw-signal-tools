@@ -370,6 +370,39 @@ def test_df_handling(df1, df2):
 
 
 @pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
+@pytest.mark.parametrize('eval_frequs', [
+    hp_f_fine.frequencies,
+    np.logspace(np.log10(f_min.value), np.log10(f_max.value), num=hp_f_fine.size//10) << u.Hz,
+])  # No resampling, unequal resampling
+def test_calc_modes(f_range, eval_frequs):
+    h_interp = signal_at_xindex(hp_f_fine, eval_frequs, fill_val=0.0 * hp_f_fine.unit)
+    psd = FrequencySeries(
+        np.ones(h_interp.size),
+        frequencies=eval_frequs,
+        unit=u.strain**2/hp_f_fine.xunit,
+    )
+
+    norm1 = norm(h_interp, psd=psd, f_range=f_range, no_signal_interpolation=True)
+    norm2 = norm(h_interp, psd=psd, f_range=f_range, eval_frequencies=eval_frequs)  # Equivalent to no_signal_interpolation
+    norm3 = norm(hp_f_fine, psd=psd, f_range=f_range)
+    assert_allclose_quantity(norm1, [norm2, norm3], atol=0.0, rtol=0.0015)
+
+
+@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
+def test_eval_frequs_w_opt(f_range):
+    psd = FrequencySeries(
+        np.ones(hp_f_fine.size),
+        frequencies=hp_f_fine.xindex,
+        unit=u.strain**2/hp_f_fine.xunit,
+    )
+    for opt in [False, True]:
+        norm1 = norm(hp_f_fine, psd=psd, f_range=f_range, no_signal_interpolation=True, optimize_time_and_phase=opt)
+        norm2 = norm(hp_f_fine, psd=psd, f_range=f_range, eval_frequencies=hp_f_fine.xindex, optimize_time_and_phase=opt)  # Equivalent to no_signal_interpolation
+        norm3 = norm(hp_f_fine, psd=psd, f_range=f_range, optimize_time_and_phase=opt)
+        assert_allclose_quantity(norm1, [norm2, norm3], atol=0.0, rtol=0.0008)
+
+
+@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
 def test_no_interpolation(f_range):
     norm1 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=False)
     norm2 = norm(hp_f_fine, f_range=f_range, no_signal_interpolation=True)
@@ -381,16 +414,11 @@ def test_no_interpolation(f_range):
     # -- certain f_ranges, when interpolation is there and not
 
 
-@pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2*f_min, None]])
-def test_unequal_sampling(f_range):
-    unequal_sampled_frequs = np.concatenate([np.arange(0, f_max.value//2, step=2**-4), np.arange(f_max.value//2, f_max.value, step=2**-6)]) << u.Hz
-    h_interp = signal_at_xindex(hp_f_fine, unequal_sampled_frequs)
-    psd_interp = signal_at_xindex(psd_no_noise, unequal_sampled_frequs)
 
-    norm1 = norm(h_interp, psd=psd_interp, f_range=f_range, no_signal_interpolation=True)
-    norm2 = norm(hp_f_fine, psd=psd_interp, f_range=f_range)
+# TODO: now test for failures!
 
-    assert_allclose_quantity(norm1, [norm2], atol=0.0, rtol=0.00)
+# giving eval_frequencies that do not match signal1
+# giving unequally sampled eval_frequencies with optimization on
 
 
 def test_different_units():

@@ -102,8 +102,7 @@ def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: Optional[FrequencySeries] = None,
-    eval_frequencies: Optional[Index | list[float] | list[u.Quantity]] = None,
-    no_signal_interpolation: bool = False,
+    signal_interpolation: bool = True,
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
@@ -147,32 +146,30 @@ def inner_product(
         has to be provided.
 
         Note that this inner product is designed for one-sided PSDs.
-    eval_frequencies : ~gwpy.types.Index pr list[float] or list[~astropy.units.Quantity], optional, default = None,
-        A specific set of frequencies on which the inner product shall
-        be calculated. The main purpose for this is to allow for signals
-        that are not given on an equally sampled frequency interval.
-        Note that an IFFT is not possible in such a configuration
-        (except eval_frequencies are evenly spaced, but then why use
-        this argument and not `f_range` in combination with `df`?),
-        which means optimized inner products cannot be carried out
-        (however, if you are interested in unequal sampling, you
-        probably have sufficient experience to know this).
-
-        In case all the signals are already given on these frequencies
-        (including the PSD, if given), consider using this argument in
-        conjunction with `no_signal_interpolation=True`, which takes
-        some shortuts throughout the function and should lead to a
-        speedup of the calculation (though it might be small).
-    no_signal_interpolation : boolean, optional, default = False
+    signal_interpolation : boolean, optional, default = True
         Determines whether or not it is ensured that signals have the
         same frequency range and spacing, with a potential interpolation
         happening. If you do not want this to happen, set this argument
-        to ``True``, whence all arguments will be directly passed on to
-        the inner product calculators. In principle, one could just
-        resort to `inner_product_calculation`, `optimized_inner_product`
-        without using `inner_product`, but this argument enables the use
-        of wrapper functions like `norm` or `overlap` while providing
-        the same functionality of not changing input signals.
+        to ``False``, whence all arguments will be directly passed on to
+        the inner product calculators (resulting in a potential, though
+        hopefully small, speedup), allowing very precise control over
+        the involved frequency ranges. This can be achieved via a
+        specific way of generating the input waveforms/data or by
+        a proper call to a function like
+        `~gwsignal_tools.waveform.signal_at_index` that yields signals
+        at specific frequencies, right before this function. Providing
+        a similar functionality inside this function turned out to be
+        very error-prone, particularly the interplay of evaluating at
+        the frequencies and managing when to interpolate, in combination
+        with having to distinguish equal/unequal sampling. Hence,
+        we have resorted to keeping just `signal_interpolation`.
+
+        In principle, one could just resort to
+        `inner_product_calculation`, `optimized_inner_product` to get
+        the same results, without having to go through `inner_product`.
+        However, this would mean convenient wrappers such as `norm` or
+        `overlap` would have to redefined, which serves as justification
+        for this argument.
 
         Additionally, this argument is compatible with giving different
         `f_range` arguments, i.e. restricting is still supported (this
@@ -311,11 +308,6 @@ def inner_product(
             psd /= frequ_unit / psd_frequ_unit
             # -- Rescale density that it represents, psd is per frequ_unit
 
-        if eval_frequencies is not None:
-            # -- Interpolating 1s is surely ok. By doing this here, we
-            # -- allow zero-noise inner product with eval_frequencies, avoids annyoing error
-            psd = signal_at_xindex(psd, eval_frequencies)
-
     if isinstance(psd, FrequencySeries):
         assert psd.frequencies.unit._is_equivalent(
             frequ_unit
@@ -323,92 +315,33 @@ def inner_product(
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
-
-    # -- Handling frequency range and spacing
+    # -- Handling frequency range, needed for every case of return
     f_lower, f_upper = _determine_x_range(f_range, signal1, signal2, psd)
 
-    # -- If eval_frequencies are given or signal is already on correct
-    # -- frequencies (indicated by no_signal_interpolation), then there
-    # -- is not much left to do. Else we have to generate suitable
-    # -- eval_frequencies based on df and f_range.
-    if (eval_frequencies is not None) or no_signal_interpolation:
-        if eval_frequencies is not None:
-            eval_frequencies = Index(eval_frequencies)
 
-            try:
-                _compare_series_xindex(
-                    signal1,
-                    # signal2,
-                    # psd,
-                    FrequencySeries(
-                        np.ones(len(eval_frequencies)), frequencies=eval_frequencies
-                    ),
-                    enforce_dx=False,
-                )
-                # -- Comparing only signal1 is ok, mutual compatibility
-                # -- of input is checked in calculation functions.
-            except ValueError:
-                raise ValueError(
-                    'Given `frequs` do not match frequencies of `signal1`. '
-                    'This is incompatible with `no_signal_interpolation=True`.'
-                )
-
-            # -- Assert that lower and upper lie within range given by eval_frequencies
-            if f_lower < eval_frequencies[0]:
-                logger.info(
-                    'Given `f_range` is outside of range given by `eval_frequencies`'
-                    f' ({f_lower}vs. {eval_frequencies[0]}), '
-                    'restricting since I cannot interpolate uneven sampling.'
-                )
-                f_lower = eval_frequencies[0]
-            if f_upper > eval_frequencies[-1]:
-                logger.info(
-                    'Given `f_range` is outside of range given by `eval_frequencies`'
-                    f' ({f_upper}vs. {eval_frequencies[-1]}), '
-                    'restricting since I cannot interpolate uneven sampling.'
-                )
-                f_upper = eval_frequencies[-1]
-
-        # -- Take care of frequency ranges and return. This is done
-        # -- under the assumption that signal frequencies are already
-        # -- matching and have correct format for potential IFFT. Thus
-        # -- we just restrict + fill with zeros. We have taken care of
-        # -- correcting range to match eval_frequencies perviously.
+    if not signal_interpolation:
+        # -- Signals are assumed to be on correct frequencies already,
+        # -- thus the only things left to do are taking care of
+        # -- frequency ranges and returning.
         if not _optimize:
-            # -- Returning views is fine in this case!
             eval_range = (f_lower, f_upper)
             # eval_range = (f_lower - 0.5 * df, f_upper + 0.5 * df)  # Ensure all signals are non-zero on same range
             # -- Filling is done UP TO THIS frequency, but we want it included
             # TODO: do we need this?
 
-            if eval_frequencies is not None:
-                signal1 = signal_at_xindex(
-                    signal1, eval_frequencies, fill_val=0.0 * signal1.unit, fill_bounds=eval_range,
-                )
-                signal2 = signal_at_xindex(
-                    signal2, eval_frequencies, fill_val=0.0 * signal2.unit, fill_bounds=eval_range,
-                )
-                psd = signal_at_xindex(
-                    psd, eval_frequencies, fill_val=1.0 * psd.unit, fill_bounds=eval_range,
-                )
-            else:
-                # -- This is case where we must not interpolate
-                signal1 = restrict_x_range(
-                    signal1, x_range=eval_range,
-                )
-                signal2 = restrict_x_range(
-                    signal2, x_range=eval_range,
-                )
-                psd = restrict_x_range(psd, x_range=eval_range)
+            # -- Returning views of signals is fine (done due to
+            # -- copy=False), inner_product_computation does not edit
+            # -- the signals in any way.
+            signal1 = restrict_x_range(
+                signal1, x_range=eval_range, copy=False,
+            )
+            signal2 = restrict_x_range(
+                signal2, x_range=eval_range, copy=False,
+            )
+            psd = restrict_x_range(psd, x_range=eval_range, copy=False,)
 
             return inner_product_computation(signal1, signal2, psd)
         else:
-            if not no_signal_interpolation and not eval_frequencies.regular:  # Works because of conversion to Index above
-                raise ValueError(
-                    'Cannot perform IFFT with uneven frequency spacing, '
-                    'so no optimization can be carried out.'
-                )
-
             non_zero_range = (f_lower, f_upper)
 
             if f_lower >= 0.0 * frequ_unit:
@@ -417,38 +350,27 @@ def inner_product(
                 f_limit = max(abs(f_lower), abs(f_upper))
                 eval_range = -f_limit, f_limit
 
-            if eval_frequencies is not None:
-                signal1 = signal_at_xindex(
-                    signal1, eval_frequencies, fill_val=0.0 * signal1.unit, fill_bounds=non_zero_range,
-                )
-                signal2 = signal_at_xindex(
-                    signal2, eval_frequencies, fill_val=0.0 * signal2.unit, fill_bounds=non_zero_range,
-                )
-                psd = signal_at_xindex(
-                    psd, eval_frequencies, fill_val=1.0 * psd.unit, fill_bounds=non_zero_range,
-                )
-            else:
-                signal1 = restrict_x_range(
-                    signal1,
-                    x_range=eval_range,
-                    fill_val=0.0 * signal1.unit,
-                    fill_range=non_zero_range,
-                    copy=True,
-                )
-                signal2 = restrict_x_range(
-                    signal2,
-                    x_range=eval_range,
-                    fill_val=0.0 * signal2.unit,
-                    fill_range=non_zero_range,
-                    copy=True,
-                )
-                psd = restrict_x_range(
-                    psd,
-                    x_range=eval_range,
-                    fill_val=1.0 * psd.unit,
-                    fill_range=non_zero_range,
-                    copy=True,
-                )
+            signal1 = restrict_x_range(
+                signal1,
+                x_range=eval_range,
+                fill_val=0.0 * signal1.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
+            signal2 = restrict_x_range(
+                signal2,
+                x_range=eval_range,
+                fill_val=0.0 * signal2.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
+            psd = restrict_x_range(
+                psd,
+                x_range=eval_range,
+                fill_val=1.0 * psd.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
 
             if optimize_time_and_phase:
                 # -- Overwrite

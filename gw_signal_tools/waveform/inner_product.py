@@ -54,7 +54,7 @@ def _determine_x_range(x_range, *s):
 
     # -- If bounds are given, check that they fit the input data
     if x_range is not None:
-        if len(x_range) != 2:
+        if len(x_range) != 2:  # pragma: no cover
             raise ValueError(
                 '`f_range` must contain lower and upper frequency bounds for '
                 'integration. One of them or both can be `None`, but both '

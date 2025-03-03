@@ -120,7 +120,7 @@ def test_time_and_phase_shift_consistency():
     )
 
     assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
-                                    atol=1.3e-49, rtol=0.)
+                                    atol=1.3e-49, rtol=2.4e-16)
     # This is great accuracy. This deviation is for two uncorrelated
     # parameters, where the value itself is ten (!) orders of magnitude
     # below all diagonal values (which means it is of the order of
@@ -147,7 +147,7 @@ def test_deriv_routine_consistency():
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(
         fisher_gw_signal_tools.fisher, fisher_numdifftools.fisher,
-        atol=0., rtol=8e-4)
+        atol=0., rtol=8.1e-4)
     assert_allclose_MatrixWithUnits(
         fisher_gw_signal_tools.fisher, fisher_amplitude_phase.fisher,
         atol=0., rtol=7e-4)

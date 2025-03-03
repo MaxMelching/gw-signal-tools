@@ -150,7 +150,7 @@ def test_optimize_match_consistency():
 
     assert_allclose_quantity(norm1_coarse, norm2_coarse, atol=0.0, rtol=0.11)
     assert_allclose_quantity(0.*u.s, time_coarse, atol=1e-10, rtol=0.0)
-    assert_allclose_quantity(0.*u.rad, phase_coarse, atol=1e-18, rtol=0.0)
+    assert_allclose_quantity(0.*u.rad, phase_coarse, atol=3e-18, rtol=0.0)
 
 
     norm1_fine = norm(hp_f_fine)

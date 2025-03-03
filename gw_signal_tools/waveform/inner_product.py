@@ -258,7 +258,7 @@ def inner_product(
             'the result, this is discouraged, consider doing it manually.'
         )
 
-        signal1 = td_to_fd(signal1)
+        signal1 = td_to_fd(signal1, convention='unwrap')
 
     if isinstance(signal2, TimeSeries):
         logger.info(
@@ -267,7 +267,7 @@ def inner_product(
             'the result, this is discouraged, consider doing it manually.'
         )
 
-        signal2 = td_to_fd(signal2)
+        signal2 = td_to_fd(signal2, convention='unwrap')
 
     # -- Store frequently accessed, quite lengthy boolean
     _optimize = optimize_time_and_phase or optimize_time or optimize_phase
@@ -395,7 +395,29 @@ def inner_product(
 
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
-        df = 0.0625 * frequ_unit  # Default value of output of FDWaveform (2**-4*u.Hz)
+        # df = 0.0625 * frequ_unit
+        # -- Choose default value of output of FDWaveform (2**-4*u.Hz)
+        # df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+        # if frequ_unit._is_equivalent(u.Hz):
+        #     df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+        # else:
+        #     df = 0.0625 * frequ_unit
+        # if signal1.frequencies.regular and signal2.frequencies.regular:
+        #     df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
+        # else:
+        #     df = _q_convert(max(signal1.frequencies.diff(), signal2.frequencies.diff()), frequ_unit, 'df', 'signal.frequencies')
+        # TODO: check if .regular is as expensive as taking diff directly -> could also be that it is immediately set True if FrequencySeries is initialized with df
+        # df = _q_convert(max(signal1.frequencies.diff().max(), signal2.frequencies.diff().max()), frequ_unit, 'df', 'signal.frequencies')
+
+        try:
+            df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
+        except AttributeError:
+            # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
+            if frequ_unit._is_equivalent(u.Hz):
+                df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+            else:
+                # -- We have no idea what frequ_unit is, just set to some number
+                df = 0.0625 * frequ_unit
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 

@@ -22,7 +22,7 @@ from ..types import WFGen, FDWFGen
 
 __all__ = (
     'pad_to_dx',
-    'restrict_x_range',
+    'adjust_x_range',
     'fill_x_range',
     'signal_at_dx',
     'signal_at_xindex',
@@ -82,7 +82,7 @@ def pad_to_dx(signal: Series, dx: float | u.Quantity) -> Series:
         return signal
 
 
-def restrict_x_range(
+def adjust_x_range(
     signal: Series,
     x_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
     fill_val: float | u.Quantity = 0.0,
@@ -92,7 +92,9 @@ def restrict_x_range(
     """
     Pad :code:'signal' to xindex values specified by :code:`x_range`,
     while potentially setting its values in the interval
-    :code:`fill_range` to a fixed value.
+    :code:`fill_range` to a fixed value. Note that this function can
+    both extend and restrict the range of :code:`signal.xindex`,
+    depending on the given :code:`x_range`.
 
     This function does not support signals that are unevenly spaced if
     padding is required (i.e. if :code:`x_range` is wider than
@@ -183,7 +185,7 @@ def restrict_x_range(
                 # if (x_lower < signal.x0 - 0.5*(signal.xindex[1] - signal.xindex[0])) or (x_upper > signal.xindex[-1] + 0.5*(signal.xindex[-1] - signal.xindex[-2])):
                 # -- Keep as backup, in case this shows up as issue again
                 raise ValueError(
-                    'The padding features of `restrict_x_range` only works '
+                    'The padding features of `adjust_x_range` only works '
                     'for equally sampled signals.'
                 )
 

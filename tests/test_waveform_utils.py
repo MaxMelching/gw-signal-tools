@@ -12,7 +12,7 @@ import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.waveform.utils import (
-    pad_to_dx, restrict_x_range,
+    pad_to_dx, adjust_x_range,
     signal_at_dx, signal_at_xindex,
     get_strain, fill_x_range, get_wf_generator
 )
@@ -244,7 +244,7 @@ def test_signal_at_xindex_interp_and_filling(f_low, f_high, df):
     assert_quantity_equal(hp_f_at_target_frequs_restricted_3, 0.0 * _CORRECT_H_UNIT_FREQU)
 
 
-def test_restrict_x_range_copy():
+def test_adjust_x_range_copy():
     hf = type(hp_f_fine)(
         np.ones(hp_f_fine.size),
         xindex=hp_f_fine.frequencies.copy(),
@@ -254,27 +254,27 @@ def test_restrict_x_range_copy():
 
     # -- First test: if copy=True, filling must not edit original array
     # -- (if copy=False, the default, this is not the case, second test)
-    hf_2 = restrict_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=True)
+    hf_2 = adjust_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=True)
     assert_allequal_series(hf, hf_backup)
-    hf_2 = restrict_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=False)
+    hf_2 = adjust_x_range(hf, x_range=None, fill_range=[f_min, None], fill_val=42, copy=False)
     assert_allequal_series(hf.crop(start=f_min), hf_2.crop(start=f_min))
 
     # -- If we pad something in beginning, a copy is already made, so
     # -- filling (even with False) should not edit original array
     hf = hf_backup.copy()
-    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=[f_min, None], fill_val=42, copy=False)
+    hf_2 = adjust_x_range(hf, x_range=[-f_min, None], fill_range=[f_min, None], fill_val=42, copy=False)
     assert_allequal_series(hf, hf_backup)
 
     # -- If we fill, but on same frequency that padding started, no
     # -- inplace editing must take place
     hf = hf_backup.copy()
-    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=[-f_min, None], fill_val=42, copy=False)
+    hf_2 = adjust_x_range(hf, x_range=[-f_min, None], fill_range=[-f_min, None], fill_val=42, copy=False)
     assert_allequal_series(hf, hf_backup)
 
     # -- Even for no filling, a copy is made in certain circumstances,
     # -- e.g. filling.
     hf = hf_backup.copy()
-    hf_2 = restrict_x_range(hf, x_range=[-f_min, None], fill_range=None, fill_val=42, copy=False)
+    hf_2 = adjust_x_range(hf, x_range=[-f_min, None], fill_range=None, fill_val=42, copy=False)
     hf_2[100:] = np.full_like(100, 42) * hf_2.unit
     assert_allequal_series(hf, hf_backup)
 
@@ -282,15 +282,15 @@ def test_restrict_x_range_copy():
     # -- due to application of filling (because users will rely on that
     # -- when passing copy=True)
     hf = hf_backup.copy()
-    # hf_2 = restrict_x_range(hf, x_range=None, fill_range=None, copy=True)
-    hf_2 = restrict_x_range(hf, x_range=[f_min, None], fill_range=[f_min, None], fill_val=42, copy=True)
+    # hf_2 = adjust_x_range(hf, x_range=None, fill_range=None, copy=True)
+    hf_2 = adjust_x_range(hf, x_range=[f_min, None], fill_range=[f_min, None], fill_val=42, copy=True)
     hf_2[200:420] = np.full_like(-100, 42) * hf_2.unit
     assert_allequal_series(hf, hf_backup)
 
-test_restrict_x_range_copy()
+test_adjust_x_range_copy()
 
 
-def test_restrict_x_range_none_args():
+def test_adjust_x_range_none_args():
     hp_f, _ = fd_wf_gen(wf_params)
 
     hp_f_filtered = hp_f[hp_f != 0.0 * hp_f.unit]
@@ -301,31 +301,31 @@ def test_restrict_x_range_none_args():
     assert_quantity_equal(hp_f.frequencies[-1], f_max)
 
 
-    hp_f_restricted = restrict_x_range(hp_f)
+    hp_f_restricted = adjust_x_range(hp_f)
 
     assert_quantity_equal(hp_f_restricted.f0, hp_f.f0)
     assert_quantity_equal(hp_f_restricted.frequencies[-1], hp_f.frequencies[-1])
 
 
-    hp_f_restricted_2 = restrict_x_range(hp_f, x_range=[None, None])
+    hp_f_restricted_2 = adjust_x_range(hp_f, x_range=[None, None])
 
     assert_quantity_equal(hp_f_restricted_2.f0, hp_f.f0)
     assert_quantity_equal(hp_f_restricted_2.frequencies[-1], hp_f.frequencies[-1])
 
 
-    hp_f_restricted_2_v2 = restrict_x_range(hp_f, x_range=[f_min, f_max])
+    hp_f_restricted_2_v2 = adjust_x_range(hp_f, x_range=[f_min, f_max])
 
     assert_quantity_equal(hp_f_restricted_2_v2.f0, hp_f_filtered.f0)
     assert_quantity_equal(hp_f_restricted_2_v2.frequencies[-1], hp_f.frequencies[-1])
 
 
-    hp_f_restricted_3 = restrict_x_range(hp_f, fill_range=[None, None])
+    hp_f_restricted_3 = adjust_x_range(hp_f, fill_range=[None, None])
 
     assert_quantity_equal(hp_f_restricted_3.f0, hp_f.f0)
     assert_quantity_equal(hp_f_restricted_3.frequencies[-1], hp_f.frequencies[-1])
 
 
-    hp_f_restricted_3_v2 = restrict_x_range(hp_f, fill_range=[f_min, f_max])
+    hp_f_restricted_3_v2 = adjust_x_range(hp_f, fill_range=[f_min, f_max])
     hp_f_restricted_3_v2_filtered = hp_f_restricted_3_v2[hp_f_restricted_3_v2 != 0.0 * hp_f_restricted_3_v2.unit]
 
     assert_quantity_equal(hp_f_restricted_3_v2.f0, hp_f.f0)
@@ -338,13 +338,13 @@ def test_restrict_x_range_none_args():
 @pytest.mark.parametrize('f_crop_high', [0.9 * f_max, 1.1 * f_max])
 # Last one is there to demonstrate that it is not about size of df, behaviour
 # is about nature of its value (power of two or not)
-def test_restrict_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
+def test_adjust_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     
-    hp_f_restricted = restrict_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
+    hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes a method similar to what is done in restrict_x_range.
+    # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
 
     f_lower = max(hp_f.f0, hp_f_restricted.f0)
@@ -382,14 +382,14 @@ def test_restrict_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high
 @pytest.mark.parametrize('f_crop_low', [0.9 * f_min, 1.1 * f_min])
 @pytest.mark.parametrize('f_crop_high', [0.9 * f_max, 1.1 * f_max])
 # Checking with one that is not power of two is important to ensure
-# pad_to_dx does good job (not necessarily related to restrict_x_range)
-def test_restrict_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
+# pad_to_dx does good job (not necessarily related to adjust_x_range)
+def test_adjust_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     
-    hp_f_restricted = restrict_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
+    hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes a method similar to what is done in restrict_x_range.
+    # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
 
     f_lower = max(hp_f.f0, hp_f_restricted.f0)
@@ -425,15 +425,15 @@ def test_restrict_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
 # Checking with one that is not power of two is important to ensure
-# pad_to_dx does good job (not necessarily related to restrict_x_range)
+# pad_to_dx does good job (not necessarily related to adjust_x_range)
 @pytest.mark.parametrize('f_fill_low', [-f_min, 0.8 * f_min, f_min, 1.2 * f_min])
 @pytest.mark.parametrize('f_fill_high', [0.8 * f_max, f_max, 1.2 * f_max])
-def test_restrict_x_range_filling(df, f_fill_low, f_fill_high):
+def test_adjust_x_range_filling(df, f_fill_low, f_fill_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 
-    hp_f_restricted = restrict_x_range(hp_f, fill_range=[f_fill_low, f_fill_high])
+    hp_f_restricted = adjust_x_range(hp_f, fill_range=[f_fill_low, f_fill_high])
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes a method similar to what is done in restrict_x_range.
+    # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
 
     assert_allclose_quantity(hp_f_restricted.f0, hp_f.f0,
@@ -485,15 +485,15 @@ def test_restrict_x_range_filling(df, f_fill_low, f_fill_high):
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
 # Checking with one that is not power of two is important to ensure
-# pad_to_dx does good job (not necessarily related to restrict_x_range)
+# pad_to_dx does good job (not necessarily related to adjust_x_range)
 @pytest.mark.parametrize('f_crop_low', [0.9 * f_min, f_min])
 @pytest.mark.parametrize('f_crop_high', [f_max, 1.1 * f_max])
 @pytest.mark.parametrize('f_fill_low', [1.1 * f_min, f_min])
 @pytest.mark.parametrize('f_fill_high', [0.9 * f_max, f_max])
-def test_restrict_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
+def test_adjust_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f_fill_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
 
-    hp_f_restricted = restrict_x_range(hp_f,
+    hp_f_restricted = adjust_x_range(hp_f,
                                        x_range=[f_crop_low, f_crop_high],
                                        fill_range=[f_fill_low, f_fill_high])
 
@@ -503,7 +503,7 @@ def test_restrict_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low,
                              atol=df.value, rtol=0.0)
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes a method similar to what is done in restrict_x_range.
+    # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
 
     hp_f_cropped = hp_f[(hp_f.frequencies >= f_fill_low)
@@ -539,7 +539,7 @@ def test_restrict_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low,
 
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, hp_f_fine.df / 4])
-def test_restrict_x_range_with_padding_and_cropping_exact(df):
+def test_adjust_x_range_with_padding_and_cropping_exact(df):
     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
     # For contiguous padding to be possible, f_crop_low has to be an integer
     # multiple of df
@@ -548,11 +548,11 @@ def test_restrict_x_range_with_padding_and_cropping_exact(df):
     # hp_t_f = td_to_fd(hp_t_padded)
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-    hp_f_restricted = restrict_x_range(hp_f, x_range=[0.0, f_crop_high],
+    hp_f_restricted = adjust_x_range(hp_f, x_range=[0.0, f_crop_high],
                                        fill_range=[f_crop_low, None])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes computations similar to what is done in restrict_x_range.
+    # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
     print(hp_f_restricted.frequencies[-1], hp_f_restricted.df, f_crop_high)
     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
@@ -562,23 +562,23 @@ def test_restrict_x_range_with_padding_and_cropping_exact(df):
 
 
 @pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
-def test_restrict_x_range_with_padding_and_cropping_not_exact(df):
+def test_adjust_x_range_with_padding_and_cropping_not_exact(df):
     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
 
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
-    hp_f_restricted = restrict_x_range(hp_f, x_range=[0.0, f_crop_high],
+    hp_f_restricted = adjust_x_range(hp_f, x_range=[0.0, f_crop_high],
                                        fill_range=[f_crop_low, None])
     
     # NOTE: we will not use Series.crop to get the comparisons because it
-    # utilizes computations similar to what is done in restrict_x_range.
+    # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
 
     assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
                              atol=df.value, rtol=0.0)
     # More tolerance needed here since using the more accurate slicing
-    # method used here is too expensive for use in restrict_x_range. This
+    # method used here is too expensive for use in adjust_x_range. This
     # comes at the price of certain smaller deviations for some df
 
 

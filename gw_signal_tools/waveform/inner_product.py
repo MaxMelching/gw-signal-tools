@@ -18,7 +18,7 @@ from .utils import (
     signal_at_xindex,
     apply_time_phase_shift,
     fill_x_range,
-    restrict_x_range,
+    adjust_x_range,
 )
 from .ft import td_to_fd
 from ._error_helpers import _q_convert, _compare_series_xindex, _assert_ft_compatible
@@ -330,17 +330,17 @@ def inner_product(
             # -- Returning views of signals is fine (done due to
             # -- copy=False), inner_product_computation does not edit
             # -- the signals in any way.
-            signal1 = restrict_x_range(
+            signal1 = adjust_x_range(
                 signal1,
                 x_range=eval_range,
                 copy=False,
             )
-            signal2 = restrict_x_range(
+            signal2 = adjust_x_range(
                 signal2,
                 x_range=eval_range,
                 copy=False,
             )
-            psd = restrict_x_range(
+            psd = adjust_x_range(
                 psd,
                 x_range=eval_range,
                 copy=False,
@@ -356,21 +356,21 @@ def inner_product(
                 f_limit = max(abs(f_lower), abs(f_upper))
                 eval_range = -f_limit, f_limit
 
-            signal1 = restrict_x_range(
+            signal1 = adjust_x_range(
                 signal1,
                 x_range=eval_range,
                 fill_val=0.0 * signal1.unit,
                 fill_range=non_zero_range,
                 copy=True,
             )
-            signal2 = restrict_x_range(
+            signal2 = adjust_x_range(
                 signal2,
                 x_range=eval_range,
                 fill_val=0.0 * signal2.unit,
                 fill_range=non_zero_range,
                 copy=True,
             )
-            psd = restrict_x_range(
+            psd = adjust_x_range(
                 psd,
                 x_range=eval_range,
                 fill_val=1.0 * psd.unit,

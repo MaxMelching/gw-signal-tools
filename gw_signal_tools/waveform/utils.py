@@ -549,7 +549,7 @@ def signal_at_xindex(
         out.xindex = target_xindex
 
     if fill_bounds is not None:
-        out = fill_x_range(out, fill_val=fill_val, fill_bounds=fill_bounds)
+        out = fill_x_range(out, fill_val=fill_val, fill_bounds=fill_bounds, copy=False)
 
     if full_metadata:
         # -- Copy everything from signal._metadata_slots

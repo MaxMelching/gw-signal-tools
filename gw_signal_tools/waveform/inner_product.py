@@ -258,7 +258,7 @@ def inner_product(
             'the result, this is discouraged, consider doing it manually.'
         )
 
-        signal1 = td_to_fd(signal1, convention='unwrap')
+        signal1 = td_to_fd(signal1)
 
     if isinstance(signal2, TimeSeries):
         logger.info(
@@ -267,7 +267,7 @@ def inner_product(
             'the result, this is discouraged, consider doing it manually.'
         )
 
-        signal2 = td_to_fd(signal2, convention='unwrap')
+        signal2 = td_to_fd(signal2)
 
     # -- Store frequently accessed, quite lengthy boolean
     _optimize = optimize_time_and_phase or optimize_time or optimize_phase

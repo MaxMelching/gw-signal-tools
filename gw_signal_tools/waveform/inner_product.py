@@ -296,16 +296,23 @@ def inner_product(
 
     # -- Handling PSD
     if psd is None:
-        from ..PSDs import psd_no_noise
+        if not signal_interpolation:
+            # -- We know frequencies on which to evaluate
+            psd = FrequencySeries(
+                np.ones(signal1.frequencies.size),
+                frequencies=signal1.frequencies,
+                unit=u.strain**2 / frequ_unit,
+            )
+        else:
+            from ..PSDs import psd_no_noise
+            psd = psd_no_noise.copy()
 
-        psd = psd_no_noise.copy()
-
-        # -- Make sure units are consistent with input. PSD is always a
-        # -- density, i.e. some unit per frequency
-        if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
-            psd.frequencies *= frequ_unit / psd_frequ_unit
-            psd /= frequ_unit / psd_frequ_unit
-            # -- Rescale density that it represents, psd is per frequ_unit
+            # -- Make sure units are consistent with input. PSD is always a
+            # -- density, i.e. some unit per frequency
+            if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
+                psd.frequencies *= frequ_unit / psd_frequ_unit
+                psd /= frequ_unit / psd_frequ_unit
+                # -- Rescale density that it represents, psd is per frequ_unit
 
     if isinstance(psd, FrequencySeries):
         assert psd.frequencies.unit._is_equivalent(

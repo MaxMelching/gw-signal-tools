@@ -421,6 +421,79 @@ def test_adjust_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_hi
     # larger than the sample spacing, this would mean error in our code
 
 
+# @pytest.mark.parametrize('frequ_mode', ['log', 'two_df'])
+@pytest.mark.parametrize('frequ_mode', ['two_df'])
+@pytest.mark.parametrize('f_crop_low', [
+    pytest.param([0.9 * f_min], marks=pytest.mark.xfail(raises=ValueError,
+    strict=True, reason='Invalid f_lower for unequal sampling')),
+    f_min,
+    1.1 * f_min
+    ]
+)
+@pytest.mark.parametrize('f_crop_high', [
+    0.9 * f_max,
+    f_max,
+    pytest.param([1.1 * f_max], marks=pytest.mark.xfail(raises=ValueError,
+    strict=True, reason='Invalid f_lower for unequal sampling'))
+    ]
+)
+def test_adjust_x_range_cropping_and_padding_unequal(frequ_mode, f_crop_low, f_crop_high):
+    if frequ_mode == 'log':
+        # frequs = np.logspace(np.log10(f_crop_low.value), np.log10(f_crop_high.value), endpoint=True, num=hp_f_fine.size//2) << u.Hz
+        frequs = np.logspace(np.log10(f_min.value), np.log10(f_max.value), endpoint=True, num=hp_f_fine.size//2) << u.Hz
+    elif frequ_mode == 'two_df':
+        # frequs = np.concatenate([np.linspace(f_crop_low.value, f_crop_high.value/2, endpoint=True, num=hp_f_fine.size//2),
+        #                          np.linspace(f_crop_high.value/2, f_crop_high.value, endpoint=True, num=hp_f_fine.size//2)]) << u.Hz
+        frequs = np.concatenate([np.linspace(f_min.value, f_max.value/2, endpoint=True, num=hp_f_fine.size//2),
+                                 np.linspace(f_max.value/2, f_max.value, endpoint=True, num=hp_f_fine.size//2)]) << u.Hz
+
+    hp_f = signal_at_xindex(hp_f_fine, frequs)
+    hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
+    
+    # NOTE: we will not use Series.crop to get the comparisons because it
+    # utilizes a method similar to what is done in adjust_x_range.
+    # Instead, more straightforward array slicing is used
+
+    f_lower = max(hp_f.f0, hp_f_restricted.f0)
+    f_upper = min(hp_f.frequencies[-1], hp_f_restricted.frequencies[-1])
+
+    hp_f_cropped = hp_f[(hp_f.frequencies >= f_lower)
+                            & (hp_f.frequencies <= f_upper)]
+    hp_f_restricted_cropped = hp_f_restricted[
+        (hp_f_restricted.frequencies >= f_lower)
+        & (hp_f_restricted.frequencies <= f_upper)
+    ]
+
+    if hp_f_cropped.size != hp_f_restricted_cropped.size:
+        # Note: this only happens for VERY small df like 0.001 where our
+        # estimates of the number of points to pad/cut off may be flawed
+        # and deviate by a single sample
+        assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
+        
+        size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
+        hp_f_cropped = hp_f_cropped[:size_min]
+        hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
+
+    assert_quantity_equal(hp_f_cropped, hp_f_restricted_cropped)
+
+    assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+                             atol=(frequs[1] - frequs[0]).value, rtol=0.0)
+    assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+                             atol=(frequs[-1] - frequs[-2]).value, rtol=0.0)
+    # -- Things are much more difficult for log...
+
+    # assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+    #                          atol=0.5 * (frequs[1] - frequs[0]).value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+    #                          atol=0.5 * (frequs[-1] - frequs[-2]).value, rtol=0.0)
+
+    # assert_allclose_quantity(hp_f_restricted.f0, f_crop_low,
+    #                          atol=0.9 * (frequs[1] - frequs[0]).value, rtol=0.0)
+    # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
+    #                          atol=0.9 * (frequs[-1] - frequs[-2]).value, rtol=0.0)
+    # -- Have full df difference if we choose side='left' in adjust_x_range
+
+
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])#, 0.007*u.Hz, 0.001*u.Hz])
 # Checking with one that is not power of two is important to ensure
 # pad_to_dx does good job (not necessarily related to adjust_x_range)

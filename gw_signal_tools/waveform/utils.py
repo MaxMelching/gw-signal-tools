@@ -192,13 +192,17 @@ def adjust_x_range(
             lower_number = np.searchsorted(
                 signal.xindex.value,
                 x_lower,
-                side='left',
+                side='left',  # Only then correct result if element in xindex
             )
+            # -- side='right' and using lower_number-1 makes better test
+            # -- results, but not sure if more correct...
             upper_number = np.searchsorted(
                 signal.xindex.value,
                 x_upper,
-                side='right',
+                side='left',  # Only then correct result if element in xindex
             )
+            # -- GWpy uses side='left' without subtraction for both
+            # -- cases, so we are consistent here.
 
             signal = signal[lower_number:upper_number]
         else:
@@ -372,7 +376,7 @@ def fill_x_range(
                 lower_number_to_fill = np.searchsorted(
                     signal.xindex.value,
                     x_fill_lower,
-                    side='left',
+                    side='left',  # Only then correct result if element in xindex
                 )
             signal[:lower_number_to_fill].fill(fill_val)
 
@@ -394,7 +398,7 @@ def fill_x_range(
                 upper_number_to_fill = np.searchsorted(
                     signal.xindex.value,
                     x_fill_upper,
-                    side='right',
+                    side='left',  # Only then correct result if element in xindex
                 )
             signal[upper_number_to_fill:].fill(fill_val)
 

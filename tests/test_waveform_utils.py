@@ -287,8 +287,6 @@ def test_adjust_x_range_copy():
     hf_2[200:420] = np.full_like(-100, 42) * hf_2.unit
     assert_allequal_series(hf, hf_backup)
 
-test_adjust_x_range_copy()
-
 
 def test_adjust_x_range_none_args():
     hp_f, _ = fd_wf_gen(wf_params)
@@ -580,10 +578,6 @@ def test_adjust_x_range_with_padding_and_cropping_not_exact(df):
     # More tolerance needed here since using the more accurate slicing
     # method used here is too expensive for use in adjust_x_range. This
     # comes at the price of certain smaller deviations for some df
-
-
-# TODO: test for various cases if copy works; e.g. if copy=False, but nothing
-# is to be filled, should not change original array
 
 
 @pytest.mark.parametrize('fill_val', [0., 2.])

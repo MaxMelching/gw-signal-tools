@@ -116,7 +116,7 @@ def _assert_ft_compatible(*fs: list[FrequencySeries]) -> None:
         'even sample size, on the other hand, the number of samples for '
         'positive frequencies is expected to be one less than the number of '
         'samples for negative frequencies, in accordance with the format '
-        'expected by `~numpy.fft.ifftshift`. Note that the conditions just'
+        'expected by `~numpy.fft.ifftshift`. Note that the conditions just '
         'mentioned do not apply to the case of a starting frequency f=0, '
         'where both even and odd sample sizes are accepted.'
     )

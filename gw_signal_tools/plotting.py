@@ -27,6 +27,8 @@ latexparams: dict[str, str] = {
     'phi_2': r'$\phi_2$',
     'tilt_1': r'$\theta_1$',
     'tilt_2': r'$\theta_2$',
+    'theta_1': r'$\theta_1$',
+    'theta_2': r'$\theta_2$',
     'phi_jl': r'$\phi_\mathrm{jl}$',
     'phi_12': r'$\phi_{12}$',
     # -- External Parameters
@@ -38,6 +40,8 @@ latexparams: dict[str, str] = {
     'iota': r'$\iota$',
     'time': '$t_0$',
     'tc': r'$t_c$',  # Basically alias for time
+    'tgps': r'$t_\mathrm{gps}$',
+    'geocent_time': r'$t_\mathrm{gps}$',
     'phase': r'$\phi_0$',
     'ra': r'$\mathrm{ra}$',
     'dec': r'$\mathrm{dec}$',

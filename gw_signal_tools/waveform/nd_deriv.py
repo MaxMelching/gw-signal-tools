@@ -65,7 +65,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative):
         calculations that are carried out.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     args, kwds :
         All other positional and keyword arguments are passed on as such
@@ -418,7 +418,7 @@ class WaveformDerivativeAmplitudePhase:
         calculations that are carried out.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     args, kwds :
         All other positional and keyword arguments are passed on as such

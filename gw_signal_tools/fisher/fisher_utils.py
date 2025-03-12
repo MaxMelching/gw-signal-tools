@@ -140,7 +140,7 @@ def fisher_matrix(
         calculations that are carried out.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'], optional, default = 'gw_signal_tools'
         Determines the class used for numerical differentiation

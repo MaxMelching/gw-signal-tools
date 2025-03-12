@@ -81,7 +81,7 @@ class FisherMatrix:
         calculations that are carried out.
 
         A convenient option is to use the method
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`, which
+        :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     direct_computation : boolean, optional, default = True
         Whether to compute the Fisher matrix upon intialization of the
@@ -429,7 +429,7 @@ class FisherMatrix:
             for the calculations that are carried out.
 
             Convenient options are the methods
-            :code:`~gw_signal_tools.waveform_utils.get_wf_generator`
+            :code:`~gw_signal_tools.waveform.get_wf_generator`
             or :code:`FisherMatrix.get_wf_generator`, which generate a
             suitable function from a few arguments.
 
@@ -1200,7 +1200,7 @@ class FisherMatrix:
         """
         Generates a function that fulfils the requirements of the
         :code:`wf_generator` argument of a ``FisherMatrix`` by calling
-        :code:`~gw_signal_tools.waveform_utils.get_wf_generator`.
+        :code:`~gw_signal_tools.waveform.get_wf_generator`.
 
         Parameters
         ----------
@@ -1224,7 +1224,7 @@ class FisherMatrix:
 
         See Also
         --------
-        gw_signal_tools.waveform_utils.get_strain :
+        gw_signal_tools.waveform.get_strain :
             Function that is wrapped here. All arguments provided in
             addition to the mandatory ones are passed to this function
             (just like `domain` is as well).

@@ -9,13 +9,19 @@ from scipy.optimize import minimize
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import astropy.units as u
+from gwpy.types import Index
 
 # -- Local Package Imports
 from ..units import preferred_unit_system
 from ..logging import logger
-from .utils import pad_to_target_df, get_signal_at_target_frequs, apply_time_phase_shift
+from .utils import (
+    signal_at_xindex,
+    apply_time_phase_shift,
+    fill_x_range,
+    adjust_x_range,
+)
 from .ft import td_to_fd
-from ._error_helpers import _q_convert, _compare_series, _assert_ft_compatible
+from ._error_helpers import _q_convert, _compare_series_xindex, _assert_ft_compatible
 from ..types import FDWFGen
 
 
@@ -38,10 +44,70 @@ __all__ = (
 )
 
 
+def _determine_x_range(x_range, *s):
+    """Inner product helper to determine the range of x-values."""
+    x_unit = s[0].xunit
+    x_lower, x_upper = (
+        max([_s.xindex[0] for _s in s]),
+        min([_s.xindex[-1] for _s in s]),
+    )
+
+    # -- If bounds are given, check that they fit the input data
+    if x_range is not None:
+        if len(x_range) != 2:  # pragma: no cover
+            raise ValueError(
+                '`f_range` must contain lower and upper frequency bounds for '
+                'integration. One of them or both can be `None`, but both '
+                'have to be specified if `f_range` is given.'
+            )
+
+        # -- Check if both lower and upper are given or one of them is None
+        if x_range[0] is not None:
+            x_lower_new = _q_convert(
+                x_range[0], x_unit, 'f_range[0]', 'signal.frequencies'
+            )
+        else:
+            x_lower_new = x_lower
+
+        if x_range[1] is not None:
+            x_upper_new = _q_convert(
+                x_range[1], x_unit, 'f_range[1]', 'signal.frequencies'
+            )
+        else:
+            x_upper_new = x_upper
+
+        # -- New lower bound must be greater than current lower bound,
+        # -- otherwise no values for the range are available in signals
+        if x_lower_new >= x_lower:
+            x_lower = x_lower_new
+        else:
+            # -- Leave lower bound at x_lower, no update
+            logger.info(
+                f'Given lower bound of {x_lower_new} is smaller than '
+                'values available from given signals. Taking a lower '
+                f'bound of {x_lower} instead.'
+            )
+
+        # -- New upper bound must be smaller than current upper bound,
+        # -- otherwise no values for the range are available in signals
+        if x_upper_new <= x_upper:
+            x_upper = x_upper_new
+        else:
+            # -- Leave upper bound at x_upper, no update
+            logger.info(
+                f'Given upper bound of {x_upper_new} is larger than '
+                'values available from given signals. Taking an upper '
+                f'bound of {x_upper} instead.'
+            )
+
+    return x_lower, x_upper
+
+
 def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: Optional[FrequencySeries] = None,
+    signal_interpolation: bool = True,
     f_range: Optional[list[float] | list[u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
@@ -68,8 +134,8 @@ def inner_product(
     :math:`\tilde{a}(f), \tilde{b}(f)` in frequency domain.
 
     In case of a :code:`psd` :math:`S_n(f)` that is equal to 1 at all
-    frequencies (the default case), this corresponds to the :math:`L^2`
-    inner product.
+    frequencies (the default case), this corresponds to the standard
+    :math:`L^2` inner product.
 
     Parameters
     ----------
@@ -83,6 +149,36 @@ def inner_product(
         this default PSD is [-2048 Hz, 2048 Hz], so in case larger
         ranges shall be used, a custom PSD with suitable frequencies
         has to be provided.
+
+        Note that this inner product is designed for one-sided PSDs.
+    signal_interpolation : boolean, optional, default = True
+        Determines whether or not it is ensured that signals have the
+        same frequency range and spacing, with a potential interpolation
+        happening. If you do not want this to happen, set this argument
+        to ``False``, whence all arguments will be directly passed on to
+        the inner product calculators (resulting in a potential, though
+        hopefully small, speedup), allowing very precise control over
+        the involved frequency ranges. This can be achieved via a
+        specific way of generating the input waveforms/data or by
+        a proper call to a function like
+        `~gwsignal_tools.waveform.signal_at_index` that yields signals
+        at specific frequencies, right before this function. Providing
+        a similar functionality inside this function turned out to be
+        very error-prone, particularly the interplay of evaluating at
+        the frequencies and managing when to interpolate, in combination
+        with having to distinguish equal/unequal sampling. Hence,
+        we have resorted to keeping just `signal_interpolation`.
+
+        In principle, one could just resort to
+        `inner_product_calculation`, `optimized_inner_product` to get
+        the same results, without having to go through `inner_product`.
+        However, this would mean convenient wrappers such as `norm` or
+        `overlap` would have to redefined, which serves as justification
+        for this argument.
+
+        Additionally, this argument is compatible with giving different
+        `f_range` arguments, i.e. restricting is still supported (this
+        would have to be done manually for `inner_product_computation`).
     f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
@@ -154,11 +250,31 @@ def inner_product(
     transform of the involved signals. An indicator this might be
     necessary is a shape mismatch error.
     """
+    # -- If necessary, do Fourier transform
+    if isinstance(signal1, TimeSeries):
+        logger.info(
+            '`signal1` is a ``TimeSeries``, performing an automatic FFT. '
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
+        )
+
+        signal1 = td_to_fd(signal1)
+
+    if isinstance(signal2, TimeSeries):
+        logger.info(
+            '`signal2` is a ``TimeSeries``, performing an automatic FFT. '
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
+        )
+
+        signal2 = td_to_fd(signal2)
+
+    # -- Store frequently accessed, quite lengthy boolean
+    _optimize = optimize_time_and_phase or optimize_time or optimize_phase
+
     # -- Handling of units
     if isinstance(signal1, FrequencySeries):
         frequ_unit = signal1.frequencies.unit
-    elif isinstance(signal1, TimeSeries):
-        frequ_unit = signal1.times.unit * u.Hz / u.s
     else:
         raise TypeError(
             '`signal1` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
@@ -173,10 +289,6 @@ def inner_product(
         assert signal2.frequencies.unit._is_equivalent(
             frequ_unit
         ), 'Need consistent frequency/time units for `signal1` and `signal2`.'
-    elif isinstance(signal2, TimeSeries):
-        assert (signal2.times.unit * u.Hz / u.s)._is_equivalent(
-            frequ_unit
-        ), 'Need consistent frequency/time units for `signal1` and `signal2`.'
     else:
         raise TypeError(
             '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
@@ -184,16 +296,23 @@ def inner_product(
 
     # -- Handling PSD
     if psd is None:
-        from ..PSDs import psd_no_noise
+        if not signal_interpolation:
+            # -- We know frequencies on which to evaluate
+            psd = FrequencySeries(
+                np.ones(signal1.frequencies.size),
+                frequencies=signal1.frequencies,
+                unit=u.strain**2 / frequ_unit,
+            )
+        else:
+            from ..PSDs import psd_no_noise
+            psd = psd_no_noise.copy()
 
-        psd = psd_no_noise.copy()
-
-        # -- Make sure units are consistent with input. PSD is always a
-        # -- density, i.e. some unit per frequency
-        if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
-            psd.frequencies *= frequ_unit / psd_frequ_unit
-            psd /= frequ_unit / psd_frequ_unit
-            # -- Rescale density that it represents, psd is per frequ_unit
+            # -- Make sure units are consistent with input. PSD is always a
+            # -- density, i.e. some unit per frequency
+            if (psd_frequ_unit := psd.frequencies.unit) != frequ_unit:
+                psd.frequencies *= frequ_unit / psd_frequ_unit
+                psd /= frequ_unit / psd_frequ_unit
+                # -- Rescale density that it represents, psd is per frequ_unit
 
     if isinstance(psd, FrequencySeries):
         assert psd.frequencies.unit._is_equivalent(
@@ -202,146 +321,184 @@ def inner_product(
     else:
         raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
-    # -- Handling df argument
+    # -- Handling frequency range, needed for every case of return
+    f_lower, f_upper = _determine_x_range(f_range, signal1, signal2, psd)
+
+    if not signal_interpolation:
+        # -- Signals are assumed to be on correct frequencies already,
+        # -- thus the only things left to do are taking care of
+        # -- frequency ranges and returning.
+        if not _optimize:
+            eval_range = (f_lower, f_upper)
+            # eval_range = (f_lower - 0.5 * df, f_upper + 0.5 * df)  # Ensure all signals are non-zero on same range
+            # -- Filling is done UP TO THIS frequency, but we want it included
+            # TODO: do we need this?
+
+            # -- Returning views of signals is fine (done due to
+            # -- copy=False), inner_product_computation does not edit
+            # -- the signals in any way.
+            signal1 = adjust_x_range(
+                signal1,
+                x_range=eval_range,
+                copy=False,
+            )
+            signal2 = adjust_x_range(
+                signal2,
+                x_range=eval_range,
+                copy=False,
+            )
+            psd = adjust_x_range(
+                psd,
+                x_range=eval_range,
+                copy=False,
+            )
+
+            return inner_product_computation(signal1, signal2, psd)
+        else:
+            non_zero_range = (f_lower, f_upper)
+
+            if f_lower >= 0.0 * frequ_unit:
+                eval_range = 0.0 * frequ_unit, f_upper
+            else:
+                f_limit = max(abs(f_lower), abs(f_upper))
+                eval_range = -f_limit, f_limit
+
+            signal1 = adjust_x_range(
+                signal1,
+                x_range=eval_range,
+                fill_val=0.0 * signal1.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
+            signal2 = adjust_x_range(
+                signal2,
+                x_range=eval_range,
+                fill_val=0.0 * signal2.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
+            psd = adjust_x_range(
+                psd,
+                x_range=eval_range,
+                fill_val=1.0 * psd.unit,
+                fill_range=non_zero_range,
+                copy=True,
+            )
+
+            if optimize_time_and_phase:
+                # -- Overwrite
+                optimize_time = True
+                optimize_phase = True
+
+            return optimized_inner_product(
+                signal1=signal1,
+                signal2=signal2,
+                psd=psd,
+                optimize_time=optimize_time,
+                optimize_phase=optimize_phase,
+                min_dt_prec=min_dt_prec,
+                return_opt_info=return_opt_info,
+            )
+
+    # -- Frequency range needs to be constructed, we need df for that
     if df is None:
-        df = 0.0625 * frequ_unit  # Default value of output of FDWaveform
+        # df = 0.0625 * frequ_unit
+        # -- Choose default value of output of FDWaveform (2**-4*u.Hz)
+        # df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+        # if frequ_unit._is_equivalent(u.Hz):
+        #     df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+        # else:
+        #     df = 0.0625 * frequ_unit
+        # if signal1.frequencies.regular and signal2.frequencies.regular:
+        #     df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
+        # else:
+        #     df = _q_convert(max(signal1.frequencies.diff(), signal2.frequencies.diff()), frequ_unit, 'df', 'signal.frequencies')
+        # TODO: check if .regular is as expensive as taking diff directly -> could also be that it is immediately set True if FrequencySeries is initialized with df
+        # df = _q_convert(max(signal1.frequencies.diff().max(), signal2.frequencies.diff().max()), frequ_unit, 'df', 'signal.frequencies')
+
+        try:
+            df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
+        except AttributeError:
+            # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
+            if frequ_unit._is_equivalent(u.Hz):
+                df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+            else:
+                # -- We have no idea what frequ_unit is, just set to some number
+                df = 0.0625 * frequ_unit
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
-    # -- If necessary, do Fourier transform (padding to ensure
-    # -- sufficient resolution in frequency domain)
-    if isinstance(signal1, TimeSeries):
-        logger.info(
-            '`signal1` is a ``TimeSeries``, performing an automatic FFT.'
-            'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase. '
-            'Alternatively, do the FFT manually and make sure the result '
-            'looks reasonable.'
-        )
-
-        signal1 = td_to_fd(pad_to_target_df(signal1, df))
-
-    if isinstance(signal2, TimeSeries):
-        logger.info(
-            '`signal2` is a ``TimeSeries``, performing an automatic FFT.'
-            'To safeguard against inconsistent conventions during this '
-            'it is recommended to turn on optimization over time, phase. '
-            'Alternatively, do the FFT manually and make sure the result '
-            'looks reasonable.'
-        )
-
-        signal2 = td_to_fd(pad_to_target_df(signal2, df))
-
-    # -- Handling frequency range
-    f_lower, f_upper = (
-        max([signal1.frequencies[0], signal2.frequencies[0], psd.frequencies[0]]),
-        min([signal1.frequencies[-1], signal2.frequencies[-1], psd.frequencies[-1]])
-    )
-
-    # -- If bounds are given, check that they fit the input data
-    if f_range is not None:
-        if len(f_range) != 2:
-            raise ValueError(
-                '`f_range` must contain lower and upper frequency bounds for'
-                'integration. One of them or both can be `None`, but both'
-                'have to be specified if `f_range` is given.'
-            )
-
-        # -- Check if both lower and upper are given or one of them is None
-        if f_range[0] is not None:
-            f_lower_new = _q_convert(
-                f_range[0], frequ_unit, 'f_range[0]', 'signal.frequencies'
-            )
-        else:
-            f_lower_new = f_lower
-
-        if f_range[1] is not None:
-            f_upper_new = _q_convert(
-                f_range[1], frequ_unit, 'f_range[1]', 'signal.frequencies'
-            )
-
-            # TODO: implement check of f_max with Nyquist of signals
-            # -> really needed? I actually don't think so
-        else:
-            f_upper_new = f_upper
-
-        # -- New lower bound must be greater than current lower bound,
-        # -- otherwise no values for the range are available in signals
-        if f_lower_new >= f_lower:
-            f_lower = f_lower_new
-        else:
-            # -- Leave lower bound at f_lower, no update
-            logger.info(
-                f'Given lower bound of {f_lower_new} is smaller than '
-                'values available from given signals. Taking a lower '
-                f'bound of {f_lower} instead.'
-            )
-
-        # -- New upper bound must be smaller than current upper bound,
-        # -- otherwise no values for the range are available in signals
-        if f_upper_new <= f_upper:
-            f_upper = f_upper_new
-        else:
-            # -- Leave upper bound at f_upper, no update
-            logger.info(
-                f'Given upper bound of {f_upper_new} is larger than '
-                'values available from given signals. Taking an upper '
-                f'bound of {f_upper} instead.'
-            )
-
     # -- Get signals to same frequencies, i.e. make df
     # -- equal (if necessary) and then restrict range
-    if not (optimize_time_and_phase or optimize_time or optimize_phase):
+    if not _optimize:
         target_range = (
-            np.arange(f_lower.value, f_upper.value + 0.9 * df.value, step=df.value)
+            np.arange(
+                f_lower.to_value(frequ_unit),
+                f_upper.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
+                step=df.to_value(frequ_unit),
+            )
             << frequ_unit
         )
+        fill_bounds = None
 
-        signal1 = get_signal_at_target_frequs(
-            signal1, target_range, fill_val=0.0 * signal1.unit
+        signal1 = signal_at_xindex(
+            signal1,
+            target_range,
+            fill_val=0.0 * signal1.unit,
+            fill_bounds=fill_bounds,
         )
-        signal2 = get_signal_at_target_frequs(
-            signal2, target_range, fill_val=0.0 * signal2.unit
+        signal2 = signal_at_xindex(
+            signal2,
+            target_range,
+            fill_val=0.0 * signal2.unit,
+            fill_bounds=fill_bounds,
         )
-        psd = get_signal_at_target_frequs(psd, target_range, fill_val=1.0 * psd.unit)
+        psd = signal_at_xindex(
+            psd,
+            target_range,
+            fill_val=1.0 * psd.unit,
+            fill_bounds=fill_bounds,
+        )
 
         return inner_product_computation(signal1, signal2, psd)
     else:
-        non_zero_range = (f_lower, f_upper)  # Ensure all signals are non-zero on same range
-
-        # TODO: adjust df here? Maybe based on input for min_dt or so
-        # Get estimate of length of signals (= maximum shift we have to take
-        # into account), select df to represent this (?)
-        # duration = 1./df.value  # Number of points times dt
-
+        # -- Ensure all signals are non-zero on same range and on IFT-compatible range
         if f_lower >= 0.0 * frequ_unit:
-            target_range = (
-                np.arange(0.0, f_upper.value + 0.9 * df.value, step=df.value)
-                << frequ_unit
-            )
+            eval_range = 0.0 * frequ_unit, f_upper
         else:
             f_limit = max(abs(f_lower), abs(f_upper))
-            target_range = (
-                np.arange(-f_limit.value, f_limit.value + 0.9 * df.value, step=df.value)
-                << frequ_unit
-            )
+            eval_range = -f_limit, f_limit
 
-        signal1 = get_signal_at_target_frequs(
+        target_range = (
+            np.arange(
+                eval_range[0].to_value(frequ_unit),
+                eval_range[1].to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
+                step=df.to_value(frequ_unit),
+            )
+            << frequ_unit
+        )
+        non_zero_range = (f_lower, f_upper)
+        # non_zero_range = (f_lower - 0.5*df, f_upper + 0.5*df)  # Ensure all signals are non-zero on same range
+        # -- Filling is done UP TO THIS frequency, but we want it included
+        # TODO: do we need this?
+
+        signal1 = signal_at_xindex(
             signal1,
             target_range,
             fill_val=0.0 * signal1.unit,
             fill_bounds=non_zero_range,
         )
-
-        signal2 = get_signal_at_target_frequs(
+        signal2 = signal_at_xindex(
             signal2,
             target_range,
             fill_val=0.0 * signal2.unit,
             fill_bounds=non_zero_range,
         )
-
-        psd = get_signal_at_target_frequs(
-            psd, target_range, fill_val=1.0 * psd.unit, fill_bounds=non_zero_range
+        psd = signal_at_xindex(
+            psd,
+            target_range,
+            fill_val=1.0 * psd.unit,
+            fill_bounds=non_zero_range,
         )
 
         if optimize_time_and_phase:
@@ -393,7 +550,7 @@ def inner_product_computation(
     scipy.integrate.simpson : Used for evaluation of inner product.
     """
     # -- Assure input signals are compatible
-    _compare_series(signal1, signal2, psd)
+    _compare_series_xindex(signal1, signal2, psd, enforce_dx=False)
 
     output_unit = (
         signal1.unit * signal2.unit / psd.unit * signal1.frequencies.unit
@@ -500,7 +657,7 @@ def optimized_inner_product(
     # -- First step: ensuring input signals are consistent
     frequ_unit = signal1.frequencies.unit
 
-    _compare_series(signal1, signal2, psd)
+    _compare_series_xindex(signal1, signal2, psd)
 
     # -- Second step: make sure all signals start at valid frequencies
     _assert_ft_compatible(signal1, signal2, psd)

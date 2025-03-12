@@ -32,8 +32,8 @@ n = 42
         strict=True, reason='Non-matching dx')),
     ],
 )
-def test_compare_series(s):
-    _compare_series(*s)
+def test_compare_series_xindex(s):
+    _compare_series_xindex(*s)
 
 df = 0.5
 @pytest.mark.parametrize(

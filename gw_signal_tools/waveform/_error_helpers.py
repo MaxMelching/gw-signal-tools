@@ -5,14 +5,15 @@ from typing import Optional
 import astropy.units as u
 from gwpy.types import Series
 from gwpy.frequencyseries import FrequencySeries
+import numpy as np
 
 # -- Local Package Imports
 from ..test_utils import allclose_quantity
 
 
-__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series', '_assert_ft_compatible')
+__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series_xindex', '_assert_ft_compatible')
 
-__doc__: str = """
+__doc__ = """
 Little helper file containing functions and other definitions that help
 dealing with errors in package functions.
 """
@@ -45,23 +46,28 @@ def _q_convert(
             )
 
 
-def _compare_series(*s: list[Series]) -> None:
-    """Checks if input is mutually compatible, raises error if not."""
+def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
+    """
+    Checks if input is mutually compatible, raises error if not.
+
+    The only argument is `enforce_dx`, which determines whether the `dx`
+    attribute is accessed (bad for signals with unequal sampling).
+    """
     # -- Checks: equal length, sufficiently equal spacing, sufficiently
     # -- equal index (making sure small errors do not accumulate)
     if len(s) < 2:
         return None
     if len(s) > 2:
         # for val in s[:-1]:
-        #     _compare_series(val, s[-1])
+        #     _compare_series_xindex(val, s[-1])
         # -- Idea: performing every mutual comparison is not required
-        _compare_series(s[-1], s[-2])
-        _compare_series(s[:-1])
+        _compare_series_xindex(s[-1], s[-2], enforce_dx=enforce_dx)
+        _compare_series_xindex(s[:-1], enforce_dx=enforce_dx)
         return None
 
     # -- Leaves case with len(s)s == 2
     s1, s2 = s
-    if not allclose_quantity(s1.dx, s2.dx, atol=0.0, rtol=1e-5):
+    if enforce_dx and not allclose_quantity(s1.dx, s2.dx, atol=0.0, rtol=1e-5):
         # -- Some arbitrary deviation allowed, in case of numerical differences
         # raise ValueError('Signals must have equal spacing on x-axis.')
         # raise ValueError('Signals do not have equal spacing on x-axis.')
@@ -75,9 +81,16 @@ def _compare_series(*s: list[Series]) -> None:
     # sense because this operation is also O(n), one can also just use
     # checks on all frequencies)
 
-    if not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
+    if enforce_dx and not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
         # -- Note: this atol checks for equality up to sampling accuracy
         # -- Note: this automatically checks for equal size
+        raise ValueError(
+            'Signals must have sufficiently equal xindex. '
+            'Maximum allowed deviation is 0.5*dx.'
+        )
+
+    if not enforce_dx and not np.all(abs(s1.xindex - s2.xindex)[:-1] <= 0.5*abs(np.diff(s1.xindex))):
+        # -- Unequal spacing was given, allowed for inner_product_computation
         raise ValueError(
             'Signals must have sufficiently equal xindex. '
             'Maximum allowed deviation is 0.5*dx.'
@@ -103,7 +116,7 @@ def _assert_ft_compatible(*fs: list[FrequencySeries]) -> None:
         'even sample size, on the other hand, the number of samples for '
         'positive frequencies is expected to be one less than the number of '
         'samples for negative frequencies, in accordance with the format '
-        'expected by `~numpy.fft.ifftshift`. Note that the conditions just'
+        'expected by `~numpy.fft.ifftshift`. Note that the conditions just '
         'mentioned do not apply to the case of a starting frequency f=0, '
         'where both even and odd sample sizes are accepted.'
     )

@@ -462,7 +462,7 @@ def signal_at_dx(
 def signal_at_xindex(
     signal: Series,
     target_xindex: np.ndarray | u.Quantity | Index,
-    fill_val: float | u.Quantity = np.nan,
+    fill_val: float | u.Quantity = None,
     fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
     full_metadata: bool = False,
 ) -> FrequencySeries:
@@ -481,13 +481,14 @@ def signal_at_xindex(
         Signal to be interpolated.
     target_xindex : ~numpy.array or ~astropy.units.Quantity or ~gwpy.types.Index
         Samples to evaluate :code:`signal` in.
-    fill_val : float or ~astropy.units.Quantity, optional, default = ~numpy.nan
+    fill_val : float or ~astropy.units.Quantity, optional, default = None
         Value to fill :code:`signal` with in case
         :code:`target_frequencies` contains signals outside its
-        frequency band.
+        frequency band. If it is an astropy ``Quantity``, it must have
+        units compatible with :code:`signal.unit`.
 
-        If it is an astropy ``Quantity``, it must have units compatible with
-        :code:`signal.unit`.
+        If None (the default), the decision is passed on to the function
+        that is used for interpolation, i.e. `~numpy.interp`.
     fill_bounds : ~numpy.array or ~astropy.units.Quantity, optional, default = None
         In case only a certain region inside of
         :code:`target_xindex` is supposed to not (!) be filled with
@@ -527,7 +528,8 @@ def signal_at_xindex(
         'signal.xindex',
     )
 
-    fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
+    if fill_val is not None:
+        fill_val = _q_convert(fill_val, signal.unit, 'fill_val', 'signal')
 
     # -- Actual computations
     if signal.xindex.size == target_xindex.size and (
@@ -549,8 +551,8 @@ def signal_at_xindex(
             target_xindex,
             signal.xindex,
             signal,
-            left=fill_val.to_value(signal.unit),
-            right=fill_val.to_value(signal.unit),
+            left=fill_val.to_value(signal.unit) if fill_val is not None else None,
+            right=fill_val.to_value(signal.unit) if fill_val is not None else None,
         ).view(type(signal))
         out.xindex = target_xindex
 

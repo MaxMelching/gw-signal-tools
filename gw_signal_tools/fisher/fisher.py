@@ -119,7 +119,7 @@ class FisherMatrix:
     """
 
     default_metadata = {
-        'deriv_routine': 'gw_signal_tools',
+        'deriv_routine': 'numdifftools',
     }
 
     _preferred_units = preferred_unit_system

@@ -58,7 +58,7 @@ pc.default_dict.pop('mass2', None);
 #%% -- Testing WaveformDerivative ---------------------------------------------
 def test_default_routine():
     full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator)
-    assert isinstance(full_deriv, WaveformDerivativeGWSignaltools)
+    assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
 
 
 def test_all_routines():

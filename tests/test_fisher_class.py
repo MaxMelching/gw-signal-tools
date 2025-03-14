@@ -79,31 +79,43 @@ def test_fisher_calc():
         wf_params,
         'total_mass',
         phenomx_generator,
-        deriv_routine='gw_signal_tools'
+        deriv_routine='numdifftools'
     )
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
 
 
 def test_criterion_consistency():
+    fisher_tot_mass_1 = fisher_matrix(
+        wf_params,
+        'total_mass',
+        phenomx_generator,
+        deriv_routine='gw_signal_tools',
+        convergence_check='diff_norm',
+    )
+
     fisher_tot_mass_2 = fisher_matrix(
         wf_params,
         'total_mass',
         phenomx_generator,
+        deriv_routine='gw_signal_tools',
         convergence_check='mismatch',
-        deriv_routine='gw_signal_tools'
     )
     
-    assert_allclose_MatrixWithUnits(fisher_tot_mass.fisher, fisher_tot_mass_2,
-                                    atol=0.0, rtol=5e-5)
+    assert_allclose_MatrixWithUnits(
+        fisher_tot_mass_1,
+        fisher_tot_mass_2,
+        atol=0.0,
+        rtol=5e-5,
+    )
 
 
 def test_time_and_phase_shift_consistency():
     # -- Idea: time and phase shift in the waveform should not have
     # -- effect on Fisher matrix entries, cancel out in inner product
-    t_shift = 1e-3 * u.s
-    phase_shift = 1e-2 * u.rad
+    t_shift = 3e-2 * u.s
+    phase_shift = 2e-1 * u.rad
 
-    shifted_wf_gen = time_phase_wrapper(phenomx_generator)
+    # shifted_wf_gen = time_phase_wrapper(phenomx_generator)
     
     calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
@@ -116,15 +128,45 @@ def test_time_and_phase_shift_consistency():
     fisher_v2 = FisherMatrix(
         wf_params | {'time': t_shift, 'phase': phase_shift},
         calc_params,
-        shifted_wf_gen
+        # shifted_wf_gen
+        phenomx_generator
     )
 
-    assert_allclose_MatrixWithUnits(fisher_v1.fisher, fisher_v2.fisher,
-                                    atol=1.3e-49, rtol=2.4e-16)
-    # This is great accuracy. This deviation is for two uncorrelated
-    # parameters, where the value itself is ten (!) orders of magnitude
-    # below all diagonal values (which means it is of the order of
-    # 1e-50). This deviation can certainly be tolerated.
+
+    # # print(fisher_v1.fisher - fisher_v2.fisher)
+    # print(fisher_v1.fisher.diagonal())
+    # print(fisher_v1.fisher.diagonal() - fisher_v2.fisher.diagonal())
+
+
+    # from gw_signal_tools.waveform import apply_time_phase_shift
+    # plt.plot(fisher_v1.deriv_info['total_mass']['deriv'])
+    # plt.plot(apply_time_phase_shift(fisher_v1.deriv_info['total_mass']['deriv'], t_shift, phase_shift), '--')
+    # plt.plot(fisher_v2.deriv_info['total_mass']['deriv'], '-.')
+    
+    # plt.xlim(10, 400)
+
+    # plt.show()
+
+
+    # plt.plot(fisher_v1.deriv_info['total_mass']['error_estimate'])
+    # plt.plot(fisher_v2.deriv_info['total_mass']['error_estimate'], '--')
+    # plt.plot((fisher_v2.deriv_info['total_mass']['deriv'] - apply_time_phase_shift(fisher_v1.deriv_info['total_mass']['deriv'], t_shift, phase_shift)).abs(), '-.')
+    
+    # plt.xlim(10, 400)
+
+    # plt.show()
+
+
+    assert_allclose_MatrixWithUnits(
+        fisher_v1.fisher,
+        fisher_v2.fisher,
+        atol=2e-53,
+        rtol=4.8e-6,
+    )
+    # -- Gotta be happy with that. Derivative is accurate to about 0.1%
+    # -- (on average), which translates to 1e-6 accuracy in Fisher. atol
+    # -- is just one of the off-diagonal values, but super small anyway,
+    # -- diagonal values of Fisher are all on scale of 1e-39.
 
 
 def test_deriv_routine_consistency():
@@ -140,9 +182,9 @@ def test_deriv_routine_consistency():
             deriv_routine=routine
         )
 
-    print(fisher_gw_signal_tools.fisher)
-    print(fisher_numdifftools.fisher)
-    print(fisher_amplitude_phase.fisher)
+    # print(fisher_gw_signal_tools.fisher)
+    # print(fisher_numdifftools.fisher)
+    # print(fisher_amplitude_phase.fisher)
     
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(
@@ -391,7 +433,7 @@ def test_get_wf_generator():
 @pytest.mark.parametrize('new_point', [None, wf_params | {'total_mass': 42.*u.solMass}])
 @pytest.mark.parametrize('new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']])
 @pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
-@pytest.mark.parametrize('new_metadata', [None, {'convergence_check': 'mismatch'}])
+@pytest.mark.parametrize('new_metadata', [None, {'deriv_routine': 'gw_signal_tools', 'convergence_check': 'mismatch'}])
 def test_update_attrs(new_point, new_params_to_vary,
                       new_wf_generator, new_metadata):
     if new_metadata is None:

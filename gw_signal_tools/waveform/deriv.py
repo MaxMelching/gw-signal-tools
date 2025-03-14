@@ -35,7 +35,7 @@ class WaveformDerivative:
     Parameters
     ----------
     deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase']
-        Available routines.
+        Available routines. Default is `'numdifftools'`.
 
     Returns
     -------
@@ -66,7 +66,7 @@ class WaveformDerivative:
     """
 
     def __new__(cls, *args, **kw_args):
-        deriv_routine = kw_args.pop('deriv_routine', 'gw_signal_tools')
+        deriv_routine = kw_args.pop('deriv_routine', 'numdifftools')
 
         match deriv_routine:
             case 'gw_signal_tools':

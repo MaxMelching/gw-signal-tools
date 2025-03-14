@@ -352,11 +352,12 @@ def test_sys_error(params):
         wf_generator=phenomx_generator,
     )
 
-    fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False)
+    fisher.systematic_error(phenomd_generator, 'total_mass', optimize=False,
+                            return_diagnostics=True)
 
-    fisher.systematic_error(phenomd_generator, params)
+    fisher.systematic_error(phenomd_generator, params, return_diagnostics='deriv_info')
     
-    fisher.systematic_error(phenomd_generator, optimize=True)
+    fisher.systematic_error(phenomd_generator, optimize=True, return_diagnostics=True, is_true_point=True)
         
     fisher.systematic_error(phenomd_generator,
                             optimize=['time', 'phase'])
@@ -366,7 +367,7 @@ def test_sys_error(params):
     
     fisher.systematic_error(phenomd_generator, optimize='total_mass')
 
-    fisher = fisher.update_attrs(return_info=False,
+    fisher = fisher.update_attrs(return_info=False,  # Does not make sense to give, is overwritten. This is what we test here
                                  new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'])
     
     fisher.systematic_error(phenomd_generator, params='mass_ratio', optimize='time',

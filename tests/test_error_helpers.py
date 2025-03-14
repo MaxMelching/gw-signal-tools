@@ -32,8 +32,23 @@ n = 42
         strict=True, reason='Non-matching dx')),
     ],
 )
-def test_compare_series_xindex(s):
+def test_compare_series_xindex_equal_sampling(s):
     _compare_series_xindex(*s)
+
+
+@pytest.mark.parametrize(
+    's', [
+        (Series(4*[1, ], xindex=[0, 1, 3, 6]), Series(4*[1, ], xindex=[0, 1, 3, 6])),
+        (Series(4*[1, ], xindex=[0, 1, 3, 6]), Series(4*[1, ], xindex=[0.5, 2, 4.5, 8])),  # 0.5 dx is allowed
+        pytest.param((Series(4*[1, ], xindex=[0, 1, 3, 6]), Series(4*[1, ], xindex=[2, 3, 5, 8])), marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Non-matching xindex, shifted index')),
+        pytest.param((Series(4*[1, ], xindex=[0, 1, 3, 6]), Series(4*[1, ], xindex=[2, 4, 8, 16])), marks=pytest.mark.xfail(raises=ValueError,
+        strict=True, reason='Non-matching xindex, dx differs')),
+    ],
+)
+def test_compare_series_xindex_unequal_sampling(s):
+    _compare_series_xindex(*s, enforce_dx=False)
+
 
 df = 0.5
 @pytest.mark.parametrize(

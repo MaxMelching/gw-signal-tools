@@ -77,9 +77,10 @@ hp_f_coarse, hc_f_coarse = fd_wf_gen(wf_params | {'deltaF': 1.0 / (hp_t.size * h
 
 #%% -- Testing helper functions for frequency region stuff --------------------
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df])
+@pytest.mark.parametrize('where', ['start', 'end'])
 # -- These input values are powers of two, have to be reproduced exactly
-def test_pad_to_dx_exact(df):
-    hp_t_padded = pad_to_dx(hp_t, df)
+def test_pad_to_dx_exact(df, where):
+    hp_t_padded = pad_to_dx(hp_t, df, where)
     hp_t_f = td_to_fd(hp_t_padded)
 
     assert_quantity_equal(df, hp_t_f.df)
@@ -88,8 +89,9 @@ def test_pad_to_dx_exact(df):
 @pytest.mark.parametrize('df', [0.007*u.Hz, 0.001*u.Hz])
 # -- These input values are not exact powers of two and thus cannot be
 # -- reproduced exactly (thus ensure sufficient accuracy)
-def test_pad_to_dx_not_exact(df):
-    hp_t_padded = pad_to_dx(hp_t, df)
+@pytest.mark.parametrize('where', ['start', 'end'])
+def test_pad_to_dx_not_exact(df, where):
+    hp_t_padded = pad_to_dx(hp_t, df, where)
     hp_t_f = td_to_fd(hp_t_padded)
 
     assert df >= hp_t_f.df  # If not equal, must not be coarser
@@ -672,6 +674,73 @@ def test_fill_x_range(fill_val):
     assert_quantity_equal(hf[filter1], fill_val)
     assert_quantity_equal(hf[filter2], fill_val)
     assert_quantity_equal(hf[filter3], hp_f_fine[filter3])
+
+
+# @pytest.mark.parametrize('frequ_mode', ['log', 'two_df'])
+@pytest.mark.parametrize('frequ_mode', ['two_df'])
+@pytest.mark.parametrize('fill_val', [0., 2.])
+def test_fill_x_range_unequal(frequ_mode, fill_val):
+    if frequ_mode == 'log':
+        # frequs = np.logspace(np.log10(f_crop_low.value), np.log10(f_crop_high.value), endpoint=True, num=hp_f_fine.size//2) << u.Hz
+        frequs = np.logspace(np.log10(f_min.value), np.log10(f_max.value), endpoint=True, num=hp_f_fine.size//2) << u.Hz
+    elif frequ_mode == 'two_df':
+        # frequs = np.concatenate([np.linspace(f_crop_low.value, f_crop_high.value/2, endpoint=True, num=hp_f_fine.size//2),
+        #                          np.linspace(f_crop_high.value/2, f_crop_high.value, endpoint=True, num=hp_f_fine.size//2)]) << u.Hz
+        frequs = np.concatenate([np.linspace(f_min.value, f_max.value/2, endpoint=True, num=hp_f_fine.size//2),
+                                 np.linspace(f_max.value/2, f_max.value, endpoint=True, num=hp_f_fine.size//2)]) << u.Hz
+
+    hp_f = signal_at_xindex(hp_f_fine, frequs)
+    hf = hp_f.copy()
+
+    fill_x_range(hf, fill_val, [-f_min, 1.1*f_max])
+
+    assert_allequal_series(hp_f, hf)
+
+    f_lower, f_upper = 30.*u.Hz, 50.*u.Hz
+    fill_x_range(hf, fill_val, [f_lower, f_upper])
+
+    filter1 = hp_f.frequencies < f_lower
+    filter2 = hp_f.frequencies > f_upper
+    filter3 = np.logical_and(np.logical_not(filter1), np.logical_not(filter2))
+
+    fill_val = u.Quantity(fill_val, hf.unit)  # For assertions
+    assert_quantity_equal(hf[filter1], fill_val)
+    assert_quantity_equal(hf[filter2], fill_val)
+    assert_quantity_equal(hf[filter3], hp_f[filter3])
+
+
+def test_fill_x_range_copy():
+    hf = hp_f_fine.copy()
+
+    hf_2 = fill_x_range(hf, 0.0, [None, None])  # Should do nothing
+    assert_quantity_equal(hf, hf_2)
+
+    hf_3 = fill_x_range(hf, 0.0, [2 * f_min, 0.9 * f_max], copy=True)  # Should do nothing
+    try:
+        assert_quantity_equal(hf, hf_3)
+        raise Exception('The wanted `AssertionError` has not been raised.')
+    except AssertionError:
+        pass
+
+    assert_quantity_equal(hf, hp_f_fine)  # Must not have changed
+
+
+class HelpersErrorRaising(unittest.TestCase):
+    def test_where(self):
+        with self.assertRaises(ValueError):
+            pad_to_dx(hp_f_fine, hp_f_fine.df, 'some_odd_argument')
+
+    def test_x_range_len(self):
+        with self.assertRaises(ValueError):
+            adjust_x_range(hp_f_fine, x_range=[1, 2, 3])
+
+    def test_fill_range_len(self):
+        with self.assertRaises(ValueError):
+            adjust_x_range(hp_f_fine, fill_range=[1, 2, 3])
+
+    def test_fill_bounds_len(self):
+        with self.assertRaises(ValueError):
+            fill_x_range(hp_f_fine, 0.0, fill_bounds=[1, 2, 3])
 
 
 

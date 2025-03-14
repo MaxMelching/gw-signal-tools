@@ -177,7 +177,7 @@ def adjust_x_range(
         x_range = [None, None]  # Needed below
         x_lower = signal.xindex[0]
         x_upper = signal.xindex[-1]
-    elif len(x_range) != 2:  # pragma: no cover
+    elif len(x_range) != 2:
         raise ValueError(
             '`x_range` must be None or contain one lower and one upper bound.'
         )
@@ -270,7 +270,7 @@ def adjust_x_range(
         else:
             return signal
 
-    elif len(fill_range) != 2:  # pragma: no cover
+    elif len(fill_range) != 2:
         raise ValueError(
             '`fill_range` must be None or contain one lower and one upper bound.'
         )
@@ -376,7 +376,7 @@ def fill_x_range(
     xunit = signal.xunit
     x_lower, x_upper = signal.x0, signal.xindex[-1]
 
-    if len(fill_bounds) != 2:  # pragma: no cover
+    if len(fill_bounds) != 2:
         raise ValueError('`fill_bounds` must contain one lower and one upper bound.')
 
     # -- Actual filling

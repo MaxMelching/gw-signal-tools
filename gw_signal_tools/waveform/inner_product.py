@@ -54,11 +54,11 @@ def _determine_x_range(x_range, *s):
 
     # -- If bounds are given, check that they fit the input data
     if x_range is not None:
-        if len(x_range) != 2:  # pragma: no cover
+        if len(x_range) != 2:
             raise ValueError(
-                '`f_range` must contain lower and upper frequency bounds for '
-                'integration. One of them or both can be `None`, but both '
-                'have to be specified if `f_range` is given.'
+                '`x_range` must contain lower and upper bound for '
+                'integration. One of them or both can be `None`, but '
+                'both have to be specified if `x_range` is given.'
             )
 
         # -- Check if both lower and upper are given or one of them is None
@@ -402,20 +402,6 @@ def inner_product(
 
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
-        # df = 0.0625 * frequ_unit
-        # -- Choose default value of output of FDWaveform (2**-4*u.Hz)
-        # df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
-        # if frequ_unit._is_equivalent(u.Hz):
-        #     df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
-        # else:
-        #     df = 0.0625 * frequ_unit
-        # if signal1.frequencies.regular and signal2.frequencies.regular:
-        #     df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
-        # else:
-        #     df = _q_convert(max(signal1.frequencies.diff(), signal2.frequencies.diff()), frequ_unit, 'df', 'signal.frequencies')
-        # TODO: check if .regular is as expensive as taking diff directly -> could also be that it is immediately set True if FrequencySeries is initialized with df
-        # df = _q_convert(max(signal1.frequencies.diff().max(), signal2.frequencies.diff().max()), frequ_unit, 'df', 'signal.frequencies')
-
         try:
             df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
         except AttributeError:

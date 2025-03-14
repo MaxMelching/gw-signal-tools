@@ -340,7 +340,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 params=None,  # Get all for now, filter before return
                 optimize=optimize,
                 optimize_fisher=optimize_fisher,
-                return_diagnostics=True,
+                return_diagnostics='deriv_info' if not return_diagnostics else return_diagnostics,
                 is_true_point=is_true_point,
                 **inner_prod_kwargs,
             )

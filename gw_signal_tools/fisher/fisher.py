@@ -576,7 +576,7 @@ class FisherMatrix:
         params: Optional[str | list[str]] = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
-        return_diagnostics: bool = False,
+        return_diagnostics: bool | str = False,
         is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
@@ -629,9 +629,18 @@ class FisherMatrix:
             Note that they will not appear in the returned error anymore
             because they do not appear in the Fisher matrix used for the
             calculation that determines the output.
-        return_diagnostics : bool, optional, default = False
+        return_diagnostics : bool or str, optional, default = False
             Whether to return information on the calculations along with
-            result.
+            result. False means only the systematic error is returned,
+            otherwise it is a tuple of systematic error along with some
+            information. The latter is determined by the value of
+            `return_diagnostics`: If ``True``, information about both
+            derivative calculation and the obtained result is returned
+            (e.g. some self-consistency criteria based on mismatches),
+            and if equal to `'deriv_info'`, only information about the
+            derivative calculation is returned (this is mainly useful
+            for the ``FisherMatrixNetwork`` class that builds on
+            ``FisherMatrix``).
         is_true_point : bool, optional, default = False
             Whether :code:``self.point`` represents the "true", i.e.
             injected, parameters or not. Default is ``False``, which
@@ -855,6 +864,12 @@ class FisherMatrix:
                 fisher_bias = fisher_bias[param_indices]
 
             return fisher_bias
+        elif return_diagnostics == 'deriv_info':
+            if params is not None:
+                param_indices = opt_fisher.get_param_indices(params)
+                fisher_bias = fisher_bias[param_indices]
+
+            return fisher_bias, optimization_info
 
         # -- Some calculations for diagnostic purposes. We look at ------------
         # -- mismatches instead of waveform differences here for --------------

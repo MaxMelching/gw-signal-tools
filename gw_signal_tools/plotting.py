@@ -1,3 +1,8 @@
+__doc__ = """Module with some helpers for plotting."""
+
+__all__ = ('latexparams',)
+
+
 latexparams: dict[str, str] = {
     # -- Masses
     'chirp_mass_source': r'$\mathcal{M}$',

@@ -8,6 +8,8 @@ import logging
 from gw_signal_tools import logger
 
 
+__doc__ = """The caching module of gw-signal-tools."""
+
 __all__ = (
     'disable_caching',
     'enable_caching',

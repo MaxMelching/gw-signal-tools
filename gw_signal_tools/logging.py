@@ -2,6 +2,8 @@
 import logging as _log
 
 
+__doc__ = """Module in which the gw-signal-tools logger is defined."""
+
 __all__ = ('logger',)
 
 

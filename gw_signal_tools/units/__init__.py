@@ -8,3 +8,5 @@ preferred_unit_system = gw_signal_tools_units
 
 
 __doc__ = gw_signal_tools_units.__doc__
+
+__all__ = ('preferred_unit_system',)

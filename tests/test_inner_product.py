@@ -291,7 +291,9 @@ def test_f_range(f_min, f_max):
     pytest.param([0.*u.m, None], marks=pytest.mark.xfail(raises=ValueError,
         strict=True, reason='Invalid unit for f_lower')),
     pytest.param([None, f_max.value*u.m], marks=pytest.mark.xfail(
-        raises=ValueError, strict=True, reason='Invalid unit for f_upper'))
+        raises=ValueError, strict=True, reason='Invalid unit for f_upper')),
+    pytest.param([1, 2, 3], marks=pytest.mark.xfail(
+        raises=ValueError, strict=True, reason='Three values in f_range')),
 ])
 def test_f_range_handling(f_range):
     norm1 = norm(hp_f_fine)

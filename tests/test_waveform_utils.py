@@ -728,7 +728,7 @@ def test_fill_x_range_copy():
 class HelpersErrorRaising(unittest.TestCase):
     def test_where(self):
         with self.assertRaises(ValueError):
-            pad_to_dx(hp_f_fine, hp_f_fine.df, 'some_odd_argument')
+            pad_to_dx(hp_f_fine, 2*hp_f_fine.df, 'some_odd_argument')
 
     def test_x_range_len(self):
         with self.assertRaises(ValueError):

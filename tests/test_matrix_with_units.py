@@ -591,6 +591,14 @@ def test_reshape(new_shape):
     )
 
 
+def test_isscalar():
+    matrix = MatrixWithUnits(example_values, example_units)
+    assert not matrix.isscalar
+
+    matrix_2 = matrix[0, 0]
+    assert matrix_2.isscalar
+
+
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_ndim(units):
     matrix = MatrixWithUnits(example_values, units)
@@ -613,6 +621,15 @@ def test_reading_from_array():
 
     assert np.all(np.equal(matrix.value, example_values))
     assert np.all(np.equal(matrix.unit, u.dimensionless_unscaled))
+
+
+def test_convering_to_array():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    arr = matrix.to_numpy_full()
+
+    for i in np.ndindex(arr.shape):
+        assert arr[i] == matrix[i]
 
 
 def test_inv():
@@ -774,6 +791,10 @@ def test_to_row_to_col(units):
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
+
+    def test_invalid_input(self):
+        with self.assertRaises(ValueError):
+            MatrixWithUnits(['string_value', 'another_string'])
 
     def test_wrong_unit_setting(self):
         with self.assertRaises(AssertionError):

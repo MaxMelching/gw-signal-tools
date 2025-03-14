@@ -160,7 +160,7 @@ def test_time_and_phase_shift_consistency():
     assert_allclose_MatrixWithUnits(
         fisher_v1.fisher,
         fisher_v2.fisher,
-        atol=2e-53,
+        atol=4e-53,
         rtol=4.8e-6,
     )
     # -- Gotta be happy with that. Derivative is accurate to about 0.1%

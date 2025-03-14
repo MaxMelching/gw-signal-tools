@@ -228,7 +228,18 @@ class FisherMatrix:
         """
         return self._nparams
 
-    def _calc_fisher(self):
+    def _check_cond(self) -> None:
+        """Calculate condition number and throw warning if it is too large."""
+        if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
+            # -- Conservative threshold choice for double precision,
+            # -- as quoted e.g. in gwbench paper
+            logger.info(
+            # logger.warning(  # TODO: change to warning? Because high cond is serious issue... -> would have to adjust logger disabling
+                f'This Fisher matrix has a condition number of {cond_numb}, '
+                'meaning it is ill-conditioned.'
+            )
+
+    def _calc_fisher(self) -> None:
         """Calculate the Fisher matrix for this instance."""
         self._fisher, self._deriv_info = fisher_matrix(
             point=self.point,
@@ -237,13 +248,10 @@ class FisherMatrix:
             **self.metadata,
         )
 
-        if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
-            # -- Conservative threshold choice for double precision,
-            # -- as quoted e.g. in gwbench paper
-            logger.info(
-                f'This Fisher matrix has a condition number of {cond_numb}, '
-                'meaning it is ill-conditioned.'
-            )
+        # self._check_cond()
+        # TODO: make final decision if this is required. But I do not
+        # think so, because we might not want to inver and then cond
+        # does not really matter.
 
     @property
     def fisher(self) -> MatrixWithUnits:
@@ -276,14 +284,7 @@ class FisherMatrix:
             # -- Inverse is called for the first time or has been deleted
             self._fisher_inverse = MatrixWithUnits.inv(self.fisher)
 
-            if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
-                # -- Conservative threshold choice for double precision,
-                # -- as quoted e.g. in gwbench paper
-                logger.info(
-                    f'This Fisher matrix has a condition number of {cond_numb}, '
-                    'meaning it is ill-conditioned. Results of matrix inversion '
-                    'might not be reliable.'
-                )
+            self._check_cond()  # Prints warning if condition number too high
 
             return self._fisher_inverse
 

@@ -1,6 +1,7 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
 from typing import Optional, Any
+import logging
 
 # -- Third Party Imports
 import astropy.units as u
@@ -280,21 +281,25 @@ class FisherMatrixNetwork(FisherMatrix):
         # -- similar, the response functions are definitely not in most
         # -- cases. Thus no shortcut can be taken.
 
-        self._fisher = 0.0
-        for i, det in enumerate(self.detectors):
-            det_fisher = self._fisher_for_dets[i]
+        _logger_level = logger.getEffectiveLevel()
+        logger.setLevel(max(_logger_level, logging.INFO + 1))
+        # -- Disable info calls from logging for now, to avoid messages
+        # -- due to bad condition number in inversion (we do not intend
+        # -- to use the inverse matrices of each detector, so the
+        # -- warnings are irrelevant here).
 
-            self._fisher += det_fisher.fisher
+        try:
+            self._fisher = 0.0
+            for i, det in enumerate(self.detectors):
+                det_fisher = self._fisher_for_dets[i]
 
-            self._deriv_info[det.name] = det_fisher.deriv_info
+                self._fisher += det_fisher.fisher
 
-        if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
-            # -- Conservative threshold choice for double precision,
-            # -- as quoted e.g. in gwbench paper
-            logger.info(
-                f'This Fisher matrix has a condition number of {cond_numb}, '
-                'meaning it is ill-conditioned.'
-            )
+                self._deriv_info[det.name] = det_fisher.deriv_info
+        finally:
+            # -- This try statement is super important! Ensures that we
+            # -- restore the logging level even if there is error.
+            logger.setLevel(_logger_level)
 
     def systematic_error(
         self,
@@ -328,44 +333,53 @@ class FisherMatrixNetwork(FisherMatrix):
 
         optimization_info = {}
 
-        # logging.disable(logging.CRITICAL)  # TODO: only switch info stuff off maybe?
-        # -- Disable logging for now, e.g. to avoid calls due to bad
-        # -- condition number in inversion (we do not intend to use the
-        # -- inverse matrices of each detector, calls irrelevant here).
+        _logger_level = logger.getEffectiveLevel()
+        logger.setLevel(max(_logger_level, logging.INFO + 1))
+        # -- Disable info calls from logging for now, to avoid messages
+        # -- due to bad condition number in inversion (we do not intend
+        # -- to use the inverse matrices of each detector, so the
+        # -- warnings are irrelevant here).
 
-        for i, det in enumerate(self.detectors):
-            # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
-            _, info = self.detector_fisher(i).systematic_error(
-                reference_wf_generator=reference_wf_generator,
-                params=None,  # Get all for now, filter before return
-                optimize=optimize,
-                optimize_fisher=optimize_fisher,
-                return_diagnostics='deriv_info' if not return_diagnostics else return_diagnostics,
-                is_true_point=is_true_point,
-                **inner_prod_kwargs,
-            )
+        try:
+            for i, det in enumerate(self.detectors):
+                # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
+                _, info = self.detector_fisher(i).systematic_error(
+                    reference_wf_generator=reference_wf_generator,
+                    params=None,  # Get all for now, filter before return
+                    optimize=optimize,
+                    optimize_fisher=optimize_fisher,
+                    return_diagnostics='deriv_info' if not return_diagnostics else return_diagnostics,
+                    is_true_point=is_true_point,
+                    **inner_prod_kwargs,
+                )
 
-            optimization_info[det.name] = info
+                optimization_info[det.name] = info
 
-            if isinstance(optimize, bool) and not optimize:
-                used_opt_bias = 0.0
+                if isinstance(optimize, bool) and not optimize:
+                    used_opt_bias = 0.0
 
-                if optimize_fisher is not None:
-                    used_fisher = info['opt_fisher'].fisher
+                    if optimize_fisher is not None:
+                        used_fisher = info['opt_fisher'].fisher
+                    else:
+                        used_fisher = self.detector_fisher(i).fisher
                 else:
-                    used_fisher = self.detector_fisher(i).fisher
-            else:
-                # -- Some kind of optimization was carried out, thus we
-                # -- can access attribute in info dictionary
-                used_fisher = info['opt_fisher'].fisher
-                used_opt_bias = info['opt_bias']
+                    # -- Some kind of optimization was carried out, thus we
+                    # -- can access attribute in info dictionary
+                    used_fisher = info['opt_fisher'].fisher
+                    used_opt_bias = info['opt_bias']
 
-                opt_bias += used_fisher @ used_opt_bias
+                    opt_bias += used_fisher @ used_opt_bias
 
-            vector += info['deriv_vector']
-            fisher += used_fisher
+                vector += info['deriv_vector']
+                fisher += used_fisher
+        finally:
+            # -- This try statement is super important! Ensures that we
+            # -- restore the logging level even if there is error.
+            logger.setLevel(_logger_level)
 
-        # logging.disable(logging.NOTSET)
+
+        FisherMatrix._check_cond(fisher)
+        # -- Just calls fisher.cond, so works although no FisherMatrix instance
 
         fisher_bias = MatrixWithUnits.inv(fisher) @ (vector + opt_bias)
 

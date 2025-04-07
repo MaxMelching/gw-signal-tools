@@ -26,18 +26,30 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     def __init__(self, gen):
         self.gen = gen
 
+        # -- Initialize some important GravitationalWaveGenerator attributes
+        self._generation_domain = None
+        self._update_domains()
+
     @staticmethod
     def _get_fd_amplitude(hf: FrequencySeries) -> FrequencySeries:
+        """Extract the amplitude of a waveform on the whole frequency range."""
         return np.abs(hf)
 
     @staticmethod
     def _get_fd_phase(hf: FrequencySeries) -> FrequencySeries:
+        """Extract the phase of a waveform on the whole frequency range."""
         return np.unwrap(np.angle(hf))
+
+    @staticmethod
+    def _recombine_to_fd_wf(ampl: FrequencySeries, phase: FrequencySeries) -> FrequencySeries:
+        """Recombine a given amplitude and phase into a frequency domain waveform."""
+        # TODO: assert compatible frequencies?
+        return ampl * np.exp(1.j * phase)
 
     def _calibrate_f_series(
         self,
         hf: FrequencySeries,
-        modification=None,  # TODO: make dict, config file, or even custom class?
+        modification: dict[str, Any] = None,
     ) -> FrequencySeries:
         """
         Idea: only this function has to be able to parse whatever is in
@@ -53,7 +65,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
         # TODO: apply calibration here
 
-        hf_cal = hf_amp*np.exp(1.j*hf_phase)
+        hf_cal = self._recombine_to_fd_wf(hf_amp, hf_phase)
 
         return hf_cal
 
@@ -68,7 +80,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     def _calibrate_t_series(
         self,
         ht: TimeSeries,
-        modification=None,
+        modification: dict[str, Any] = None,
     ) -> TimeSeries:
         if modification is None:
             return ht
@@ -78,25 +90,37 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     def _extract_calib_kwds(
         self, **kwargs
     ) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
+        """Helper function to separate waveform arguments from systematics arguments."""
         wf_params = {}
         calib_params = {}
+
+        for key, val in kwargs.items():
+            if key in [
+                'modification_type',
+                'error_in_phase',
+                'delta_amplitude',
+                'delta_phase',
+                'nodal_points',
+            ]:
+                calib_params[key] = val
+            else:
+                wf_params[key] = val
+
+        # TODO: potentially already apply checks whether given calib_params make sense?
+
         return wf_params, calib_params
 
     def generate_fd_waveform(self, **kwargs):
-        # TODO: apply calibration
-        # return super().generate_fd_waveform(**kwargs)
-        return self.gen.generate_fd_waveform(**kwargs)
+        # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
+        wf_params, calib_params = self._extract_calib_kwds(**kwargs)
+        wf = self.gen.generate_fd_waveform(**wf_params)
+        return self._calibrate_f_series(hf=wf, modification=calib_params)
 
     def generate_td_waveform(self, **kwargs):
-        # TODO: apply calibration
-        # return super().generate_td_waveform(**kwargs)
-        return self.gen.generate_td_waveform(**kwargs)
-
-    def generate_fd_waveform(self, **kwargs):
-        return NotImplemented
-
-    def generate_td_waveform(self, **kwargs):
-        return NotImplemented
+        # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
+        wf_params, calib_params = self._extract_calib_kwds(**kwargs)
+        wf = self.gen.generate_td_waveform(**wf_params)
+        return self._calibrate_t_series(hf=wf, modification=calib_params)
 
     @property
     def gen(self) -> FDWFGen:
@@ -109,6 +133,19 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     @gen.setter
     def gen(self, value: FDWFGen) -> None:
         self._gen = value
+        # self._implemented_domain = value._implemented_domain
+        # self._generation_domain = value._generation_domain
+
+        # -- Actually, these domains are usually set in the generator.
+        self._update_domains = value._update_domains
+
+    @property
+    def metadata(self):
+        return self.gen.metadata | {
+            'implemented_domain': 'freq',
+            'generation_domain': 'freq',
+        }
+        # TODO: remove this additional stuff once TD calibration becomes available
 
     def __getattr__(self, name) -> Any:
         try:
@@ -225,8 +262,14 @@ if __name__ == '__main__':
 
     print(cal_gen.gen)
 
-    # print(gen.generate_fd_waveform(**wf_params))
-    # print(cal_gen.generate_fd_waveform(**wf_params))
+    print(gen.generate_fd_waveform(**wf_params))
+    print(cal_gen.generate_fd_waveform(**wf_params))
+
+    import lalsimulation.gwsignal.core.waveform as wfm
+    print(wfm.GenerateFDWaveform(wf_params, gen))
+    print(wfm.GenerateFDWaveform(wf_params, cal_gen))
+
+    assert False
 
     # from importlib.metadata import entry_points
     # for model in entry_points(group='gwsignal_models'):

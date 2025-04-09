@@ -7,6 +7,7 @@ import astropy.units as u
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 from lalsimulation.gwsignal.core.waveform import GravitationalWaveGenerator
+from scipy.interpolate import CubicSpline
 
 # -- Local Package Imports
 from gw_signal_tools.types import WFGen, FDWFGen, TDWFGen  # To run as py file
@@ -72,7 +73,58 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         hf_amp = self._get_fd_amplitude(hf)
         hf_phase = self._get_fd_phase(hf)
 
-        # TODO: apply calibration here
+        # -- Extract modification, paying attention to different "modes"
+        if modification['modification_type'] == 'cubic_spline':
+            wf_nodal_points = modification['nodal_points']
+            delta_amplitude_arr = modification['delta_amplitude']
+            delta_phase_arr = modification['delta_phase']
+
+            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+
+            delta_amplitude = delta_amplitude_interp(hf)
+            delta_phase = delta_phase_interp(hf)
+        elif modification['modification_type'] == 'cubic_spline_nodes':
+            f_lower = modification['f_low_wferror']
+            f_high_wferror = modification['f_high_wferror']
+            n_nodes_wferror = int(modification['n_nodes_wferror'])
+            wf_nodal_points = np.logspace(
+                np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
+            )
+
+            delta_amplitude_arr = np.hstack(
+                [
+                    modification['wferror_amplitude_{}'.format(i)]
+                    for i in range(len(wf_nodal_points))
+                ]
+            )
+            delta_phase_arr = np.hstack(
+                [
+                    modification['wferror_phase_{}'.format(i)]
+                    for i in range(len(wf_nodal_points))
+                ]
+            )
+
+            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+
+            delta_amplitude = delta_amplitude_interp(hf)
+            delta_phase = delta_phase_interp(hf)
+        elif modification['modification_type'] == 'constant_shift':
+            delta_amplitude = modification['delta_amplitude']
+            delta_phase = modification['delta_phase']
+        else:
+            raise ValueError('Invalid `\'modification_type\'` given.')
+
+        # -- Applying the modifications
+        hf_amp *= delta_amplitude
+
+        if modification['error_in_phase'] == 'absolute':
+            hf_phase += delta_phase
+        if modification['error_in_phase'] == 'relative':
+            hf_phase *= 1.0 + delta_phase
+        else:
+            raise ValueError('Invalid `\'modification_type\'` given.')
 
         hf_cal = self._recombine_to_fd_wf(hf_amp, hf_phase)
 
@@ -113,6 +165,9 @@ class CalibrationWrapper(GravitationalWaveGenerator):
                 'delta_phase',
                 'nodal_points',
                 'config',  # TODO: do this? And try to use bilby parser for example?
+                'f_low_wferror',
+                'f_high_wferror',
+                'n_nodes_wferror',
             ]:
                 calib_params[key] = val
             else:
@@ -126,7 +181,26 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
         wf_params, calib_params = self._extract_calib_kwds(**kwargs)
         wf = self.gen.generate_fd_waveform(**wf_params)
-        return self._calibrate_f_series(hf=wf, modification=calib_params)
+
+        if isinstance(wf, GravitationalWavePolarizations):
+            return GravitationalWavePolarizations(
+                self._calibrate_f_series(hf=wf[0], modification=calib_params),
+                self._calibrate_f_series(hf=wf[1], modification=calib_params)
+            )
+        elif (
+            isinstance(wf, tuple) and len(wf) == 2
+            and isinstance(wf[0], FrequencySeries)
+            and isinstance(wf[1], FrequencySeries)
+        ):
+            return (
+                self._calibrate_f_series(hf=wf[0], modification=calib_params),
+                self._calibrate_f_series(hf=wf[1], modification=calib_params)
+            )
+        elif isinstance(wf, FrequencySeries):
+            return self._calibrate_f_series(hf=wf, modification=calib_params)
+        else:
+            # TODO: do this? Or try to calibrate anyway?
+            raise ValueError(f'Output type of waveform generator is unknown.')
 
     def generate_td_waveform(self, **kwargs):
         # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
@@ -304,7 +378,7 @@ if __name__ == '__main__':
 
     cal_gen.another_attr = 96
     print(cal_gen.another_attr)
-    print(cal_gen.invalid_attr)  # To test error message
+    # print(cal_gen.invalid_attr)  # To test error message
 
     print(cal_gen.gen)
 
@@ -319,6 +393,12 @@ if __name__ == '__main__':
 
     CalGravitationalWavePolarizations(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))
     CalGravitationalWavePolarizations(wfm.GenerateFDWaveform(wf_params, test_cal_gen))
+
+
+    # -- Test operations with numpy array -> works
+    # wf = wfm.GenerateFDWaveform(wf_params, gen)[0]
+    # print(wf + wf.value)
+    # print(wf * wf.value)
 
 
     # -- Demonstrate how subclassing can work by provoking error

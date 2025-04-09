@@ -23,12 +23,21 @@ __all__ = ('CalibrationWrapper', 'CalibrationGenerator', )  # TODO: rename?
 
 # class CalibrationGenerator(GravitationalWaveGenerator):
 class CalibrationWrapper(GravitationalWaveGenerator):
+# TODO: could WFModWrapper be a better name? Could then also rename _calibrate_f_series to _apply_fd_mod
     def __init__(self, gen):
         self.gen = gen
 
         # -- Initialize some important GravitationalWaveGenerator attributes
         self._generation_domain = None
         self._update_domains()
+    # def __new__(cls, gen):
+    #     cls.gen = gen
+
+    #     # -- Initialize some important GravitationalWaveGenerator attributes
+    #     cls._generation_domain = None
+    #     cls._update_domains()
+
+    #     return cls
 
     @staticmethod
     def _get_fd_amplitude(hf: FrequencySeries) -> FrequencySeries:
@@ -69,6 +78,8 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
         return hf_cal
 
+    # -- Note: keeping separate _get_<>_amplitude etc. makes subclassing
+    # -- with adjustments to selected functionality much easier.
     @staticmethod
     def _get_td_amplitude(ht: TimeSeries) -> TimeSeries:
         return NotImplemented
@@ -101,6 +112,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
                 'delta_amplitude',
                 'delta_phase',
                 'nodal_points',
+                'config',  # TODO: do this? And try to use bilby parser for example?
             ]:
                 calib_params[key] = val
             else:
@@ -133,10 +145,10 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     @gen.setter
     def gen(self, value: FDWFGen) -> None:
         self._gen = value
-        # self._implemented_domain = value._implemented_domain
-        # self._generation_domain = value._generation_domain
 
-        # -- Actually, these domains are usually set in the generator.
+        # -- Make sure domains are still correct and match the ones of
+        # -- self.gen. Since these are meant to be set in the generator,
+        # -- we can simply use update_domains.
         self._update_domains = value._update_domains
 
     @property
@@ -157,17 +169,42 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
 # -- How to adjust GWPolarizations based on this
 from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
+from typing import Union
 
 class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
+    hp: Union[TimeSeries, FrequencySeries]
+    hc: Union[TimeSeries, FrequencySeries]
+
     # _inherit_cal_gen = CalibrationGenerator  # Where we get functions to apply calibrations from
     _inherit_cal_gen = CalibrationWrapper  # Where we get functions to apply calibrations from
+    
+    # _get_fd_amplitude = _inherit_cal_gen._get_fd_amplitude
+    # _get_fd_phase = _inherit_cal_gen._get_fd_phase
+    # _recombine_to_fd_wf = _inherit_cal_gen._recombine_to_fd_wf
+    # _calibrate_f_series = _inherit_cal_gen._calibrate_f_series
+    # _get_td_amplitude = _inherit_cal_gen._get_td_amplitude
+    # _get_td_phase = _inherit_cal_gen._get_td_phase
+    # _calibrate_t_series = _inherit_cal_gen._calibrate_t_series
 
-    _get_fd_amplitude = _inherit_cal_gen._get_fd_amplitude
-    _get_fd_phase = _inherit_cal_gen._get_fd_phase
-    _calibrate_f_series = _inherit_cal_gen._calibrate_f_series
-    _get_td_amplitude = _inherit_cal_gen._get_td_amplitude
-    _get_td_phase = _inherit_cal_gen._get_td_phase
-    _calibrate_t_series = _inherit_cal_gen._calibrate_t_series
+    # def __new__(cls, hp, hc):
+    def __new__(cls, *args):
+        # -- Doing it here allows for easier subclassing, where only
+        # -- _inherit_cal_gen must be replaced in the subclass
+        cls._get_fd_amplitude = cls._inherit_cal_gen._get_fd_amplitude
+        cls._get_fd_phase = cls._inherit_cal_gen._get_fd_phase
+        cls._recombine_to_fd_wf = cls._inherit_cal_gen._recombine_to_fd_wf
+        cls._calibrate_f_series = cls._inherit_cal_gen._calibrate_f_series
+        cls._get_td_amplitude = cls._inherit_cal_gen._get_td_amplitude
+        cls._get_td_phase = cls._inherit_cal_gen._get_td_phase
+        cls._calibrate_t_series = cls._inherit_cal_gen._calibrate_t_series
+
+        # return super().__new__(cls, hp, hc)
+
+        if len(args) == 1:
+            args = args[0]  # Is already tuple of polarizations
+            # TODO: should we allow for this? Or demand passing of both polarizations?
+        return super().__new__(cls, *args)
+
 
     def strain(self, det, ra, dec, psi, tgps, **cal_kwargs):
         h = super().strain(det, ra, dec, psi, tgps)
@@ -188,8 +225,8 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
 
 from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
 
-# class CalibrationGenerator(GravitationalWaveGenerator):
-class CalibrationGenerator:
+class CalibrationGenerator(GravitationalWaveGenerator):
+# class CalibrationGenerator:
     # # def __init__(self, **kwargs):
     # def __new__(cls, *args, **kwargs):
     #     # super().__init__()
@@ -211,10 +248,10 @@ class CalibrationGenerator:
 
 if __name__ == '__main__':
     appr = 'IMRPhenomXPHM'
-    test = CalibrationGenerator(appr)
 
     gen = gwsignal_get_waveform_generator(appr)
     cal_gen = CalibrationWrapper(gen)
+    test_cal_gen = CalibrationGenerator(appr)
 
 
     import astropy.units as u
@@ -225,8 +262,6 @@ if __name__ == '__main__':
     delta_f = 2**-6 * u.Hz
     delta_t = 1./4096.*u.s
     f_ref = f_min  # Frequency where we specify spins
-    # f_ref = 0.8*f_min  # Frequency where we specify spins
-    # f_ref = 1.2*f_min  # Frequency where we specify spins
 
     wf_params = {
         'total_mass': 100.*u.Msun,
@@ -236,8 +271,7 @@ if __name__ == '__main__':
         'deltaF': delta_f,
         'f22_ref': f_ref,
         'phi_ref': 0.*u.rad,
-        # 'distance': 1.*u.Mpc,
-        'distance': 440.*u.Mpc,  # As expected, systematic error is independent of SNR and thus amplitude given by D_L
+        'distance': 440.*u.Mpc,
         'inclination': 0.*u.rad,
         'eccentricity': 0.*u.dimensionless_unscaled,
         'longAscNodes': 0.*u.rad,
@@ -264,10 +298,23 @@ if __name__ == '__main__':
 
     print(gen.generate_fd_waveform(**wf_params))
     print(cal_gen.generate_fd_waveform(**wf_params))
+    print(test_cal_gen.generate_fd_waveform(**wf_params))
 
     import lalsimulation.gwsignal.core.waveform as wfm
     print(wfm.GenerateFDWaveform(wf_params, gen))
     print(wfm.GenerateFDWaveform(wf_params, cal_gen))
+    print(wfm.GenerateFDWaveform(wf_params, test_cal_gen))
+
+    CalGravitationalWavePolarizations(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))
+    CalGravitationalWavePolarizations(wfm.GenerateFDWaveform(wf_params, test_cal_gen))
+
+
+    # -- Demonstrate how subclassing can work by provoking error
+    class WrongWrapper(CalGravitationalWavePolarizations):
+        _inherit_cal_gen = CalibrationGenerator
+
+    # WrongWrapper(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))  # Throws error, as it should, nice!!!
+
 
     assert False
 

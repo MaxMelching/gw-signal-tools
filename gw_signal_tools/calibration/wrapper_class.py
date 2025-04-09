@@ -25,7 +25,15 @@ __all__ = ('CalibrationWrapper', 'CalibrationGenerator', 'CalGravitationalWavePo
 # class CalibrationGenerator(GravitationalWaveGenerator):
 class CalibrationWrapper(GravitationalWaveGenerator):
 # TODO: could WFModWrapper be a better name? Could then also rename _calibrate_f_series to _apply_fd_mod
-    def __init__(self, gen):
+    def __init__(self, gen=None):
+        """
+        gen=None means that people intend to use parser capabilities only
+        """
+        if gen is None:
+            # return None
+            # -- Not setting attributes would be bad, thus use basic gen as default
+            gen = GravitationalWaveGenerator()
+
         self.gen = gen
 
         # -- Initialize some important GravitationalWaveGenerator attributes
@@ -56,8 +64,8 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         # TODO: assert compatible frequencies?
         return ampl * np.exp(1.j * phase)
 
+    @staticmethod
     def _calibrate_f_series(
-        self,
         hf: FrequencySeries,
         modification: dict[str, Any] = None,
     ) -> FrequencySeries:
@@ -66,55 +74,29 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         modification. Through clever call structure, we can do
         calibration of hp, hc in signal frame and calibration of h in
         detector frame using this function.
+
+        Note that modification here expects three keys: delta_amplitude,
+        delta_phase, error_in_phase. The first two can be either Callables
+        like CubicSplines that return interpolated errors or it must
+        return the errors themselves (e.g. constant ones).
         """
         if modification is None:
             return hf
-
-        hf_amp = self._get_fd_amplitude(hf)
-        hf_phase = self._get_fd_phase(hf)
-
-        # -- Extract modification, paying attention to different "modes"
-        if modification['modification_type'] == 'cubic_spline':
-            wf_nodal_points = modification['nodal_points']
-            delta_amplitude_arr = modification['delta_amplitude']
-            delta_phase_arr = modification['delta_phase']
-
-            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
-            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
-
-            delta_amplitude = delta_amplitude_interp(hf)
-            delta_phase = delta_phase_interp(hf)
-        elif modification['modification_type'] == 'cubic_spline_nodes':
-            f_lower = modification['f_low_wferror']
-            f_high_wferror = modification['f_high_wferror']
-            n_nodes_wferror = int(modification['n_nodes_wferror'])
-            wf_nodal_points = np.logspace(
-                np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
-            )
-
-            delta_amplitude_arr = np.hstack(
-                [
-                    modification['wferror_amplitude_{}'.format(i)]
-                    for i in range(len(wf_nodal_points))
-                ]
-            )
-            delta_phase_arr = np.hstack(
-                [
-                    modification['wferror_phase_{}'.format(i)]
-                    for i in range(len(wf_nodal_points))
-                ]
-            )
-
-            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
-            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
-
-            delta_amplitude = delta_amplitude_interp(hf)
-            delta_phase = delta_phase_interp(hf)
-        elif modification['modification_type'] == 'constant_shift':
-            delta_amplitude = modification['delta_amplitude']
-            delta_phase = modification['delta_phase']
         else:
-            raise ValueError('Invalid `\'modification_type\'` given.')
+            # if isinstance(modification['delta_amplitude'], CubicSpline):
+            if callable(modification['delta_amplitude']):  # Some interpolant, e.g. CubicSpline
+                delta_amplitude = modification['delta_amplitude'](hf.frequencies)
+            else:
+                delta_amplitude = modification['delta_amplitude']
+
+            # if isinstance(modification['delta_phase'], CubicSpline):
+            if callable(modification['delta_phase']):  # Some interpolant, e.g. CubicSpline
+                delta_phase = modification['delta_phase'](hf.frequencies)
+            else:
+                delta_phase = modification['delta_phase']
+
+        hf_amp = CalibrationWrapper._get_fd_amplitude(hf)
+        hf_phase = CalibrationWrapper._get_fd_phase(hf)
 
         # -- Applying the modifications
         hf_amp *= delta_amplitude
@@ -126,7 +108,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         else:
             raise ValueError('Invalid `\'modification_type\'` given.')
 
-        hf_cal = self._recombine_to_fd_wf(hf_amp, hf_phase)
+        hf_cal = CalibrationWrapper._recombine_to_fd_wf(hf_amp, hf_phase)
 
         return hf_cal
 
@@ -137,7 +119,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         return NotImplemented
 
     @staticmethod
-    def _get_td_phase(hf: TimeSeries) -> TimeSeries:
+    def _get_td_phase(ht: TimeSeries) -> TimeSeries:
         return NotImplemented
 
     def _calibrate_t_series(
@@ -150,8 +132,9 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
         return NotImplemented
 
-    def _extract_calib_kwds(
-        self, **kwargs
+    @staticmethod
+    def parse_calib_kwds(
+        **kwargs
     ) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
         """Helper function to separate waveform arguments from systematics arguments."""
         wf_params = {}
@@ -173,13 +156,62 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             else:
                 wf_params[key] = val
 
-        # TODO: potentially already apply checks whether given calib_params make sense?
+        # -- Check if any calibration parameters are given at all
+        if len(calib_params) == 0:
+            return wf_params, None
 
-        return wf_params, calib_params if len(calib_params) > 0 else None
+        # -- Parse modifications. Here is more efficient than in _calibrate_series
+        if calib_params['modification_type'] == 'cubic_spline':
+            wf_nodal_points = calib_params['nodal_points']
+            delta_amplitude_arr = calib_params['delta_amplitude']
+            delta_phase_arr = calib_params['delta_phase']
+
+            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+
+            delta_amplitude = delta_amplitude_interp
+            delta_phase = delta_phase_interp
+        elif calib_params['modification_type'] == 'cubic_spline_nodes':
+            f_lower = calib_params['f_low_wferror']
+            f_high_wferror = calib_params['f_high_wferror']
+            n_nodes_wferror = int(calib_params['n_nodes_wferror'])
+            wf_nodal_points = np.logspace(
+                np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
+            )
+
+            delta_amplitude_arr = np.hstack(
+                [
+                    calib_params['wferror_amplitude_{}'.format(i)]
+                    for i in range(len(wf_nodal_points))
+                ]
+            )
+            delta_phase_arr = np.hstack(
+                [
+                    calib_params['wferror_phase_{}'.format(i)]
+                    for i in range(len(wf_nodal_points))
+                ]
+            )
+
+            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+
+            delta_amplitude = delta_amplitude_interp
+            delta_phase = delta_phase_interp
+        elif calib_params['modification_type'] == 'constant_shift':
+            delta_amplitude = calib_params['delta_amplitude']
+            delta_phase = calib_params['delta_phase']
+        else:
+            raise ValueError('Invalid `\'modification_type\'` given.')
+
+        return wf_params, {
+            'delta_amplitude': delta_amplitude,
+            'delta_phase': delta_phase,
+            'error_in_phase': calib_params['error_in_phase'],
+        }
 
     def generate_fd_waveform(self, **kwargs):
-        # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
-        wf_params, calib_params = self._extract_calib_kwds(**kwargs)
+        # wf_params, calib_params = self.parse_calib_kwds(kwargs=kwargs)
+        wf_params, calib_params = self.parse_calib_kwds(**kwargs)
         wf = self.gen.generate_fd_waveform(**wf_params)
 
         if isinstance(wf, GravitationalWavePolarizations):
@@ -203,15 +235,15 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             raise ValueError(f'Output type of waveform generator is unknown.')
 
     def generate_td_waveform(self, **kwargs):
-        # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
-        wf_params, calib_params = self._extract_calib_kwds(**kwargs)
+        # wf_params, calib_params = self.parse_calib_kwds(kwargs=kwargs)
+        wf_params, calib_params = self.parse_calib_kwds(**kwargs)
         wf = self.gen.generate_td_waveform(**wf_params)
         return self._calibrate_t_series(hf=wf, modification=calib_params)
 
     @property
-    def gen(self) -> FDWFGen:
+    def gen(self) -> GravitationalWaveGenerator | FDWFGen:
         """
-        Generator that is wrapper around in this class, i.e. that the
+        Generator that is wrapped around in this class, i.e. that the
         calibration is applied to.
         """
         return self._gen

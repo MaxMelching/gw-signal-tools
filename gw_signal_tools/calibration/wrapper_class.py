@@ -18,7 +18,7 @@ Module for waveform generators that allow application of systematic
 error corrections.
 """
 
-__all__ = ('CalibrationWrapper', 'CalibrationGenerator', )  # TODO: rename?
+__all__ = ('CalibrationWrapper', 'CalibrationGenerator', 'CalGravitationalWavePolarizations', )  # TODO: rename?
 
 
 # class CalibrationGenerator(GravitationalWaveGenerator):
@@ -120,7 +120,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
         # TODO: potentially already apply checks whether given calib_params make sense?
 
-        return wf_params, calib_params
+        return wf_params, calib_params if len(calib_params) > 0 else None
 
     def generate_fd_waveform(self, **kwargs):
         # wf_params, calib_params = self._extract_calib_kwds(kwargs=kwargs)
@@ -162,9 +162,21 @@ class CalibrationWrapper(GravitationalWaveGenerator):
     def __getattr__(self, name) -> Any:
         try:
             return self.__getattribute__(name)
-        except AttributeError:
+        except AttributeError as err:
             # -- Maybe gen had this defined. If not, throw error
-            return self.gen.__getattribute__(name)
+            # try:
+            #     return self.gen.__getattribute__(name)
+            # except AttributeError:
+            #     # raise err
+            #     pass
+
+            # # -- To avoid chained error message
+            # raise err
+
+            if hasattr(self.gen, name):
+                return self.gen.__getattribute__(name)
+            else:
+                raise err
 
 
 # -- How to adjust GWPolarizations based on this
@@ -292,7 +304,7 @@ if __name__ == '__main__':
 
     cal_gen.another_attr = 96
     print(cal_gen.another_attr)
-    # print(cal_gen.invalid_attr)  # To test error message
+    print(cal_gen.invalid_attr)  # To test error message
 
     print(cal_gen.gen)
 

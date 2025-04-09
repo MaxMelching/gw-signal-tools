@@ -39,14 +39,6 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         # -- Initialize some important GravitationalWaveGenerator attributes
         self._generation_domain = None
         self._update_domains()
-    # def __new__(cls, gen):
-    #     cls.gen = gen
-
-    #     # -- Initialize some important GravitationalWaveGenerator attributes
-    #     cls._generation_domain = None
-    #     cls._update_domains()
-
-    #     return cls
 
     @staticmethod
     def _get_fd_amplitude(hf: FrequencySeries) -> FrequencySeries:
@@ -269,16 +261,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         try:
             return self.__getattribute__(name)
         except AttributeError as err:
-            # -- Maybe gen had this defined. If not, throw error
-            # try:
-            #     return self.gen.__getattribute__(name)
-            # except AttributeError:
-            #     # raise err
-            #     pass
-
-            # # -- To avoid chained error message
-            # raise err
-
+            # -- No use of another try except here to avoid chained error message
             if hasattr(self.gen, name):
                 return self.gen.__getattribute__(name)
             else:
@@ -295,14 +278,6 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
 
     # _inherit_cal_gen = CalibrationGenerator  # Where we get functions to apply calibrations from
     _inherit_cal_gen = CalibrationWrapper  # Where we get functions to apply calibrations from
-    
-    # _get_fd_amplitude = _inherit_cal_gen._get_fd_amplitude
-    # _get_fd_phase = _inherit_cal_gen._get_fd_phase
-    # _recombine_to_fd_wf = _inherit_cal_gen._recombine_to_fd_wf
-    # _calibrate_f_series = _inherit_cal_gen._calibrate_f_series
-    # _get_td_amplitude = _inherit_cal_gen._get_td_amplitude
-    # _get_td_phase = _inherit_cal_gen._get_td_phase
-    # _calibrate_t_series = _inherit_cal_gen._calibrate_t_series
 
     # def __new__(cls, hp, hc):
     def __new__(cls, *args):
@@ -344,21 +319,6 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
 from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
 
 class CalibrationGenerator(GravitationalWaveGenerator):
-# class CalibrationGenerator:
-    # # def __init__(self, **kwargs):
-    # def __new__(cls, *args, **kwargs):
-    #     # super().__init__()
-    #     # _appr = kwargs.pop('baseline_approximant')
-    #     # gen = gwsignal_get_waveform_generator(_appr, **kwargs)
-    #     if not isinstance(args[0], str):
-    #         args = [kwargs.pop('baseline_approximant')].append(args)
-    #     gen = gwsignal_get_waveform_generator(*args, **kwargs)
-    #     return CalibrationWrapper(gen)
-    #     # return CalibrationWrapper.__new__(gen)
-
-    # def __new__(cls, baseline_approximant, *args, **kwargs):
-    #     gen = gwsignal_get_waveform_generator(baseline_approximant, *args, **kwargs)
-    #     return CalibrationWrapper(gen)
     def __new__(cls, approximant, *args, **kwargs):
         gen = gwsignal_get_waveform_generator(approximant, *args, **kwargs)
         return CalibrationWrapper(gen)

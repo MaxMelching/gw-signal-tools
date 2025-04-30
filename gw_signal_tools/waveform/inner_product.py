@@ -628,6 +628,10 @@ def optimized_inner_product(
         number represents a shift :math:`t_0` from :code:`signal1` to
         :code:`signal2`, i.e. :code:`signal1` is "ahead in time"
         in the sense that :math:`signal1(t) = signal2(t+t0)`.
+        Note that this time shift does NOT take into account the epochs
+        assigned to the signals, it is solely inferred from features of
+        the signal samples (i.e. if there is a time shift that is
+        present in the samples, this will be picked up).
         (iii) phase shift needed to get maximum of (i) at time (ii) if
         :code:`optimize_phase=True` or
         :code:`optimize_time_and_phase=True`, i.e. it is the phase that
@@ -740,14 +744,6 @@ def optimized_inner_product(
 
     # -- Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
-    # TODO: can we do better with rolling? The "starting time" of IFT signal
-    # is usually chosen to be the epoch. So couldn't we use that epoch of
-    # h1*conj(h2) should be h1.epoch-h2.epoch? Would then also have to adjust
-    # starting time when setting match series, be consistent there
-    # -> or maybe it does not play role because we can argue via periodicity
-    #    in signal length? Starting time zero should remain
-    # -> also, we only care about relative (!) time shift that we have
-    #    to introduce, not the actual difference in starting time
 
     match_series = np.roll(match_series, shift=number_to_roll)
     match_series.shift(-match_series.times[number_to_roll])

@@ -703,17 +703,7 @@ def optimized_inner_product(
             n_required = n_total
 
         n_required = next_power_of_two(n_required)
-
         n_append = n_required - dft_vals.size
-
-        if n_append % 2 == 0:  # Equivalent to dft_vals.size % 2 == 0
-            # -- Symmetric appending
-            n_append_lower = n_append_upper = n_append // 2
-        else:
-            # -- Via checks at beginning of function, we know that less
-            # -- values at positive frequencies
-            n_append_lower = n_append // 2 + 1
-            n_append_upper = n_append // 2
 
         n_split = dft_vals.size // 2
         # -- Should actually work for all cases. For odd, rounds down
@@ -723,8 +713,7 @@ def optimized_inner_product(
         full_dft_vals = 2.0 * np.concatenate(
             (
                 dft_vals.value[n_split:],
-                np.zeros(n_append_upper),
-                np.zeros(n_append_lower),
+                np.zeros(n_append),
                 dft_vals.value[:n_split],
             )
         )

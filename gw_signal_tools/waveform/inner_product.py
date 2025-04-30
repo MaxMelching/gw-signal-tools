@@ -88,6 +88,9 @@ def _determine_x_range(x_range, *s):
                 f'bound of {x_lower} instead.'
             )
 
+        assert x_lower < x_upper, 'Given lower bound must be smaller than upper bound.'
+
+
         # -- New upper bound must be smaller than current upper bound,
         # -- otherwise no values for the range are available in signals
         if x_upper_new <= x_upper:

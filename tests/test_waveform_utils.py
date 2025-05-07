@@ -627,14 +627,17 @@ def test_adjust_x_range_with_padding_and_cropping_exact(df):
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
-    print(hp_f_restricted.frequencies[-1], hp_f_restricted.df, f_crop_high)
-    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    assert_allclose_quantity(0.0 * u.Hz, hp_f_restricted.f0, rtol=0.0, atol=5e-12)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
                              atol=0.8 * df.value, rtol=0.0)
     # -- Coarse requires 0.8, for fine 0.42 would be sufficient
 
+# TODO: we do not test for cropping other than 0.0!!! This will always work
+# because signals include this by default. Interesting cases where rounding is
+# needed are not tested for!!! -> now done with synthetic tests below, but should still do
 
-@pytest.mark.parametrize('df', [0.001*u.Hz, 0.007*u.Hz])
+
+@pytest.mark.parametrize('df', [0.4*u.Hz, 0.001*u.Hz, 0.007*u.Hz])
 def test_adjust_x_range_with_padding_and_cropping_not_exact(df):
     f_crop_low, f_crop_high = 20.0 * u.Hz, 30.0 * u.Hz
 
@@ -646,13 +649,78 @@ def test_adjust_x_range_with_padding_and_cropping_not_exact(df):
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
-
-    assert_quantity_equal(hp_f_restricted.f0, 0.0 * u.Hz)
+    assert_allclose_quantity(0.0 * u.Hz, hp_f_restricted.f0, rtol=0.0, atol=5e-11)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
-                             atol=df.value, rtol=0.0)
-    # More tolerance needed here since using the more accurate slicing
-    # method used here is too expensive for use in adjust_x_range. This
-    # comes at the price of certain smaller deviations for some df
+                             atol=0.8 * df.value, rtol=0.0)
+    # -- Same tolerance as for fine case of exact, which is nice
+
+
+def test_adjust_x_range_synthetic():
+    mock_signal = Series(np.ones(5), xindex=[1, 2, 3, 4, 5])
+
+    exact_crop_range = [2, 4]
+    exact_crop_signal = adjust_x_range(mock_signal, exact_crop_range, copy=True)
+    assert exact_crop_signal.xindex[0] == exact_crop_range[0]
+    assert exact_crop_signal.xindex[-1] == exact_crop_range[-1]
+
+
+    exact_pad_range = [0, 6]
+    exact_pad_signal = adjust_x_range(mock_signal, exact_pad_range, copy=True)
+    assert exact_pad_signal.xindex[0] == exact_pad_range[0]
+    assert exact_pad_signal.xindex[-1] == exact_pad_range[-1]
+
+
+    for inexact_crop_range in [
+        [1.9, 3.2],  # Within 0.5 * dx to target
+        [1.1, 3.7],  # More than 0.5 * dx away from target
+    ]:
+        inexact_crop_signal = adjust_x_range(mock_signal, inexact_crop_range, copy=True)
+
+        assert inexact_crop_signal.xindex[0] <= inexact_crop_range[0]  # For floor in x_lower > signal.x0
+        assert inexact_crop_signal.xindex[0] == 1  # For floor in x_lower > signal.x0
+        # assert inexact_crop_signal.xindex[0] == 2  # For ceil in x_lower > signal.x0
+
+        assert inexact_crop_signal.xindex[-1] >= inexact_crop_range[-1]  # For ceil in x_upper < signal.xindex[-1]
+        assert inexact_crop_signal.xindex[-1] == 4  # For ceil in x_upper < signal.xindex[-1]
+        # assert inexact_crop_signal.xindex[-1] == 3  # For floor in x_upper < signal.xindex[-1]
+
+
+    for inexact_pad_range in [
+        [0.7, 5.3],  # Within 0.5 * dx to target
+        [0.3, 5.8],  # More than 0.5 * dx away from target
+    ]:
+        inexact_pad_signal = adjust_x_range(mock_signal, inexact_pad_range, copy=True)
+        
+        assert inexact_pad_signal.xindex[0] <= inexact_pad_range[0]  # For floor in x_lower < signal.x0
+        assert inexact_pad_signal.xindex[0] == 0  # For floor in x_lower < signal.x0
+        # assert inexact_pad_signal.xindex[0] == 1  # For ceil in x_lower < signal.x0
+        
+        assert inexact_pad_signal.xindex[-1] >= inexact_pad_range[-1]  # For ceil in x_upper > signal.xindex[-1]
+        assert inexact_pad_signal.xindex[-1] == 6  # For ceil in x_upper > signal.xindex[-1]
+        # assert inexact_pad_signal.xindex[-1] == 5  # For floor in x_upper > signal.xindex[-1]
+
+
+def test_adjust_x_range_synthetic_irregular():
+    mock_signal = Series(np.ones(5), xindex=[1, 2, 2.2, 2.6, 3, 4, 5])  # Irregular xindex
+
+    exact_crop_range = [2, 4]
+    exact_crop_signal = adjust_x_range(mock_signal, exact_crop_range, copy=True)
+    assert exact_crop_signal.xindex[0] == exact_crop_range[0]
+    assert exact_crop_signal.xindex[-1] == exact_crop_range[-1]
+
+    # -- Padding is not possible for irregular spacing, thus no tests for that
+
+    for inexact_crop_range in [
+        [1.9, 3.2],  # Within 0.5 * dx to target
+        [1.1, 3.7],  # More than 0.5 * dx away from target
+    ]:
+        inexact_crop_signal = adjust_x_range(mock_signal, inexact_crop_range, copy=True)
+
+        assert inexact_crop_signal.xindex[0] <= inexact_crop_range[0]
+        assert inexact_crop_signal.xindex[0] == 1
+
+        assert inexact_crop_signal.xindex[-1] >= inexact_crop_range[-1]
+        assert inexact_crop_signal.xindex[-1] == 4
 
 
 @pytest.mark.parametrize('fill_val', [0., 2.])

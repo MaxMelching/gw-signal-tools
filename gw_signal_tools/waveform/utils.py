@@ -214,27 +214,32 @@ def adjust_x_range(
             lower_number = np.searchsorted(
                 signal.xindex.value,
                 x_lower,
-                side='left',  # Only then correct result if element in xindex
-            )
-            # -- side='right' and using lower_number-1 makes better test
-            # -- results, but not sure if more correct...
+                side='right',
+            ) - 1
+
             upper_number = np.searchsorted(
                 signal.xindex.value,
                 x_upper,
-                side='left',  # Only then correct result if element in xindex
-            )
-            # -- GWpy uses side='left' without subtraction for both
-            # -- cases, so we are consistent here.
+                side='left',
+            ) + 1
+            # -- GWpy uses side='left' without subtraction for both cases,
+            # -- but we found better results for this here. Is likely
+            # -- related to the fact that we want to KEEP elements at
+            # -- lower_number and upper_number, not access them (which
+            # -- is what searchsorted does).
 
             signal = signal[lower_number:upper_number]
         else:
-            lower_number = abs(int(np.ceil((x_lower - signal.x0) / signal.dx)))
+            lower_number = abs(int(np.floor((x_lower - signal.x0) / signal.dx)))
+            # -- Use of np.floor means: if x_lower=42 and we have samples at
+            # -- 41.9, 42.6, then we include 41.9. np.ceil would exclude
 
             if x_lower < signal.x0:  # Equivalent to lower_number > 0
                 signal = type(signal)(
                     np.full(lower_number, fill_value=fill_val.value),
                     unit=signal_unit,
-                    x0=x_lower,
+                    # x0=x_lower,
+                    x0=signal.x0 - lower_number * signal.dx,
                     dx=signal.dx,
                     name=signal.name,
                     epoch=signal.epoch,
@@ -248,6 +253,8 @@ def adjust_x_range(
                 signal = signal[lower_number:]
 
             upper_number = abs(int(np.ceil((x_upper - signal.xindex[-1]) / signal.dx)))
+            # -- Use of np.ceil means: if x_upper=42 and we have samples at
+            # -- 41.9, 42.6, then we include 42.6. np.floor would exclude
 
             if x_upper > signal.xindex[-1]:  # Equivalent to upper_number > 0
                 signal = signal.append(

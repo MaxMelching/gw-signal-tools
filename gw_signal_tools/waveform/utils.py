@@ -405,7 +405,7 @@ def fill_x_range(
                 lower_number_to_fill = np.searchsorted(
                     signal.xindex.value,
                     x_fill_lower,
-                    side='left',  # Only then correct result if element in xindex
+                    side='left',
                 )
             signal[:lower_number_to_fill].fill(fill_val)
 
@@ -427,7 +427,7 @@ def fill_x_range(
                 upper_number_to_fill = np.searchsorted(
                     signal.xindex.value,
                     x_fill_upper,
-                    side='left',  # Only then correct result if element in xindex
+                    side='left',
                 )
             signal[upper_number_to_fill:].fill(fill_val)
 

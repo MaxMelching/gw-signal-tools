@@ -701,7 +701,7 @@ def test_adjust_x_range_synthetic():
 
 
 def test_adjust_x_range_synthetic_irregular():
-    mock_signal = Series(np.ones(5), xindex=[1, 2, 2.2, 2.6, 3, 4, 5])  # Irregular xindex
+    mock_signal = Series(np.ones(7), xindex=[1, 2, 2.2, 2.6, 3, 4, 5])  # Irregular xindex
 
     exact_crop_range = [2, 4]
     exact_crop_signal = adjust_x_range(mock_signal, exact_crop_range, copy=True)
@@ -791,6 +791,61 @@ def test_fill_x_range_copy():
         pass
 
     assert_quantity_equal(hf, hp_f_fine)  # Must not have changed
+
+
+@pytest.mark.parametrize('fill_val', [0., 2.])
+def test_fill_x_range_synthetic(fill_val):
+    mock_signal = Series(np.ones(5), xindex=[1, 2, 3, 4, 5])  # Irregular xindex
+
+    for fill_func in [
+        lambda x, y: adjust_x_range(x, fill_range=y, fill_val=fill_val, copy=True),
+        lambda x, y: fill_x_range(x, fill_val, fill_bounds=y, copy=True),
+    ]:
+        exact_fill_range = [2, 4]
+        exact_fill_signal = fill_func(mock_signal, exact_fill_range)
+        assert exact_fill_signal[0] == fill_val
+        assert exact_fill_signal[-1] == fill_val
+
+
+        for inexact_fill_range in [
+            [1.9, 3.2],  # Within 0.5 * dx to target
+            [1.1, 3.7],  # More than 0.5 * dx away from target
+        ]:
+            inexact_fill_signal = fill_func(mock_signal, inexact_fill_range)
+
+            for i in [0, 3, 4]:
+                assert inexact_fill_signal[i] == fill_val
+            
+            for i in [1, 2]:
+                assert inexact_fill_signal[i] != fill_val
+
+
+@pytest.mark.parametrize('fill_val', [0., 2.])
+def test_fill_x_range_synthetic_irregular(fill_val):
+    mock_signal = Series(np.ones(7), xindex=[1, 2, 2.2, 2.6, 3, 4, 5])  # Irregular xindex
+
+    for fill_func in [
+        lambda x, y: adjust_x_range(x, fill_range=y, fill_val=fill_val, copy=True),
+        lambda x, y: fill_x_range(x, fill_val, fill_bounds=y, copy=True),
+    ]:
+        
+        exact_fill_range = [2, 4]
+        exact_fill_signal = fill_func(mock_signal, exact_fill_range)
+        assert exact_fill_signal[0] == fill_val
+        assert exact_fill_signal[-1] == fill_val
+
+
+        for inexact_fill_range in [
+            [1.9, 3.2],  # Within 0.5 * dx to target
+            [1.1, 3.7],  # More than 0.5 * dx away from target
+        ]:
+            inexact_fill_signal = fill_func(mock_signal, inexact_fill_range)
+
+            for i in [0, 5, 6]:
+                assert inexact_fill_signal[i] == fill_val
+            
+            for i in [1, 2, 3, 4]:
+                assert inexact_fill_signal[i] != fill_val
 
 
 class HelpersErrorRaising(unittest.TestCase):

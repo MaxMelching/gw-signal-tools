@@ -11,7 +11,9 @@ from scipy.interpolate import CubicSpline
 
 # -- Local Package Imports
 from gw_signal_tools.types import WFGen, FDWFGen, TDWFGen  # To run as py file
+from gw_signal_tools.logging import logger
 # from ..types import WFGen, FDWFGen, TDWFGen
+# from ..logging import logger
 
 
 __doc__ = """
@@ -158,10 +160,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
             if search_key in calib_keys:
                 if suffix is None:
-                    calib_params[key] = kwargs.get(key)
-
-                    # calib_params[key + '_plus'] = kwargs.get(search_key)
-                    # calib_params[key + '_cross'] = kwargs.get(search_key)
+                    calib_params[key] = kwargs[key]
                 else:
                     # -- Note: this code will inevitably set the keys
                     # -- twice, but all attempts to circumvent this
@@ -169,8 +168,8 @@ class CalibrationWrapper(GravitationalWaveGenerator):
                     # -- for example, we would need to copy the whole
                     # -- kwargs dictionary, even more inefficient)
                     try:
-                        calib_params[search_key + '_plus'] = kwargs.get(search_key + '_plus')
-                        calib_params[search_key + '_cross'] = kwargs.get(search_key + '_cross')
+                        calib_params[search_key + '_plus'] = kwargs[search_key + '_plus']
+                        calib_params[search_key + '_cross'] = kwargs[search_key + '_cross']
                     except KeyError:
                         given_pol = suffix.lstrip('_')
                         missing_pol = 'plus' if given_pol == 'cross' else 'cross'
@@ -178,8 +177,12 @@ class CalibrationWrapper(GravitationalWaveGenerator):
                             f'Parameter \'{search_key}\' is given for {given_pol}-polarization,'
                             f' but not {missing_pol}-polarization.'
                         )
+                    finally:
+                        if search_key in kwargs:
+                            logger.info(f'Parameter {search_key} has input for individual polarizations. Ignoring input intended for both polarizations.')
+                        # TODO: really do this? Is another search in the params...
             else:
-                wf_params[key] = kwargs.get(key)
+                wf_params[key] = kwargs[key]
 
         # -- Check if any calibration parameters are given at all
         if len(calib_params) == 0:
@@ -191,34 +194,43 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             suffices.add('')
 
         for suffix in suffices:
+            def custom_get_key(key):
+                return calib_params.get(key + suffix, calib_params.get(key))
+            # -- Is ok to fall back to name without suffix as default
+            # -- because we have ensured that either variable is given
+            # -- for both polarizations separately or without suffix.
+
+            mod_type = custom_get_key('modification_type')
             # -- Parse modifications. Here is more efficient than in _calibrate_series
-            if calib_params['modification_type' + suffix] == 'cubic_spline':
-                wf_nodal_points = calib_params['nodal_points' + suffix]
-                delta_amplitude_arr = calib_params['delta_amplitude' + suffix]
-                delta_phase_arr = calib_params['delta_phase' + suffix]
+            if mod_type == 'cubic_spline':
+                wf_nodal_points = custom_get_key('nodal_points')
+                delta_amplitude_arr = custom_get_key('delta_amplitude')
+                delta_phase_arr = custom_get_key('delta_phase')
 
                 delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
                 delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
 
                 delta_amplitude = delta_amplitude_interp
                 delta_phase = delta_phase_interp
-            elif calib_params['modification_type' + suffix] == 'cubic_spline_nodes':
-                f_lower = calib_params['f_low_wferror' + suffix]
-                f_high_wferror = calib_params['f_high_wferror' + suffix]
-                n_nodes_wferror = int(calib_params['n_nodes_wferror' + suffix])
+            elif mod_type == 'cubic_spline_nodes':
+                f_lower = custom_get_key('f_low_wferror')
+                f_high_wferror = custom_get_key('f_high_wferror')
+                n_nodes_wferror = int(custom_get_key('n_nodes_wferror'))
                 wf_nodal_points = np.logspace(
                     np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
                 )
 
                 delta_amplitude_arr = np.hstack(
                     [
-                        calib_params[f'wferror_amplitude_{i}{suffix}']
+                        # calib_params[f'wferror_amplitude_{i}{suffix}']
+                        custom_get_key(f'wferror_amplitude_{i}')
                         for i in range(n_nodes_wferror)
                     ]
                 )
                 delta_phase_arr = np.hstack(
                     [
-                        calib_params[f'wferror_phase_{i}{suffix}']
+                        # calib_params[f'wferror_phase_{i}{suffix}']
+                        custom_get_key(f'wferror_phase_{i}')
                         for i in range(n_nodes_wferror)
                     ]
                 )
@@ -228,20 +240,16 @@ class CalibrationWrapper(GravitationalWaveGenerator):
 
                 delta_amplitude = delta_amplitude_interp
                 delta_phase = delta_phase_interp
-            elif calib_params['modification_type' + suffix] == 'constant_shift':
-                delta_amplitude = calib_params['delta_amplitude' + suffix]
-                delta_phase = calib_params['delta_phase' + suffix]
+            elif mod_type == 'constant_shift':
+                delta_amplitude = custom_get_key('delta_amplitude')
+                delta_phase = custom_get_key('delta_phase')
             else:
                 raise ValueError('Invalid `\'modification_type\'` given.')
 
-
             calib_out[suffix.lstrip('_')] = {
-                # 'delta_amplitude' + suffix: delta_amplitude,
-                # 'delta_phase' + suffix: delta_phase,
-                # 'error_in_phase' + suffix: calib_params['error_in_phase' + suffix],
                 'delta_amplitude': delta_amplitude,
                 'delta_phase': delta_phase,
-                'error_in_phase': calib_params['error_in_phase' + suffix],
+                'error_in_phase': custom_get_key('error_in_phase'),
             }
 
         if '' in suffices:

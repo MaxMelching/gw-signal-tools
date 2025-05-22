@@ -127,10 +127,19 @@ def test_GenerateFDWaveform_no_mod():
         marks=pytest.mark.xfail(raises=KeyError, strict=True,
                                 reason='Only one polarization given')
     ),
+    {
+        'modification_type': 'constant_shift',
+        'error_in_phase': 'relative',
+        'delta_amplitude_plus': 0.01,
+        'delta_phase_plus': 0.01,
+        'delta_amplitude_cross': 0.01,
+        'delta_phase_cross': 0.01,
+    },
     pytest.param(
         {
             'modification_type': 'constant_shift',
             'error_in_phase': 'relative',
+            'error_in_phase_plus': 'relative',  # This is what is wrong
             'delta_amplitude_plus': 0.01,
             'delta_phase_plus': 0.01,
             'delta_amplitude_cross': 0.01,
@@ -139,36 +148,57 @@ def test_GenerateFDWaveform_no_mod():
         marks=pytest.mark.xfail(raises=KeyError, strict=True,
                                 reason='Mixing input for one, two polarizations')
     ),
+    {
+        'modification_type': 'constant_shift',
+        'error_in_phase': 'relative',
+        'delta_amplitude': None,  # Invalid, but is ignored because given for plus + cross as well
+        'delta_amplitude_plus': 0.01,
+        'delta_phase_plus': 0.01,
+        'delta_amplitude_cross': 0.01,
+        'delta_phase_cross': 0.01,
+    },
 ])
 def test_generate_fd_waveform_w_mod(calib_params):
     params = wf_params | calib_params
 
-    # print(wrap_gen.parse_calib_kwds(**params))
-    # assert False
-
-    # wf_gen = gen.generate_fd_waveform(**wf_params)
+    wf_gen = gen.generate_fd_waveform(**wf_params)
     wf_wrap_gen = wrap_gen.generate_fd_waveform(**params)
     wf_cal_gen = cal_gen.generate_fd_waveform(**params)
 
     for i in [0, 1]:
         assert_allequal_series(wf_wrap_gen[i], wf_cal_gen[i])
-        # assert_allequal_series(wf_gen[i], wf_wrap_gen[i])
-        # assert_allequal_series(wf_gen[i], wf_cal_gen[i])
+
+        try:
+            assert_allequal_series(wf_gen[i], wf_wrap_gen[i])
+
+            raise RuntimeError('An AssertionError should be raised.')
+        except AssertionError:
+            pass
+
+        try:
+            assert_allequal_series(wf_gen[i], wf_cal_gen[i])
+
+            raise RuntimeError('An AssertionError should be raised.')
+        except AssertionError:
+            pass
 
 
 def test_domain():
     # -- Call generators so that they know which domain we want to generate in
     wfm.GenerateFDWaveform(wf_params, gen)
-    wfm.GenerateFDWaveform(wf_params, wrap_gen)
-    wfm.GenerateFDWaveform(wf_params, cal_gen)
+    # wfm.GenerateFDWaveform(wf_params, wrap_gen)
+    # wfm.GenerateFDWaveform(wf_params, cal_gen)
+    # -- This attribute is hard-coded now, so no calling needed for wrapper
 
     assert gen.domain == cal_gen.domain == wrap_gen.domain
 
 
 def test_metadata():
+    # -- Call generators so that they know which domain we want to generate in
     wfm.GenerateFDWaveform(wf_params, gen)
-    wfm.GenerateFDWaveform(wf_params, wrap_gen)
-    wfm.GenerateFDWaveform(wf_params, cal_gen)
+    # wfm.GenerateFDWaveform(wf_params, wrap_gen)
+    # wfm.GenerateFDWaveform(wf_params, cal_gen)
+    # -- This attribute is hard-coded now, so no calling needed for wrapper
 
     for attr in [
         '_implemented_domain',

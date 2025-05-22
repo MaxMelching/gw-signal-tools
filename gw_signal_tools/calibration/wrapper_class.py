@@ -26,7 +26,7 @@ __all__ = ('CalibrationWrapper', 'CalibrationGenerator', 'CalGravitationalWavePo
 
 # class CalibrationGenerator(GravitationalWaveGenerator):
 class CalibrationWrapper(GravitationalWaveGenerator):
-# TODO: could WFModWrapper be a better name? Could then also rename calibrate_f_series to _apply_fd_mod
+# TODO: could WFModWrapper be a better name? Could then also rename modify_f_series to _apply_fd_mod
     def __init__(self, gen=None):
         """
         gen=None means that people intend to use parser capabilities only
@@ -52,13 +52,13 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         return np.unwrap(np.angle(hf))
 
     @staticmethod
-    def recombine_to_fd_wf(ampl: FrequencySeries, phase: FrequencySeries) -> FrequencySeries:
+    def recombine_fd(ampl: FrequencySeries, phase: FrequencySeries) -> FrequencySeries:
         """Recombine a given amplitude and phase into a frequency domain waveform."""
         # TODO: assert compatible frequencies?
         return ampl * np.exp(1.j * phase)
 
     @staticmethod
-    def calibrate_f_series(
+    def modify_f_series(
         hf: FrequencySeries,
         modification: dict[str, Any] = None,
     ) -> FrequencySeries:
@@ -99,7 +99,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         else:
             raise ValueError('Invalid `\'modification_type\'` given.')
 
-        hf_cal = CalibrationWrapper.recombine_to_fd_wf(hf_amp, hf_phase)
+        hf_cal = CalibrationWrapper.recombine_fd(hf_amp, hf_phase)
 
         return hf_cal
 
@@ -114,7 +114,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         return NotImplemented
 
     @staticmethod
-    def calibrate_t_series(
+    def modify_t_series(
         ht: TimeSeries,
         modification: dict[str, Any] = None,
     ) -> TimeSeries:
@@ -124,7 +124,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         return NotImplemented
 
     @staticmethod
-    def parse_calib_kwds(
+    def parse_mod_kwds(
         **kwargs
     ) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
         """Helper function to separate waveform arguments from systematics arguments."""
@@ -260,13 +260,13 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         return wf_params, calib_out
 
     def generate_fd_waveform(self, **kwargs):
-        wf_params, calib_params = self.parse_calib_kwds(**kwargs)
+        wf_params, calib_params = self.parse_mod_kwds(**kwargs)
         wf = self.gen.generate_fd_waveform(**wf_params)
 
         if isinstance(wf, GravitationalWavePolarizations):
             return GravitationalWavePolarizations(
-                self.calibrate_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
-                self.calibrate_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
+                self.modify_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
+                self.modify_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
             )
         elif (
             isinstance(wf, tuple) and len(wf) == 2
@@ -274,21 +274,20 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             and isinstance(wf[1], FrequencySeries)
         ):
             return (
-                self.calibrate_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
-                self.calibrate_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
+                self.modify_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
+                self.modify_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
             )
         elif isinstance(wf, FrequencySeries):
-            return self.calibrate_f_series(hf=wf, modification=calib_params)
+            return self.modify_f_series(hf=wf, modification=calib_params)
             # -- Assumes only a single modification was passed
         else:
             # TODO: do this? Or try to calibrate anyway?
             raise ValueError(f'Output type of waveform generator is unknown.')
 
     def generate_td_waveform(self, **kwargs):
-        # wf_params, calib_params = self.parse_calib_kwds(kwargs=kwargs)
-        wf_params, calib_params = self.parse_calib_kwds(**kwargs)
+        wf_params, calib_params = self.parse_mod_kwds(**kwargs)
         wf = self.gen.generate_td_waveform(**wf_params)
-        return self.calibrate_t_series(hf=wf, modification=calib_params)
+        return self.modify_t_series(hf=wf, modification=calib_params)
 
     @property
     def gen(self) -> GravitationalWaveGenerator | FDWFGen:
@@ -351,11 +350,11 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
         # -- _inherit_cal_gen must be replaced in the subclass
         cls.get_fd_amplitude = cls._inherit_cal_gen.get_fd_amplitude
         cls.get_fd_phase = cls._inherit_cal_gen.get_fd_phase
-        cls.recombine_to_fd_wf = cls._inherit_cal_gen.recombine_to_fd_wf
-        cls.calibrate_f_series = cls._inherit_cal_gen.calibrate_f_series
+        cls.recombine_fd = cls._inherit_cal_gen.recombine_fd
+        cls.modify_f_series = cls._inherit_cal_gen.modify_f_series
         cls.get_td_amplitude = cls._inherit_cal_gen.get_td_amplitude
         cls.get_td_phase = cls._inherit_cal_gen.get_td_phase
-        cls.calibrate_t_series = cls._inherit_cal_gen.calibrate_t_series
+        cls.modify_t_series = cls._inherit_cal_gen.modify_t_series
 
         # return super().__new__(cls, hp, hc)
 
@@ -368,9 +367,9 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
     def strain(self, det, ra, dec, psi, tgps, **cal_kwargs):
         h = super().strain(det, ra, dec, psi, tgps)
         if self.domain() == 'time':
-            return self.calibrate_t_series(ht=h, modification=cal_kwargs)
+            return self.modify_t_series(ht=h, modification=cal_kwargs)
         elif self.domain() == 'frequency':
-            return self.calibrate_f_series(hf=h, modification=cal_kwargs)
+            return self.modify_f_series(hf=h, modification=cal_kwargs)
         else:
             raise ValueError('Cannot apply calibration to mixed polarizations.')
             # return ValueError('hp and hc must both be either TimeSeries or FrequencySeries')

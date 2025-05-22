@@ -21,12 +21,10 @@ Module for waveform generators that allow application of systematic
 error corrections.
 """
 
-__all__ = ('CalibrationWrapper', 'CalibrationGenerator', 'CalGravitationalWavePolarizations', )  # TODO: rename?
+__all__ = ('WFModWrapper', 'WFModGenerator', 'CalGravitationalWavePolarizations', )  # TODO: rename?
 
 
-# class CalibrationGenerator(GravitationalWaveGenerator):
-class CalibrationWrapper(GravitationalWaveGenerator):
-# TODO: could WFModWrapper be a better name? Could then also rename modify_f_series to _apply_fd_mod
+class WFModWrapper(GravitationalWaveGenerator):
     def __init__(self, gen=None):
         """
         gen=None means that people intend to use parser capabilities only
@@ -86,8 +84,8 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             else:
                 delta_phase = modification['delta_phase']
 
-        hf_amp = CalibrationWrapper.get_fd_amplitude(hf)
-        hf_phase = CalibrationWrapper.get_fd_phase(hf)
+        hf_amp = WFModWrapper.get_fd_amplitude(hf)
+        hf_phase = WFModWrapper.get_fd_phase(hf)
 
         # -- Applying the modifications
         hf_amp *= delta_amplitude
@@ -99,7 +97,7 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         else:
             raise ValueError('Invalid `\'modification_type\'` given.')
 
-        hf_cal = CalibrationWrapper.recombine_fd(hf_amp, hf_phase)
+        hf_cal = WFModWrapper.recombine_fd(hf_amp, hf_phase)
 
         return hf_cal
 
@@ -341,8 +339,8 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
     hp: Union[TimeSeries, FrequencySeries]
     hc: Union[TimeSeries, FrequencySeries]
 
-    # _inherit_cal_gen = CalibrationGenerator  # Where we get functions to apply calibrations from
-    _inherit_cal_gen = CalibrationWrapper  # Where we get functions to apply calibrations from
+    # _inherit_cal_gen = WFModGenerator  # Where we get functions to apply calibrations from
+    _inherit_cal_gen = WFModWrapper  # Where we get functions to apply calibrations from
 
     # def __new__(cls, hp, hc):
     def __new__(cls, *args):
@@ -383,18 +381,18 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
 
 from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
 
-class CalibrationGenerator(GravitationalWaveGenerator):
+class WFModGenerator(GravitationalWaveGenerator):
     def __new__(cls, approximant, *args, **kwargs):
         gen = gwsignal_get_waveform_generator(approximant, *args, **kwargs)
-        return CalibrationWrapper(gen)
+        return WFModWrapper(gen)
 
 
 if __name__ == '__main__':
     appr = 'IMRPhenomXPHM'
 
     gen = gwsignal_get_waveform_generator(appr)
-    cal_gen = CalibrationWrapper(gen)
-    test_cal_gen = CalibrationGenerator(appr)
+    cal_gen = WFModWrapper(gen)
+    test_cal_gen = WFModGenerator(appr)
 
 
     import astropy.units as u
@@ -430,7 +428,7 @@ if __name__ == '__main__':
 
     gen.some_attr = 42
 
-    cal_gen = CalibrationWrapper(gen)
+    cal_gen = WFModWrapper(gen)
     print(gen.some_attr, cal_gen.some_attr)
 
     cal_gen.another_attr = 96
@@ -460,7 +458,7 @@ if __name__ == '__main__':
 
     # -- Demonstrate how subclassing can work by provoking error
     class WrongWrapper(CalGravitationalWavePolarizations):
-        _inherit_cal_gen = CalibrationGenerator
+        _inherit_cal_gen = WFModGenerator
 
     # WrongWrapper(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))  # Throws error, as it should, nice!!!
 

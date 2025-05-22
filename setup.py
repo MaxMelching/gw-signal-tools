@@ -69,6 +69,6 @@ setuptools.setup(
         'jupyter': 'jupyter',
     },
     entry_points={
-        'gwsignal_models': 'wferrors = gw_signal_tools.calibration:CalibrationGenerator'
+        'gwsignal_models': 'wferrors = gw_signal_tools.calibration:WFModGenerator'
     },
 )

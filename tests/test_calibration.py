@@ -41,13 +41,13 @@ pc.default_dict.pop('mass2', None);
 approximant = 'IMRPhenomXPHM'
 
 gen = gwsignal_get_waveform_generator(approximant)
-wrap_gen = CalibrationWrapper(gen)
-cal_gen = CalibrationGenerator(approximant)
+wrap_gen = WFModWrapper(gen)
+cal_gen = WFModGenerator(approximant)
 
 
 def test_getattr():
     gen.some_attr = 42
-    cal_gen = CalibrationWrapper(gen)
+    cal_gen = WFModWrapper(gen)
     
     assert gen.some_attr == cal_gen.some_attr
 
@@ -67,7 +67,7 @@ def test_getattr():
         raise Exception('There should be an AttributeError.')
     except AttributeError as err:
         # -- To test error message
-        assert "'CalibrationWrapper' object has no attribute 'invalid_attr'" in str(err)
+        assert "'WFModWrapper' object has no attribute 'invalid_attr'" in str(err)
 
 
 def test_generate_fd_waveform_no_mod():

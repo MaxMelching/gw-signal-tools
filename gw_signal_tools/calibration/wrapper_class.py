@@ -12,6 +12,7 @@ from scipy.interpolate import CubicSpline
 # -- Local Package Imports
 from gw_signal_tools.types import WFGen, FDWFGen, TDWFGen  # To run as py file
 from gw_signal_tools.logging import logger
+
 # from ..types import WFGen, FDWFGen, TDWFGen
 # from ..logging import logger
 
@@ -21,7 +22,11 @@ Module for waveform generators that allow application of systematic
 error corrections.
 """
 
-__all__ = ('WFModWrapper', 'WFModGenerator', 'CalGravitationalWavePolarizations', )  # TODO: rename?
+__all__ = (
+    'WFModWrapper',
+    'WFModGenerator',
+    'CalGravitationalWavePolarizations',
+)
 
 
 class WFModWrapper(GravitationalWaveGenerator):
@@ -53,7 +58,7 @@ class WFModWrapper(GravitationalWaveGenerator):
     def recombine_fd(ampl: FrequencySeries, phase: FrequencySeries) -> FrequencySeries:
         """Recombine a given amplitude and phase into a frequency domain waveform."""
         # TODO: assert compatible frequencies?
-        return ampl * np.exp(1.j * phase)
+        return ampl * np.exp(1.0j * phase)
 
     @staticmethod
     def modify_f_series(
@@ -122,9 +127,7 @@ class WFModWrapper(GravitationalWaveGenerator):
         return NotImplemented
 
     @staticmethod
-    def parse_mod_kwds(
-        **kwargs
-    ) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
+    def parse_mod_kwds(**kwargs) -> tuple[dict[str, u.Quantity], dict[str, u.Quantity]]:
         """Helper function to separate waveform arguments from systematics arguments."""
         wf_params = {}
         calib_params = {}
@@ -166,8 +169,12 @@ class WFModWrapper(GravitationalWaveGenerator):
                     # -- for example, we would need to copy the whole
                     # -- kwargs dictionary, even more inefficient)
                     try:
-                        calib_params[search_key + '_plus'] = kwargs[search_key + '_plus']
-                        calib_params[search_key + '_cross'] = kwargs[search_key + '_cross']
+                        calib_params[search_key + '_plus'] = kwargs[
+                            search_key + '_plus'
+                        ]
+                        calib_params[search_key + '_cross'] = kwargs[
+                            search_key + '_cross'
+                        ]
                     except KeyError:
                         given_pol = suffix.lstrip('_')
                         missing_pol = 'plus' if given_pol == 'cross' else 'cross'
@@ -177,7 +184,10 @@ class WFModWrapper(GravitationalWaveGenerator):
                         )
                     finally:
                         if search_key in kwargs:
-                            logger.info(f'Parameter {search_key} has input for individual polarizations. Ignoring input intended for both polarizations.')
+                            logger.info(
+                                f'Parameter {search_key} has input for individual '
+                                'polarizations. Ignoring parameter without suffix.'
+                            )
                         # TODO: really do this? Is another search in the params...
             else:
                 wf_params[key] = kwargs[key]
@@ -192,8 +202,10 @@ class WFModWrapper(GravitationalWaveGenerator):
             suffices.add('')
 
         for suffix in suffices:
+
             def custom_get_key(key):
                 return calib_params.get(key + suffix, calib_params.get(key))
+
             # -- Is ok to fall back to name without suffix as default
             # -- because we have ensured that either variable is given
             # -- for both polarizations separately or without suffix.
@@ -205,7 +217,9 @@ class WFModWrapper(GravitationalWaveGenerator):
                 delta_amplitude_arr = custom_get_key('delta_amplitude')
                 delta_phase_arr = custom_get_key('delta_phase')
 
-                delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+                delta_amplitude_interp = CubicSpline(
+                    wf_nodal_points, delta_amplitude_arr
+                )
                 delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
 
                 delta_amplitude = delta_amplitude_interp
@@ -233,7 +247,9 @@ class WFModWrapper(GravitationalWaveGenerator):
                     ]
                 )
 
-                delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+                delta_amplitude_interp = CubicSpline(
+                    wf_nodal_points, delta_amplitude_arr
+                )
                 delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
 
                 delta_amplitude = delta_amplitude_interp
@@ -263,17 +279,46 @@ class WFModWrapper(GravitationalWaveGenerator):
 
         if isinstance(wf, GravitationalWavePolarizations):
             return GravitationalWavePolarizations(
-                self.modify_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
-                self.modify_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
+                self.modify_f_series(
+                    hf=wf[0],
+                    modification=(
+                        calib_params['plus']
+                        if calib_params is not None and 'plus' in calib_params
+                        else calib_params
+                    ),
+                ),
+                self.modify_f_series(
+                    hf=wf[1],
+                    modification=(
+                        calib_params['cross']
+                        if calib_params is not None and 'cross' in calib_params
+                        else calib_params
+                    ),
+                ),
             )
         elif (
-            isinstance(wf, tuple) and len(wf) == 2
+            isinstance(wf, tuple)
+            and len(wf) == 2
             and isinstance(wf[0], FrequencySeries)
             and isinstance(wf[1], FrequencySeries)
         ):
             return (
-                self.modify_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
-                self.modify_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
+                self.modify_f_series(
+                    hf=wf[0],
+                    modification=(
+                        calib_params['plus']
+                        if calib_params is not None and 'plus' in calib_params
+                        else calib_params
+                    ),
+                ),
+                self.modify_f_series(
+                    hf=wf[1],
+                    modification=(
+                        calib_params['cross']
+                        if calib_params is not None and 'cross' in calib_params
+                        else calib_params
+                    ),
+                ),
             )
         elif isinstance(wf, FrequencySeries):
             return self.modify_f_series(hf=wf, modification=calib_params)
@@ -335,6 +380,7 @@ class WFModWrapper(GravitationalWaveGenerator):
 from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
 from typing import Union
 
+
 class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
     hp: Union[TimeSeries, FrequencySeries]
     hc: Union[TimeSeries, FrequencySeries]
@@ -361,7 +407,6 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
             # TODO: should we allow for this? Or demand passing of both polarizations?
         return super().__new__(cls, *args)
 
-
     def strain(self, det, ra, dec, psi, tgps, **cal_kwargs):
         h = super().strain(det, ra, dec, psi, tgps)
         if self.domain() == 'time':
@@ -373,13 +418,13 @@ class CalGravitationalWavePolarizations(GravitationalWavePolarizations):
             # return ValueError('hp and hc must both be either TimeSeries or FrequencySeries')
 
 
-
 # TODO: could also register custom approximant. And then use baseline_approximant
 # keyword, like PyCBC version.
 # -> via plugin structure
 # -> we must adhere to https://git.ligo.org/waveforms/reviews/lalsuite/-/blob/32a73da89d3d3638d4a24a1df80aa946fae964c9/lalsimulation/python/lalsimulation/gwsignal/models/__init__.py
 
 from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
+
 
 class WFModGenerator(GravitationalWaveGenerator):
     def __new__(cls, approximant, *args, **kwargs):
@@ -394,35 +439,36 @@ if __name__ == '__main__':
     cal_gen = WFModWrapper(gen)
     test_cal_gen = WFModGenerator(appr)
 
-
     import astropy.units as u
+
     # f_min = 20.*u.Hz  # Cutoff frequency -> usual cutoff
     # f_min = 25.*u.Hz  # Cutoff frequency for 50 Msun
-    f_min = 15.*u.Hz  # Cutoff frequency for 100 Msun
-    f_max = 1024. * u.Hz  # Cutoff from PSD
+    f_min = 15.0 * u.Hz  # Cutoff frequency for 100 Msun
+    f_max = 1024.0 * u.Hz  # Cutoff from PSD
     delta_f = 2**-6 * u.Hz
-    delta_t = 1./4096.*u.s
+    delta_t = 1.0 / 4096.0 * u.s
     f_ref = f_min  # Frequency where we specify spins
 
     wf_params = {
-        'total_mass': 100.*u.Msun,
-        'mass_ratio': 0.5*u.dimensionless_unscaled,
+        'total_mass': 100.0 * u.Msun,
+        'mass_ratio': 0.5 * u.dimensionless_unscaled,
         'f22_start': f_min,
         'f_max': f_max,
         'deltaF': delta_f,
         'f22_ref': f_ref,
-        'phi_ref': 0.*u.rad,
-        'distance': 440.*u.Mpc,
-        'inclination': 0.*u.rad,
-        'eccentricity': 0.*u.dimensionless_unscaled,
-        'longAscNodes': 0.*u.rad,
-        'meanPerAno': 0.*u.rad,
-        'condition': 0
+        'phi_ref': 0.0 * u.rad,
+        'distance': 440.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
+        'condition': 0,
     }
 
     import lalsimulation.gwsignal.core.parameter_conventions as pc
-    pc.default_dict.get('mass1', None);
-    pc.default_dict.get('mass2', None);
+
+    pc.default_dict.get('mass1', None)
+    pc.default_dict.get('mass2', None)
 
     print(gen.domain, cal_gen.domain)
 
@@ -442,6 +488,7 @@ if __name__ == '__main__':
     print(test_cal_gen.generate_fd_waveform(**wf_params))
 
     import lalsimulation.gwsignal.core.waveform as wfm
+
     print(wfm.GenerateFDWaveform(wf_params, gen))
     print(wfm.GenerateFDWaveform(wf_params, cal_gen))
     print(wfm.GenerateFDWaveform(wf_params, test_cal_gen))
@@ -449,19 +496,16 @@ if __name__ == '__main__':
     CalGravitationalWavePolarizations(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))
     CalGravitationalWavePolarizations(wfm.GenerateFDWaveform(wf_params, test_cal_gen))
 
-
     # -- Test operations with numpy array -> works
     # wf = wfm.GenerateFDWaveform(wf_params, gen)[0]
     # print(wf + wf.value)
     # print(wf * wf.value)
-
 
     # -- Demonstrate how subclassing can work by provoking error
     class WrongWrapper(CalGravitationalWavePolarizations):
         _inherit_cal_gen = WFModGenerator
 
     # WrongWrapper(*wfm.GenerateFDWaveform(wf_params, test_cal_gen))  # Throws error, as it should, nice!!!
-
 
     assert False
 

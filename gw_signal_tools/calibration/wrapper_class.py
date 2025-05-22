@@ -30,7 +30,6 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         gen=None means that people intend to use parser capabilities only
         """
         if gen is None:
-            # return None
             # -- Not setting attributes would be bad, thus use basic gen as default
             gen = GravitationalWaveGenerator()
 
@@ -75,14 +74,12 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         if modification is None:
             return hf
         else:
-            # if isinstance(modification['delta_amplitude'], CubicSpline):
-            if callable(modification['delta_amplitude']):  # Some interpolant, e.g. CubicSpline
+            if callable(modification['delta_amplitude']):  # Some interpolant
                 delta_amplitude = modification['delta_amplitude'](hf.frequencies)
             else:
                 delta_amplitude = modification['delta_amplitude']
 
-            # if isinstance(modification['delta_phase'], CubicSpline):
-            if callable(modification['delta_phase']):  # Some interpolant, e.g. CubicSpline
+            if callable(modification['delta_phase']):  # Some interpolant
                 delta_phase = modification['delta_phase'](hf.frequencies)
             else:
                 delta_phase = modification['delta_phase']
@@ -132,84 +129,136 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         wf_params = {}
         calib_params = {}
 
-        for key, val in kwargs.items():
-            if key in [
-                'modification_type',
-                'error_in_phase',
-                'delta_amplitude',
-                'delta_phase',
-                'nodal_points',
-                'config',  # TODO: do this? And try to use bilby parser for example?
-                'f_low_wferror',
-                'f_high_wferror',
-                'n_nodes_wferror',
-            ]:
-                calib_params[key] = val
+        calib_keys = [
+            'modification_type',
+            'error_in_phase',
+            'delta_amplitude',
+            'delta_phase',
+            'nodal_points',
+            # 'config',  # TODO: do this? And try to use bilby parser for example?
+            'f_low_wferror',
+            'f_high_wferror',
+            'n_nodes_wferror',
+        ]
+
+        suffices = set()
+
+        for key in kwargs:
+            if key[-5:] == '_plus':
+                search_key = key[:-5]
+                suffix = '_plus'
+                suffices.add('_plus')
+            elif key[-6:] == '_cross':
+                search_key = key[:-6]
+                suffix = '_cross'
+                suffices.add('_cross')
             else:
-                wf_params[key] = val
+                search_key = key
+                suffix = None
+
+            if search_key in calib_keys:
+                if suffix is None:
+                    calib_params[key] = kwargs.get(key)
+
+                    # calib_params[key + '_plus'] = kwargs.get(search_key)
+                    # calib_params[key + '_cross'] = kwargs.get(search_key)
+                else:
+                    # -- Note: this code will inevitably set the keys
+                    # -- twice, but all attempts to circumvent this
+                    # -- resulted in other problems (if we pop the keys
+                    # -- for example, we would need to copy the whole
+                    # -- kwargs dictionary, even more inefficient)
+                    try:
+                        calib_params[search_key + '_plus'] = kwargs.get(search_key + '_plus')
+                        calib_params[search_key + '_cross'] = kwargs.get(search_key + '_cross')
+                    except KeyError:
+                        given_pol = suffix.lstrip('_')
+                        missing_pol = 'plus' if given_pol == 'cross' else 'cross'
+                        raise KeyError(
+                            f'Parameter \'{search_key}\' is given for {given_pol}-polarization,'
+                            f' but not {missing_pol}-polarization.'
+                        )
+            else:
+                wf_params[key] = kwargs.get(key)
 
         # -- Check if any calibration parameters are given at all
         if len(calib_params) == 0:
             return wf_params, None
 
-        # -- Parse modifications. Here is more efficient than in _calibrate_series
-        if calib_params['modification_type'] == 'cubic_spline':
-            wf_nodal_points = calib_params['nodal_points']
-            delta_amplitude_arr = calib_params['delta_amplitude']
-            delta_phase_arr = calib_params['delta_phase']
+        calib_out = {}
 
-            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
-            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+        if len(suffices) == 0:
+            suffices.add('')
 
-            delta_amplitude = delta_amplitude_interp
-            delta_phase = delta_phase_interp
-        elif calib_params['modification_type'] == 'cubic_spline_nodes':
-            f_lower = calib_params['f_low_wferror']
-            f_high_wferror = calib_params['f_high_wferror']
-            n_nodes_wferror = int(calib_params['n_nodes_wferror'])
-            wf_nodal_points = np.logspace(
-                np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
-            )
+        for suffix in suffices:
+            # -- Parse modifications. Here is more efficient than in _calibrate_series
+            if calib_params['modification_type' + suffix] == 'cubic_spline':
+                wf_nodal_points = calib_params['nodal_points' + suffix]
+                delta_amplitude_arr = calib_params['delta_amplitude' + suffix]
+                delta_phase_arr = calib_params['delta_phase' + suffix]
 
-            delta_amplitude_arr = np.hstack(
-                [
-                    calib_params['wferror_amplitude_{}'.format(i)]
-                    for i in range(len(wf_nodal_points))
-                ]
-            )
-            delta_phase_arr = np.hstack(
-                [
-                    calib_params['wferror_phase_{}'.format(i)]
-                    for i in range(len(wf_nodal_points))
-                ]
-            )
+                delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+                delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
 
-            delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
-            delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+                delta_amplitude = delta_amplitude_interp
+                delta_phase = delta_phase_interp
+            elif calib_params['modification_type' + suffix] == 'cubic_spline_nodes':
+                f_lower = calib_params['f_low_wferror' + suffix]
+                f_high_wferror = calib_params['f_high_wferror' + suffix]
+                n_nodes_wferror = int(calib_params['n_nodes_wferror' + suffix])
+                wf_nodal_points = np.logspace(
+                    np.log10(f_lower), np.log10(f_high_wferror), n_nodes_wferror
+                )
 
-            delta_amplitude = delta_amplitude_interp
-            delta_phase = delta_phase_interp
-        elif calib_params['modification_type'] == 'constant_shift':
-            delta_amplitude = calib_params['delta_amplitude']
-            delta_phase = calib_params['delta_phase']
-        else:
-            raise ValueError('Invalid `\'modification_type\'` given.')
+                delta_amplitude_arr = np.hstack(
+                    [
+                        calib_params[f'wferror_amplitude_{i}{suffix}']
+                        for i in range(n_nodes_wferror)
+                    ]
+                )
+                delta_phase_arr = np.hstack(
+                    [
+                        calib_params[f'wferror_phase_{i}{suffix}']
+                        for i in range(n_nodes_wferror)
+                    ]
+                )
 
-        return wf_params, {
-            'delta_amplitude': delta_amplitude,
-            'delta_phase': delta_phase,
-            'error_in_phase': calib_params['error_in_phase'],
-        }
+                delta_amplitude_interp = CubicSpline(wf_nodal_points, delta_amplitude_arr)
+                delta_phase_interp = CubicSpline(wf_nodal_points, delta_phase_arr)
+
+                delta_amplitude = delta_amplitude_interp
+                delta_phase = delta_phase_interp
+            elif calib_params['modification_type' + suffix] == 'constant_shift':
+                delta_amplitude = calib_params['delta_amplitude' + suffix]
+                delta_phase = calib_params['delta_phase' + suffix]
+            else:
+                raise ValueError('Invalid `\'modification_type\'` given.')
+
+
+            calib_out[suffix.lstrip('_')] = {
+                # 'delta_amplitude' + suffix: delta_amplitude,
+                # 'delta_phase' + suffix: delta_phase,
+                # 'error_in_phase' + suffix: calib_params['error_in_phase' + suffix],
+                'delta_amplitude': delta_amplitude,
+                'delta_phase': delta_phase,
+                'error_in_phase': calib_params['error_in_phase' + suffix],
+            }
+
+        if '' in suffices:
+            # calib_out['plus'] = calib_out['cross'] = calib_out.get('')
+
+            calib_out = calib_out.get('')
+
+        return wf_params, calib_out
 
     def generate_fd_waveform(self, **kwargs):
-        # wf_params, calib_params = self.parse_calib_kwds(kwargs=kwargs)
         wf_params, calib_params = self.parse_calib_kwds(**kwargs)
         wf = self.gen.generate_fd_waveform(**wf_params)
 
         if isinstance(wf, GravitationalWavePolarizations):
             return GravitationalWavePolarizations(
-                self.calibrate_f_series(hf=wf[0], modification=calib_params),
-                self.calibrate_f_series(hf=wf[1], modification=calib_params)
+                self.calibrate_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
+                self.calibrate_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
             )
         elif (
             isinstance(wf, tuple) and len(wf) == 2
@@ -217,11 +266,12 @@ class CalibrationWrapper(GravitationalWaveGenerator):
             and isinstance(wf[1], FrequencySeries)
         ):
             return (
-                self.calibrate_f_series(hf=wf[0], modification=calib_params),
-                self.calibrate_f_series(hf=wf[1], modification=calib_params)
+                self.calibrate_f_series(hf=wf[0], modification=calib_params['plus'] if calib_params is not None and 'plus' in calib_params else calib_params),
+                self.calibrate_f_series(hf=wf[1], modification=calib_params['cross'] if calib_params is not None and 'cross' in calib_params else calib_params)
             )
         elif isinstance(wf, FrequencySeries):
             return self.calibrate_f_series(hf=wf, modification=calib_params)
+            # -- Assumes only a single modification was passed
         else:
             # TODO: do this? Or try to calibrate anyway?
             raise ValueError(f'Output type of waveform generator is unknown.')
@@ -247,7 +297,15 @@ class CalibrationWrapper(GravitationalWaveGenerator):
         # -- Make sure domains are still correct and match the ones of
         # -- self.gen. Since these are meant to be set in the generator,
         # -- we can simply use update_domains.
-        self._update_domains = value._update_domains
+        # self._update_domains = value._update_domains
+
+    # -- Currently, functionality is restricted to application in
+    # -- frequency domain. Thus we hard-code things related to domains
+    @property
+    def domain(self):
+        self._generation_domain, self._implemented_domain = 'freq', 'freq'
+        return self._generation_domain, self._implemented_domain
+        # return 'freq', 'freq'
 
     @property
     def metadata(self):
@@ -358,8 +416,8 @@ if __name__ == '__main__':
     }
 
     import lalsimulation.gwsignal.core.parameter_conventions as pc
-    pc.default_dict.pop('mass1', None);
-    pc.default_dict.pop('mass2', None);
+    pc.default_dict.get('mass1', None);
+    pc.default_dict.get('mass2', None);
 
     print(gen.domain, cal_gen.domain)
 

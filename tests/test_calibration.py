@@ -1,6 +1,7 @@
 import astropy.units as u
 from lalsimulation.gwsignal.models import gwsignal_get_waveform_generator
 import lalsimulation.gwsignal.core.waveform as wfm
+import pytest
 
 from gw_signal_tools.calibration import *
 from gw_signal_tools.test_utils import assert_allequal_series
@@ -69,7 +70,6 @@ def test_getattr():
         assert "'CalibrationWrapper' object has no attribute 'invalid_attr'" in str(err)
 
 
-
 def test_generate_fd_waveform_no_mod():
     wf_gen = gen.generate_fd_waveform(**wf_params)
     wf_wrap_gen = wrap_gen.generate_fd_waveform(**wf_params)
@@ -80,7 +80,7 @@ def test_generate_fd_waveform_no_mod():
         assert_allequal_series(wf_gen[i], wf_cal_gen[i])
 
 
-def test_generatefdwaveform_no_mod():
+def test_GenerateFDWaveform_no_mod():
     wf_gen = wfm.GenerateFDWaveform(wf_params, gen)
     wf_wrap_gen = wfm.GenerateFDWaveform(wf_params, wrap_gen)
     wf_cal_gen = wfm.GenerateFDWaveform(wf_params, cal_gen)
@@ -90,11 +90,86 @@ def test_generatefdwaveform_no_mod():
         assert_allequal_series(wf_gen[i], wf_cal_gen[i])
 
 
+@pytest.mark.parametrize('calib_params', [
+    {
+        'modification_type': 'constant_shift',
+        'error_in_phase': 'relative',
+        'delta_amplitude': 0.01,
+        'delta_phase': 0.01,
+    },
+    {
+        'modification_type_plus': 'constant_shift',
+        'error_in_phase_plus': 'relative',
+        'delta_amplitude_plus': 0.01,
+        'delta_phase_plus': 0.01,
+        'modification_type_cross': 'constant_shift',
+        'error_in_phase_cross': 'relative',
+        'delta_amplitude_cross': 0.01,
+        'delta_phase_cross': 0.01,
+    },
+    pytest.param(
+        {
+            'modification_type_plus': 'constant_shift',
+            'error_in_phase_plus': 'relative',
+            'delta_amplitude_plus': 0.01,
+            'delta_phase_plus': 0.01,
+        },
+        marks=pytest.mark.xfail(raises=KeyError, strict=True,
+                                reason='Only one polarization given')
+    ),
+    pytest.param(
+        {
+            'modification_type_plus': 'constant_shift',
+            'error_in_phase_plus': 'relative',
+            'delta_amplitude_plus': 0.01,
+            'delta_phase_plus': 0.01,
+        },
+        marks=pytest.mark.xfail(raises=KeyError, strict=True,
+                                reason='Only one polarization given')
+    ),
+    pytest.param(
+        {
+            'modification_type': 'constant_shift',
+            'error_in_phase': 'relative',
+            'delta_amplitude_plus': 0.01,
+            'delta_phase_plus': 0.01,
+            'delta_amplitude_cross': 0.01,
+            'delta_phase_cross': 0.01,
+        },
+        marks=pytest.mark.xfail(raises=KeyError, strict=True,
+                                reason='Mixing input for one, two polarizations')
+    ),
+])
+def test_generate_fd_waveform_w_mod(calib_params):
+    params = wf_params | calib_params
+
+    # print(wrap_gen.parse_calib_kwds(**params))
+    # assert False
+
+    # wf_gen = gen.generate_fd_waveform(**wf_params)
+    wf_wrap_gen = wrap_gen.generate_fd_waveform(**params)
+    wf_cal_gen = cal_gen.generate_fd_waveform(**params)
+
+    for i in [0, 1]:
+        assert_allequal_series(wf_wrap_gen[i], wf_cal_gen[i])
+        # assert_allequal_series(wf_gen[i], wf_wrap_gen[i])
+        # assert_allequal_series(wf_gen[i], wf_cal_gen[i])
+
+
 def test_domain():
+    # -- Call generators so that they know which domain we want to generate in
+    wfm.GenerateFDWaveform(wf_params, gen)
+    wfm.GenerateFDWaveform(wf_params, wrap_gen)
+    wfm.GenerateFDWaveform(wf_params, cal_gen)
+
     assert gen.domain == cal_gen.domain == wrap_gen.domain
 
 
 def test_metadata():
+    wfm.GenerateFDWaveform(wf_params, gen)
+    wfm.GenerateFDWaveform(wf_params, wrap_gen)
+    wfm.GenerateFDWaveform(wf_params, cal_gen)
+
     for attr in [
         '_implemented_domain',
         '_generation_domain',

@@ -54,13 +54,13 @@ pc.default_dict.pop('mass2', None);
 def test_point_calls(param, routine):
     nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
                                   deriv_routine=routine)
-    
+
     point = wf_params[param]
     deriv_scalar = nd_deriv(point.value)
     deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
 
     avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
-    
+
     assert_allclose_series(deriv_scalar, deriv_quantity,
                            atol=2e-4*avg_peak_height, rtol=1.1e-15)
     # -- atol for total_mass. Not sure where it comes from, maybe from
@@ -75,7 +75,7 @@ def test_point_calls(param, routine):
 def test_point_calls(param, routine):
     nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
                                   deriv_routine=routine)
-    
+
     point = wf_params[param]
     deriv_scalar = nd_deriv(point.value)
     deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
@@ -129,7 +129,7 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
     deriv_2_eval = deriv_2()
 
     avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.
-    
+
     assert_allclose_series(deriv_1_eval, deriv_2_eval,
                            atol=1e-3*avg_peak_height, rtol=7e-4)
     # -- Either very low relative deviation or the deviations are

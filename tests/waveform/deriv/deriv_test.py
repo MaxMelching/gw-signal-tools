@@ -79,6 +79,16 @@ def test_all_routines():
                                         deriv_routine='')
 
 
+def test_class_passing():
+    full_deriv = WaveformDerivative(
+        wf_params,
+        'total_mass',
+        wf_generator,
+        deriv_routine=WaveformDerivativeNumdifftools
+    )
+    assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+
 #%% -- Characterizing gwsignaltools derivative --------------------------------
 @pytest.mark.parametrize('param', test_params)
 @pytest.mark.parametrize('q_val', [0.42, 0.05])
@@ -240,7 +250,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
 
 
     # TODO: also include WaveformDerivativeAmplitudePhase?
-    
+
 
     mask = deriv.frequencies <= 256.0 * u.Hz
 
@@ -260,7 +270,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
     # -- Very good agreement, supports claim above that most severe
     # -- relative differences occur around zeros, where impact is not
     # -- very high. Note that no frequency regions are excluded here
-    
+
 
     # -- Eye test: here are plots of the derivatives
     # plt.plot(deriv.real)

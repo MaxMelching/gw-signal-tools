@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 # -- Local Package Imports
-from .deriv_base import WaveformDerivativeBase
+from .base import WaveformDerivativeBase
 from ...logging import logger
 from ..inner_product import norm, inner_product
 from ...types import WFGen

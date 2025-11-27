@@ -1,9 +1,9 @@
 # -- Make all important functions/classes from module available here
-from .deriv_amp_phase import *  # noqa: F401
-from .deriv_base import *  # noqa: F401
-from .deriv_gw_signal_tools import *  # noqa: F401
-from .deriv_nd import *  # noqa: F401
-from .deriv_wrapper import *  # noqa: F401
+from .base import *  # noqa: F401
+from .custom import *  # noqa: F401
+from .nd import *  # noqa: F401
+from .nd_amp_phase import *  # noqa: F401
+from .wrapper import *  # noqa: F401
 
 
 __doc__ = """

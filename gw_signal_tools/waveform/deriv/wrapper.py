@@ -1,7 +1,7 @@
 # -- Local Package Imports
-from .deriv_gw_signal_tools import WaveformDerivativeGWSignaltools  # noqa: F401
-from .deriv_nd import WaveformDerivativeNumdifftools  # noqa: F401
-from .deriv_amp_phase import WaveformDerivativeAmplitudePhase  # noqa: F401
+from .custom import WaveformDerivativeGWSignaltools  # noqa: F401
+from .nd import WaveformDerivativeNumdifftools  # noqa: F401
+from .nd_amp_phase import WaveformDerivativeAmplitudePhase  # noqa: F401
 
 
 __doc__ = """Module for the ``WaveformDerivative`` class."""

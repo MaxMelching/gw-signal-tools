@@ -13,7 +13,7 @@ import matplotlib as mpl
 # -- Local Package Imports
 from .deriv_base import WaveformDerivativeBase
 from ...logging import logger
-from ..inner_product import norm, inner_product, param_bounds
+from ..inner_product import norm, inner_product
 from ...types import WFGen
 
 
@@ -73,7 +73,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     step_sizes : list[float], optional, default = None
-        Step sizes used in the numerical differention. Based on the
+        Step sizes used in the numerical differentiation. Based on the
         evaluation point, these are used as relative or absolute steps.
     start_step_size: float, optional, default = 1e-2
         Alternative way to control the relative step sizes. Determines
@@ -562,7 +562,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
                     self._convergence_vals += [np.inf]
                     continue
                 else:
-                    raise ValueError(err_msg)
+                    raise err  # raise from err?
 
             derivative_norm = norm(deriv_param, **self.inner_prod_kwargs) ** 2
 
@@ -613,9 +613,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             else:
                 self.point[self.param_to_vary] = new_point * self.param_center_val.unit
         return self.deriv
-
-    _param_bound_storage = param_bounds.copy()
-    param_bounds = WaveformDerivativeBase.param_bounds
 
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?

@@ -1,18 +1,13 @@
 # -- Standard Lib Imports
 # from functools import cached_property  # TODO: use for some stuff?
-from typing import Optional, Literal, Any
+from typing import Any
 
 # -- Third Party Imports
 import numpy as np
 import astropy.units as u
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
-import matplotlib.pyplot as plt
-import matplotlib as mpl
 
 # -- Local Package Imports
-from ...logging import logger
-from ..inner_product import norm, inner_product, param_bounds
+from ..inner_product import param_bounds
 from ...types import WFGen
 
 
@@ -22,17 +17,28 @@ __all__ = ('WaveformDerivativeBase',)
 
 
 class WaveformDerivativeBase:
+    """
+    Base class for derivatives to inherit from. Defines useful
+    attributes and the initialization signature expected for a
+    derivative class in downstream applications (in particular Fisher
+    matrix calculations).
+    """
+
     def __init__(
         self,
-        # point: dict[str, u.Quantity],
-        # param_to_vary: str,
-        # wf_generator: WFGen,
-        # *args,
-        # **kwds,
+        point: dict[str, u.Quantity],
+        param_to_vary: str,
+        wf_generator: WFGen,
+        *args,
+        **kwds,
     ) -> None:
-        pass
+        # -- We have typical arguments here, more can be added in child classes
+        self._point = point
+        self._param_to_vary = param_to_vary
+        self._wf_generator = wf_generator
+        self._param_center_val = point[param_to_vary]
 
-    def __call__(self, x=None) -> Any:
+    def __call__(self) -> Any:
         return NotImplementedError
 
     _param_bound_storage = param_bounds.copy()
@@ -75,24 +81,18 @@ class WaveformDerivativeBase:
                     'inverse_mass_ratio', default_bounds
                 )
 
-        _base_step = ...  # TODO: this is where you have to replace with the step size you use
+        _base_step = self.step.base_step
         _par_val = self.param_center_val.value
-        lower_violation = _par_val - _base_step <= lower_bound
-        upper_violation = _par_val + _base_step >= upper_bound
+        violation = lambda step: (
+            _par_val - step <= lower_bound,
+            _par_val + step >= upper_bound,
+        )
+        lower_violation, upper_violation = violation(_base_step)
 
-        # -- Check if base_step needs change
-        if lower_violation and upper_violation:
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
-        elif lower_violation and not upper_violation:
-            # -- Can only happen if method is not forward yet
-            self.method = 'forward'
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
-        elif not lower_violation and upper_violation:
-            # -- Can only happen if method is not backward yet
-            self.method = 'backward'
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+        # -- Potentially more code that you want to have here
+        return NotImplementedError
 
-    # -- In case calling seems unintiutive, create attribute
+    # -- In case calling seems unintuitive, create attribute
     @property
     def deriv(self) -> Any:
         """Alias for calling with no arguments."""

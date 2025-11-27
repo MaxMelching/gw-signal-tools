@@ -36,7 +36,6 @@ class WaveformDerivativeBase:
         self._point = point
         self._param_to_vary = param_to_vary
         self._wf_generator = wf_generator
-        self._param_center_val = point[param_to_vary]
 
     def __call__(self) -> Any:
         return NotImplementedError
@@ -116,7 +115,7 @@ class WaveformDerivativeBase:
 
         :type: `~astropy.units.Quantity`
         """
-        return self._param_center_val
+        return self.point[self.param_to_vary]
 
     @property
     def wf_generator(self) -> WFGen:

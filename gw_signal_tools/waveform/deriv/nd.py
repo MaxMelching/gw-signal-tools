@@ -95,7 +95,6 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         **kwds,
     ) -> None:
         # -- Initialize WaveformDerivativeBase attributes
-        # super(WaveformDerivativeNumdifftools, self).__init__(
         WaveformDerivativeBase.__init__(
             self, point, param_to_vary, wf_generator,
         )

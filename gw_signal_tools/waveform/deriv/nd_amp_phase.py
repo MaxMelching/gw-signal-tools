@@ -99,6 +99,11 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         *args,
         **kwds,
     ) -> None:
+        # -- Initialize WaveformDerivativeBase attributes
+        super().__init__(
+            point, param_to_vary, wf_generator,
+        )
+
         # -- Check if parameter has analytical derivative
         if param_to_vary == 'time':
             wf = wf_generator(point)
@@ -115,36 +120,16 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             self._ana_deriv = deriv
             return None
 
-        self._param_center_val = point[param_to_vary]
+        # -- Prepare nd.Derivative initialization
         param_unit = self.param_center_val.unit
-        self._wf_generator = wf_generator
-        self._point = point
-        self._param_to_vary = param_to_vary
 
         if 'base_step' not in kwds:
             kwds['base_step'] = self._default_base_step
         elif isinstance(_base_step := kwds['base_step'], u.Quantity):
-            kwds['base_step'] = _base_step.to_value(self.param_center_val.unit)
+            kwds['base_step'] = _base_step.to_value(param_unit)
 
-        # def abs_wrapper(x):
-        #     _point = point |{
-        #         param_to_vary: x * param_unit
-        #     }
-        #     return np.abs(wf_generator(_point).value)
-
-        # def phase_wrapper(x):
-        #     _point = point |{
-        #         param_to_vary: x * param_unit
-        #     }
-        #     return np.unwrap(np.angle(wf_generator(_point).value))
-
-        # -- Defining fun turns out to be useful later on
-        # TODO: decide if calling it in abs_wrapper, phase_wrapper makes sense
-        # -> it does make nice code. And one additional call with single argument should not be too bad
         def fun(x):
             return self.wf_generator(point | {param_to_vary: x * param_unit})
-
-        self.fun = fun
 
         def abs_wrapper(x):
             return np.abs(self.fun(x).value)
@@ -152,6 +137,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         def phase_wrapper(x):
             return np.unwrap(np.angle(self.fun(x).value))
 
+        self.fun = fun  # Needed manually because we do not init nd.Derivative on self
         self._abs_deriv = nd.Derivative(abs_wrapper, *args, **kwds)
         self._phase_deriv = nd.Derivative(phase_wrapper, *args, **kwds)
 

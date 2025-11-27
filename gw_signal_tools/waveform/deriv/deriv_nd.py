@@ -20,7 +20,7 @@ __all__ = ('WaveformDerivativeNumdifftools',)
 class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
     r"""
     Wrapper around :code:`numdifftools.Derivative` class specifically
-    for waveform callers from new LAL interface.
+    for waveform callers from the LAL waveforms interface `gwsignal`.
 
     Parameters
     ----------
@@ -94,6 +94,12 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         *args,
         **kwds,
     ) -> None:
+        # -- Initialize WaveformDerivativeBase attributes
+        # super(WaveformDerivativeNumdifftools, self).__init__(
+        WaveformDerivativeBase.__init__(
+            self, point, param_to_vary, wf_generator,
+        )
+
         # -- Check if parameter has analytical derivative
         if param_to_vary == 'time':
             wf = wf_generator(point)
@@ -110,31 +116,25 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             self._ana_deriv = deriv
             return None
 
-        self._param_center_val = point[param_to_vary]
+        # -- Prepare nd.Derivative initialization
         param_unit = self.param_center_val.unit
-        self._wf_generator = wf_generator
-        self._point = point
-        self._param_to_vary = param_to_vary
 
         if 'base_step' not in kwds:
             # -- Set maximum step size. To verify, one can print e.g.
             # -- the steps in Derivative._derivative_nonzero_order
             kwds['base_step'] = self._default_base_step
         elif isinstance(_base_step := kwds['base_step'], u.Quantity):
-            kwds['base_step'] = _base_step.to_value(self.param_center_val.unit)
+            kwds['base_step'] = _base_step.to_value(param_unit)
 
         def fun(x):
             return self.wf_generator(point | {param_to_vary: x * param_unit})
 
-        # -- Next line stores this function in self.fun
-
+        # -- Initialize nd.Derivative attributes (among others, stores fun in self.fun)
         super().__init__(fun, *args, **kwds)
-
-        WaveformDerivativeBase.__init__(self)
 
     def __call__(self, x=None) -> Any:
         """
-        Get derivative at :code:`x`.
+        Get derivative with respect to `self.param_to_vary` at :code:`x`.
 
         Parameters
         ----------
@@ -149,7 +149,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         has. This should, in principle, be either a GWpy
         :code:``FrequencySeries`` or a GWpy :code:``TimeSeries`` (in
         accordance with standard LAL output types), but this function
-        only rely on GWPy :code:``Series`` properties being defined and
+        only relies on GWPy :code:``Series`` properties being defined and
         thus the output could also be of this type.
 
         Notes
@@ -166,6 +166,9 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             x = self.param_center_val.value
         elif isinstance(x, u.Quantity):
             x = x.to_value(self.param_center_val.unit)
+
+        # TODO: refine analytical deriv scheme. time and phase could change with x
+        # and this would change the waveform, potentially (because they could be in point!)
 
         # -- Check if parameter has analytical derivative (cannot be in
         # -- previous check because dependent on point)
@@ -210,9 +213,6 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         # else:
         #     return 1e-2*_par_val
 
-    _param_bound_storage = param_bounds.copy()
-    param_bounds = WaveformDerivativeBase.param_bounds
-
     def test_base_step(self) -> None:
         """
         Check if `self.point` contains potentially tricky values, e.g.
@@ -232,33 +232,37 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
 
         _base_step = self.step.base_step
         _par_val = self.param_center_val.value
-        lower_violation = _par_val - _base_step <= lower_bound
-        upper_violation = _par_val + _base_step >= upper_bound
+
+        violation = lambda step: ( _par_val - step <= lower_bound, _par_val + step >= upper_bound )
+        lower_violation, upper_violation = violation(_base_step)
 
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
             self.step.base_step = min(_base_step / 2.0, self._default_base_step)
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
-            self.method = 'forward'
             self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+
+            if violation(self.step.base_step)[0]:
+                # -- Too close to lower bound still, change method
+                self.method = 'forward'
         elif not lower_violation and upper_violation:
             # -- Can only happen if method is not backward yet
-            self.method = 'backward'
             self.step.base_step = min(_base_step / 2.0, self._default_base_step)
 
+            if violation(self.step.base_step)[1]:
+                # -- Too close to upper bound still, change method
+                self.method = 'backward'
 
-import numdifftools
 
-if numdifftools.__version__ <= '0.9.41':  # pragma: no cover
+if nd.__version__ <= '0.9.41':  # pragma: no cover
     # -- Now: fix bug in nd.Derivative, complex input throws error. This is
-    # -- due to numpy changes that were not (yet?) addressed by numdifftools
+    # -- due to numpy changes that were not (yet) addressed by numdifftools
     from numdifftools.limits import _Limit
-    import numpy as np
     import warnings
 
 
-    def _add_error_to_outliers_fixed(der, trim_fact=10):  # pragma: no cover
+    def _add_error_to_outliers_fixed(der, trim_fact=2):  # pragma: no cover
         """
         discard any estimate that differs wildly from the
         median of all estimates. A factor of 10 to 1 in either

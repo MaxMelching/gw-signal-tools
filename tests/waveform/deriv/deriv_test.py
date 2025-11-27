@@ -14,7 +14,7 @@ from gw_signal_tools.test_utils import (
 from gw_signal_tools.waveform import (
     get_wf_generator, norm, WaveformDerivativeGWSignaltools,
     WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase,
-    WaveformDerivative
+    WaveformDerivative, WaveformDerivativeBase
 )
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally
@@ -87,6 +87,38 @@ def test_class_passing():
         deriv_routine=WaveformDerivativeNumdifftools
     )
     assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+
+def test_str_mapping():
+    # WaveformDerivative.deriv_routine_class_map['custom_routine'] = WaveformDerivativeNumdifftools
+    # full_deriv = WaveformDerivative(
+    #     wf_params,
+    #     'total_mass',
+    #     wf_generator,
+    #     deriv_routine='custom_routine'
+    # )
+
+    # assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+    class CustomDeriv(WaveformDerivativeBase):
+        pass
+
+    WaveformDerivative.deriv_routine_class_map['custom_routine'] = CustomDeriv
+    full_deriv = WaveformDerivative(
+        wf_params,
+        'total_mass',
+        wf_generator,
+        deriv_routine='custom_routine'
+    )
+
+    assert isinstance(full_deriv, CustomDeriv)
+
+    WaveformDerivative.deriv_routine_class_map.pop('custom_routine')
+
+    with pytest.raises(ValueError, match='Invalid deriv_routine'):
+        full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                        deriv_routine='custom_routine')
+
 
 
 #%% -- Characterizing gwsignaltools derivative --------------------------------

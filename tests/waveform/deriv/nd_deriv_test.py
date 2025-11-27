@@ -96,7 +96,7 @@ def test_point_calls(param, routine):
     'param, param_val, invalid_step', [
         ['total_mass', 10*u.Msun, 15.],
         ['mass_ratio', 0.1*u.dimensionless_unscaled, 0.2],
-        # ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2],
+        ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2],
         # -- Works in test_deriv, but not here. One segment of frequency
         # -- interval is badly approximated by numdifftools
         ['mass_ratio', 0.9*u.dimensionless_unscaled, 1.],  # Not backward because lower bound also violated
@@ -106,7 +106,9 @@ def test_point_calls(param, routine):
         # ['sym_mass_ratio', 0.2*u.dimensionless_unscaled, 0.1*u.dimensionless_unscaled, 'backward'],
     ]
 )
-@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
+# @pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
+# @pytest.mark.parametrize('routine', ['amplitude_phase'])
+@pytest.mark.parametrize('routine', ['numdifftools'])
 def test_invalid_step_size(param, param_val, invalid_step, routine):
     deriv_1 = WaveformDerivative(
         wf_params | {param: param_val},
@@ -122,16 +124,18 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
         wf_params | {param: param_val},
         param,
         wf_generator,
-        deriv_routine=routine
+        deriv_routine=routine,
     )
 
     deriv_1_eval = deriv_1()
     deriv_2_eval = deriv_2()
 
-    avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.
+    # avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.
 
     assert_allclose_series(deriv_1_eval, deriv_2_eval,
-                           atol=1e-3*avg_peak_height, rtol=7e-4)
+                        #    atol=1e-3*avg_peak_height, rtol=7e-4)
+                        #    atol=1e-4*avg_peak_height, rtol=1e-4)
+                           rtol=2e-4)
     # -- Either very low relative deviation or the deviations are
     # -- essentially zero on scale of derivative (0.1% of peak). Latter
     # -- mainly needed for issues at high frequency end

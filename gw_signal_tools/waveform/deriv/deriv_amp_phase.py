@@ -7,7 +7,6 @@ import astropy.units as u
 import numpy as np
 
 # -- Local Package Imports
-from ..inner_product import param_bounds
 from .deriv_base import WaveformDerivativeBase
 from ...types import WFGen
 
@@ -17,55 +16,15 @@ __doc__ = """Module for ``WaveformDerivativeAmplitudePhase`` class."""
 __all__ = ('WaveformDerivativeAmplitudePhase',)
 
 
-import numdifftools
-if numdifftools.__version__ <= '0.9.41':  # pragma: no cover
-    # -- Now: fix bug in nd.Derivative, complex input throws error. This is
-    # -- due to numpy changes that were not (yet?) addressed by numdifftools
-    from numdifftools.limits import _Limit
-    import numpy as np
-    import warnings
-
-
-    def _add_error_to_outliers_fixed(der, trim_fact=10):  # pragma: no cover
-        """
-        discard any estimate that differs wildly from the
-        median of all estimates. A factor of 10 to 1 in either
-        direction is probably wild enough here. The actual
-        trimming factor is defined as a parameter.
-        """
-        if np.iscomplexobj(der):
-            return np.sqrt(
-                _add_error_to_outliers_fixed(np.real(der), trim_fact) ** 2
-                + _add_error_to_outliers_fixed(np.imag(der), trim_fact) ** 2
-            )
-
-        try:
-            if np.any(np.isnan(der)):
-                p25, median, p75 = np.nanpercentile(der, [25, 50, 75], axis=0)
-            else:
-                p25, median, p75 = np.percentile(der, [25, 50, 75], axis=0)
-
-            iqr = np.abs(p75 - p25)
-        except ValueError as msg:
-            warnings.warn(str(msg))
-            return 0 * der
-
-        a_median = np.abs(median)
-        outliers = (
-            (abs(der) < (a_median / trim_fact)) + (abs(der) > (a_median * trim_fact))
-        ) * (a_median > 1e-8) + ((der < p25 - 1.5 * iqr) + (p75 + 1.5 * iqr < der))
-        errors = outliers * np.abs(der - median)
-        return errors
-
-
-    _Limit._add_error_to_outliers = staticmethod(_add_error_to_outliers_fixed)
-
-
 class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
     r"""
-    Calculate the derivative of an arbitrary waveform with respect to
-    an arbitrary input parameter, based on the chain rule. More on that
-    in the Notes section.
+    Similar in spirit to the `~gw_signal_tools.waveform.deriv.deriv_nd.WaveformDerivativeNumdifftools`
+    class, in the sense that it is a wrapper around
+    :code:`numdifftools.Derivative` class specifically for waveform
+    callers from the LAL waveforms interface `gwsignal`.
+
+    However, it does the actual calculation in a different way that is
+    based on the chain rule. More on that in the Notes section.
 
     Parameters
     ----------
@@ -277,8 +236,9 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
         _base_step = self.abs_deriv.step.base_step  # Same for phase_deriv
         _par_val = self.param_center_val.value
-        lower_violation = _par_val - _base_step <= lower_bound
-        upper_violation = _par_val + _base_step >= upper_bound
+
+        violation = lambda step: ( _par_val - step <= lower_bound, _par_val + step >= upper_bound )
+        lower_violation, upper_violation = violation(_base_step)
 
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
@@ -287,21 +247,22 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             )
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
-            self.method = 'forward'
-            self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
-                _base_step / 2.0, self._default_base_step
-            )
-        elif not lower_violation and upper_violation:
-            # -- Can only happen if method is not backward yet
-            self.method = 'backward'
             self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
                 _base_step / 2.0, self._default_base_step
             )
 
-    @property
-    def deriv(self) -> Any:
-        """Alias for calling with no arguments."""
-        return self.__call__()
+            if violation(self.abs_deriv.step.base_step)[0]:
+                # -- Too close to lower bound still, change method
+                self.method = 'forward'
+        elif not lower_violation and upper_violation:
+            # -- Can only happen if method is not backward yet
+            self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
+                _base_step / 2.0, self._default_base_step
+            )
+
+            if violation(self.abs_deriv.step.base_step)[1]:
+                # -- Too close to upper bound still, change method
+                self.method = 'backward'
 
     @property
     def abs_deriv(self) -> nd.Derivative:
@@ -338,3 +299,45 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         :type: `Callable[[float], ~numpy.ndarray]`
         """
         return self.phase_deriv.fun
+
+
+if nd.__version__ <= '0.9.41':  # pragma: no cover
+    # -- Now: fix bug in nd.Derivative, complex input throws error. This is
+    # -- due to numpy changes that were not (yet) addressed by numdifftools
+    from numdifftools.limits import _Limit
+    import warnings
+
+
+    def _add_error_to_outliers_fixed(der, trim_fact=2):  # pragma: no cover
+        """
+        discard any estimate that differs wildly from the
+        median of all estimates. A factor of 10 to 1 in either
+        direction is probably wild enough here. The actual
+        trimming factor is defined as a parameter.
+        """
+        if np.iscomplexobj(der):
+            return np.sqrt(
+                _add_error_to_outliers_fixed(np.real(der), trim_fact) ** 2
+                + _add_error_to_outliers_fixed(np.imag(der), trim_fact) ** 2
+            )
+
+        try:
+            if np.any(np.isnan(der)):
+                p25, median, p75 = np.nanpercentile(der, [25, 50, 75], axis=0)
+            else:
+                p25, median, p75 = np.percentile(der, [25, 50, 75], axis=0)
+
+            iqr = np.abs(p75 - p25)
+        except ValueError as msg:
+            warnings.warn(str(msg))
+            return 0 * der
+
+        a_median = np.abs(median)
+        outliers = (
+            (abs(der) < (a_median / trim_fact)) + (abs(der) > (a_median * trim_fact))
+        ) * (a_median > 1e-8) + ((der < p25 - 1.5 * iqr) + (p75 + 1.5 * iqr < der))
+        errors = outliers * np.abs(der - median)
+        return errors
+
+
+    _Limit._add_error_to_outliers = staticmethod(_add_error_to_outliers_fixed)

@@ -35,15 +35,15 @@ def _q_convert(
     try:
         return u.Quantity(quant, unit=target_unit)
         # -- No use of quant.to because input might not be Quantity
-    except u.UnitConversionError:
+    except u.UnitConversionError as e:
         # -- Only happens when quant is already Quantity, so we can
         # -- assume that accessing the unit property works
         if err_msg is not None:
-            raise ValueError(err_msg)
+            raise ValueError(err_msg) from e
         else:
             raise ValueError(
                 _UNIT_CONV_ERR % (arg1name, quant.unit, arg2name, target_unit)
-            )
+            ) from e
 
 
 def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:

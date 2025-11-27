@@ -348,12 +348,12 @@ class FisherMatrix:
         for i, param in enumerate(params):
             try:
                 param_indices[i] = self._param_indices[param]
-            except KeyError:
+            except KeyError as e:
                 # -- param is not in self.params_to_vary
                 raise ValueError(
                     f'Parameter \'{param}\' was not used to calculate the '
                     'Fisher matrix (which can also mean it was projected out).'
-                )
+                ) from e
 
         return param_indices
 

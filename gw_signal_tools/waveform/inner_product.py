@@ -118,6 +118,7 @@ def inner_product(
     optimize_phase: bool = False,
     min_dt_prec: Optional[float] = None,
     return_opt_info: bool = False,
+    use_ifft: bool = False,  # TODO: new keyword to activate use of IFFT method
 ) -> (
     u.Quantity
     | tuple[
@@ -217,6 +218,12 @@ def inner_product(
         optimized over phase yet.
 
         Has no effect if no optimization is not carried out.
+    use_ifft : boolean, optional, default = False
+        Whether the IFFT method shall be used to compute the inner
+        product (regardless of whether optimization over time and/or
+        phase is not carried out).
+        In other words, whether `optimized_inner_product` shall be used
+        for the computation or `inner_product_computation`.
 
     Returns
     -------
@@ -224,7 +231,7 @@ def inner_product(
         Inner product value with :code:`signal1`, :code:`signal2`
         inserted. Additional information if optimization is carried out
         and :code:`return_opt_info=True`. More details on the latter are
-        provided in the documentaiton of the
+        provided in the documentation of the
         :code:`optimized_inner_product` function.
 
     Raises
@@ -273,7 +280,7 @@ def inner_product(
         signal2 = td_to_fd(signal2)
 
     # -- Store frequently accessed, quite lengthy boolean
-    _optimize = optimize_time_and_phase or optimize_time or optimize_phase
+    _use_ifft = use_ifft or optimize_time_and_phase or optimize_time or optimize_phase
 
     # -- Handling of units
     if isinstance(signal1, FrequencySeries):
@@ -331,7 +338,7 @@ def inner_product(
         # -- Signals are assumed to be on correct frequencies already,
         # -- thus the only things left to do are taking care of
         # -- frequency ranges and returning.
-        if not _optimize:
+        if not _use_ifft:
             eval_range = (f_lower, f_upper)
             # eval_range = (f_lower - 0.5 * df, f_upper + 0.5 * df)  # Ensure all signals are non-zero on same range
             # -- Filling is done UP TO THIS frequency, but we want it included
@@ -419,7 +426,7 @@ def inner_product(
 
     # -- Get signals to same frequencies, i.e. make df
     # -- equal (if necessary) and then restrict range
-    if not _optimize:
+    if not _use_ifft:
         target_range = (
             np.arange(
                 f_lower.to_value(frequ_unit),

@@ -28,7 +28,7 @@ from ..waveform import (
     apply_time_phase_shift,
 )
 from ..types import MatrixWithUnits, FDWFGen
-from .fisher_utils import fisher_matrix
+from .calc_utils import fisher_matrix
 
 
 __doc__ = """

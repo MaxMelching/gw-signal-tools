@@ -9,7 +9,7 @@ import astropy.units as u
 # -- Local Package Imports
 from ..logging import logger
 from ..waveform.inner_product import norm
-from .fisher import FisherMatrix
+from .base_class import FisherMatrix
 from ..types import MatrixWithUnits, Detector, FDWFGen
 
 

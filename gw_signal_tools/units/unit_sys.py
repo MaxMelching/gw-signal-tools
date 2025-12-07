@@ -92,7 +92,11 @@ __all__ += [n for n, v in _ns.items() if isinstance(v, u.UnitBase)]
 
 # -- This generates a docstring for this module that describes all of
 # -- the standard units defined here. Also copied from astropy.units.si.
-from astropy.units.utils import generate_unit_summary as _generate_unit_summary
+from astropy import __version__ as _astropy_version
+if _astropy_version >= '7.2.0':
+    from astropy.units.docgen import generate_unit_summary as _generate_unit_summary
+else:
+    from astropy.units.utils import generate_unit_summary as _generate_unit_summary
 
 __doc__ += '\n\n'
 __doc__ += _generate_unit_summary(globals())
@@ -105,3 +109,5 @@ del _si
 del _const_si
 del _astrophys
 del gwpy.detector.units
+del _astropy_version
+del _generate_unit_summary

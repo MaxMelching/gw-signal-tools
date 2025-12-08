@@ -16,10 +16,12 @@ Module for the ``MatrixWithUnits`` class that is intended to enable the
 use of astropy units with matrices.
 """
 
-_all__ = ('MatrixWithUnits',)
+__all__ = ('MatrixWithUnits',)
 
 
 class MatrixWithUnits:
+    value: ArrayLike
+    unit: ArrayLike
     """
     Class for a matrix where entries can have differing units, following
     the spirit of astropy Quantities.
@@ -83,7 +85,7 @@ class MatrixWithUnits:
     with arbitrary units or matrix inversion, both of which only work
     in certain circumstances). If possible, ``MatrixWithUnits``
     -compatible versions of many numpy functions can be accessed via
-    `MatrixWithUnits.funtion` (if you think an implementation would be
+    `MatrixWithUnits.function` (if you think an implementation would be
     possible, but is not available, please contact us).
 
     Examples
@@ -153,6 +155,8 @@ class MatrixWithUnits:
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
     """
+
+    _max_ndim: int = 2  # Max number of dimensions allowed for the matrix
 
     # -- Set array priority so that Quantity left addition and
     # -- multiplication with MatrixWithUnits are superseded. Otherwise,
@@ -243,7 +247,6 @@ class MatrixWithUnits:
             self.unit = unit
 
     # -- Define cornerstone properties, value and unit ------------------------
-    # TODO: add deleters?
     @property
     def value(self) -> np.ndarray:
         """
@@ -262,9 +265,9 @@ class MatrixWithUnits:
                 self.value
             ), 'New and old `value` must have equal shape'
 
-            # TODO: also check that len of shape (thus ndim) is not greater than 2?
-            # This class is not really made to handle more than that, not
-            # sure how this could be handled
+            assert (
+                np.ndim(value) <= self._max_ndim
+            ), f'Values cannot have more than {self._max_ndim} dimensions.'
         except AttributeError:
             pass  # New class instance is created, nothing to check
 
@@ -294,6 +297,10 @@ class MatrixWithUnits:
                     'New and old `unit` must have equal shape '
                     '(if both are not a scalar unit).'
                 )
+
+                assert (
+                    np.ndim(unit) <= self._max_ndim
+                ), f'Units cannot have more than {self._max_ndim} dimensions.'
         except AttributeError:
             pass  # New class instance is created
 
@@ -341,11 +348,7 @@ class MatrixWithUnits:
         if not isinstance(
             other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_value_types)
         ):
-            # Quantities are included here because slicing sometimes returns
-            # them, so throwing error here would not be good
-            raise TypeError(
-                f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
-            )
+            return NotImplemented
         else:
             if isinstance(other, (np.ndarray, self._allowed_value_types)):
                 other = other * u.dimensionless_unscaled
@@ -424,10 +427,7 @@ class MatrixWithUnits:
 
             return self.__class__(self.value + other.value, self.unit)
         else:
-            raise TypeError(
-                f'Addition between {type(other)} and `MatrixWithUnit` is not '
-                'supported.'
-            )
+            return NotImplemented
 
     def __radd__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
@@ -436,11 +436,9 @@ class MatrixWithUnits:
     def __sub__(self, other: Any) -> Self:
         try:
             return self.__add__(other.__neg__())
-        except AttributeError as e:  # no __neg__ for example
-            raise TypeError(
-                f'Addition between {type(other)} and `MatrixWithUnit` is not '
-                'supported.'
-            ) from e
+        except AttributeError:  # no __neg__ for example
+            return NotImplemented
+
     def __rsub__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__neg__().__add__(other)
@@ -461,82 +459,28 @@ class MatrixWithUnits:
         elif isinstance(other, MatrixWithUnits):
             return self.__class__(self.value * other.value, self.unit * other.unit)
         else:
-            raise TypeError(
-                f'Multiplication between {type(other)} and `MatrixWithUnit`'
-                ' is not supported.'
-            )
+            return NotImplemented
 
     def __rmul__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__mul__(other)
 
-    def __truediv__(self, other):
-        # if isinstance(other, self._allowed_value_types):
-        #     return self.__class__(self.value / other, self.unit)
-        # elif isinstance(other, self._pure_unit_types):
-        #     # ndarray times Unit would produce error, thus do manually
-        #     new_unit = np.empty(self.shape, dtype=object)
-        #     for i, val in np.ndenumerate(self.unit):
-        #         new_unit[i] = u.Unit(val/other)
-        #     return self.__class__(self.value, new_unit)
-        # elif isinstance(other, u.Quantity):
-        #     return self / other.value / other.unit
-        # elif isinstance(other, MatrixWithUnits):
-        #     return self.__class__(self.value / other.value, self.unit / other.unit)
-        # else:
-        #     try:
-        #         return self.__class__(self.value / other, self.unit)
-        #     except:
-        #         raise TypeError(
-        #             f'Division of `MatrixWithUnit` and {type(other)}'
-        #             ' is not supported.'
-        #         )
-
-        try:
-            return self * (1 / other)
-        except:
-            raise TypeError(
-                f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
-            )
+    def __truediv__(self, other: Any) -> Self:
+        return self * (1 / other)
 
     def __rtruediv__(self, other: Any) -> Self:
-        # if isinstance(other, self._allowed_value_types):
-        #     return self.__class__(other / self.value, 1/self.unit)
-        # # Following two are actually handled by astropy (correctly), are left
-        # # here as backup (to show how they work). Thus excluded from coverage
-        # elif isinstance(other, self._pure_unit_types):
-        #     # ndarray times Unit would produce error, thus do manually
-        #     new_unit = np.empty(self.shape, dtype=object)
-        #     for i, val in np.ndenumerate(self.unit):
-        #         new_unit[i] = u.Unit(other/val)
-        #     return self.__class__(1. / self.value, new_unit)
-        # elif isinstance(other, u.Quantity):
-        #     return self.__class__(other.value / self.value, new_unit)
-        # else:
-        #     try:
-        #         return self.__class__(other / self.value, 1/self.unit)
-        #     except:
-        #         raise TypeError(
-        #             f'Division of {type(other)} and `MatrixWithUnit`'
-        #             ' is not supported.'
-        #         )
-
         try:
-            # return other * (1/self)
+            # Note that 1/self cannot be used here since this function
+            # is the one implementing this very operation
             return other * self.__class__(1 / self.value, 1 / self.unit)
         except:
-            raise TypeError(
-                f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
-            )
+            return NotImplemented
 
     def __pow__(self, other: Any) -> Self:
         if isinstance(other, self._allowed_value_types):
             return self.__class__(self.value.__pow__(other), self.unit.__pow__(other))
         else:
-            raise TypeError(
-                'Raising of `MatrixWithUnit` to a non-numeric type like '
-                f'{type(other)} is not supported.'
-            )
+            return NotImplemented
 
     def __matmul__(self, other):
         # Problem we have to circumvent: the code "return self.__class__(
@@ -612,10 +556,7 @@ class MatrixWithUnits:
 
             return self.__class__(new_value, new_unit)
         else:
-            raise TypeError(
-                'Cannot perform matrix multiplication between '
-                f'``MatrixWithUnits`` and ``{type(other)}``.'
-            )
+            return NotImplemented
 
     # TODO: implement iadd, isub, imul etc. for inplace operations
 

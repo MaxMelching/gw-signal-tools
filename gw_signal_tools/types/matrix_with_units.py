@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, SupportsIndex
+from typing import Optional, Any, Literal, Self, SupportsIndex, TypeVar
 
 # -- Third Party Imports
 import numpy as np
@@ -18,6 +18,8 @@ use of astropy units with matrices.
 
 __all__ = ('MatrixWithUnits',)
 
+
+MatrixT = TypeVar('MatrixT', bound='MatrixWithUnits')
 
 class MatrixWithUnits:
     value: ArrayLike
@@ -185,8 +187,8 @@ class MatrixWithUnits:
     def __init__(
         self,
         value: ArrayLike,
-        unit: ArrayLike = None,
-        dtype: DTypeLike = None,
+        unit: Optional[ArrayLike | u.Unit] = None,
+        dtype: Optional[DTypeLike] = None,
         convert_int: bool = True,
     ) -> None:
         """Initialize a ``MatrixWithUnits``."""
@@ -220,9 +222,9 @@ class MatrixWithUnits:
                         _unit[index] = u.dimensionless_unscaled
                     else:
                         raise ValueError(
-                            'If a ``MatrixWithUnits`` shall be initialized '
-                            'from a list/array, each element must either be a '
-                            '``float`` or an astropy ``Quantity``.'
+                            f'If a ``{self.__class__.__name__}`` shall be '
+                            'initialized from a list/array, each element must '
+                            'either be a ``float`` or an astropy ``Quantity``.'
                         )
 
             self.value = _value
@@ -279,7 +281,7 @@ class MatrixWithUnits:
         self._value = value
 
     @property
-    def unit(self) -> np.ndarray:
+    def unit(self) -> np.ndarray | u.Unit:
         """
         Units of the matrix.
 
@@ -363,8 +365,8 @@ class MatrixWithUnits:
 
     def __hash__(self) -> int:
         raise TypeError(
-            '`MatrixWithUnits` instances cannot be hashed because they are '
-            'based on numpy arrays, which are in turn unhashable.'
+            f'`{self.__class__.__name__}` instances cannot be hashed because '
+            'they are based on numpy arrays, which are in turn unhashable.'
         )
 
     def __getitem__(self, key: Any) -> Self:
@@ -482,7 +484,7 @@ class MatrixWithUnits:
         else:
             return NotImplemented
 
-    def __matmul__(self, other):
+    def __matmul__(self, other: Any) -> Self:
         # Problem we have to circumvent: the code "return self.__class__(
         # self.value @ other.value, self.unit @ other.unit)" does not work
         # because astropy units cannot be added (and adding them would also
@@ -498,7 +500,7 @@ class MatrixWithUnits:
             # Need at least 1D output
             if len(new_shape) == 1:
                 raise ValueError(
-                    'For the provided shapes, only ``MatrixWithUnits``'
+                    f'For the provided shapes, only ``{self.__class__.__name__}``'
                     'instances initialized with a scalar unit are permitted. '
                     'If the intention was to perform matrix multiplication '
                     'with a row/column vector, please reshape the instance '
@@ -577,14 +579,8 @@ class MatrixWithUnits:
         return self.value.view(*args)  # Or use array somehow?
 
     @property
-    def T(self):
-        """
-        Transposed Matrix.
-
-        Returns
-        -------
-        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
-        """
+    def T(self) -> Self:
+        """Transpose of `self`."""
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value.T, self.unit)
         else:
@@ -695,7 +691,7 @@ class MatrixWithUnits:
             )
 
     @staticmethod
-    def inv(matrix: MatrixWithUnits) -> Self:
+    def inv(matrix: MatrixT) -> MatrixT:
         assert np.all(
             np.equal(matrix.unit, matrix.T.unit)
         ), 'Need symmetric unit for inversion.'

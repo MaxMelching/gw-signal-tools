@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, SupportsIndex, TypeVar, TYPE_CHECKING, Collection
+from typing import Optional, Any, Literal, Self, TypeVar, TYPE_CHECKING, Collection
 
 # -- Third Party Imports
 import numpy as np
@@ -560,7 +560,29 @@ class MatrixWithUnits:
 
             return self.__class__(new_value, new_unit)
         else:
-            return NotImplemented
+            try:
+                _other = self.__class__(other)
+            except:
+                # No conversion possible, cannot do matrix multiplication
+                return NotImplemented
+            print(_other)  # TODO: remove, is just for testing
+            return self.__matmul__(_other)
+
+    def __rmatmul__(self, other) -> Self:
+        # return other @ self
+        # return (self.T @ other.T).T  # Equivalent, uses already implemented functions
+        # TODO: make more efficient (involves more code, but otherwise things might get expensive here; depends on how effective .T is)?
+
+        if isinstance(other, MatrixWithUnits):
+            return other @ self
+        else:
+            try:
+                _other = self.__class__(other)
+            except:
+                # No conversion possible, cannot do matrix multiplication
+                return NotImplemented
+            print(_other)  # TODO: remove, is just for testing
+            return _other.__matmul__(self)
 
     # TODO: implement iadd, isub, imul etc. for inplace operations
 

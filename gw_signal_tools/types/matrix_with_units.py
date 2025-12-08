@@ -565,14 +565,10 @@ class MatrixWithUnits:
             except:
                 # No conversion possible, cannot do matrix multiplication
                 return NotImplemented
-            print(_other)  # TODO: remove, is just for testing
+
             return self.__matmul__(_other)
 
     def __rmatmul__(self, other) -> Self:
-        # return other @ self
-        # return (self.T @ other.T).T  # Equivalent, uses already implemented functions
-        # TODO: make more efficient (involves more code, but otherwise things might get expensive here; depends on how effective .T is)?
-
         if isinstance(other, MatrixWithUnits):
             return other @ self
         else:
@@ -581,7 +577,7 @@ class MatrixWithUnits:
             except:
                 # No conversion possible, cannot do matrix multiplication
                 return NotImplemented
-            print(_other)  # TODO: remove, is just for testing
+
             return _other.__matmul__(self)
 
     # TODO: implement iadd, isub, imul etc. for inplace operations

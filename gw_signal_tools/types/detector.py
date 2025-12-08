@@ -1,7 +1,7 @@
 # -- Standard Lib Imports
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Self
 
 # -- Third Party Imports
 from gwpy.frequencyseries import FrequencySeries
@@ -48,7 +48,7 @@ class Detector:
         passed as a dictionary and not via keyword arguments).
     """
 
-    def __init__(self, name: str, psd: FrequencySeries, **kw_args):
+    def __init__(self, name: str, psd: FrequencySeries, **kw_args) -> None:
         # -- Use object.__setattr__ for frozen dataclassto circumvent missing setters
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'psd', psd)
@@ -65,7 +65,7 @@ class Detector:
         new_name: str | None = None,
         new_psd: FrequencySeries | None = None,
         **kw_args,
-    ) -> Detector:
+    ) -> Self:
         """
         Create a copy of this ``Detector`` with updated properties.
         The recommended way to replace attributes of ``Detector`` is to
@@ -89,15 +89,15 @@ class Detector:
             | kw_args
             | dict(psd=new_psd if new_psd is not None else self.psd)
         )
-        return Detector(
+        return self.__class__(
             name=new_name if new_name is not None else self.name,
             **new_kw_args,
         )
 
-    def copy(self) -> Detector:
+    def copy(self) -> Self:
         return self.update()
 
-    def __copy__(self) -> Detector:
+    def __copy__(self) -> Self:
         return self.copy()
 
     def __repr__(self) -> str:
@@ -117,6 +117,6 @@ class Detector:
             return NotImplemented
         return (
             self.name == other.name
-            and np.all(np.equal(self.psd, other.psd))
+            and bool(np.all(np.equal(self.psd, other.psd)))
             and self.inner_prod_kwargs == other.inner_prod_kwargs
         )

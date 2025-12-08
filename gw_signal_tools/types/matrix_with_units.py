@@ -1,14 +1,15 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, SupportsIndex, TypeVar
+from typing import Optional, Any, Literal, Self, SupportsIndex, TypeVar, TYPE_CHECKING, Collection
 
 # -- Third Party Imports
 import numpy as np
-from numpy.typing import ArrayLike, DTypeLike
 import astropy.units as u
 
-# -- Local Package Imports
-from ..logging import logger
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, DTypeLike, NDArray
+    from numpy._typing import _ShapeLike
+    from matplotlib.axes import Axes
 
 
 __doc__ = """
@@ -22,8 +23,8 @@ __all__ = ('MatrixWithUnits',)
 MatrixT = TypeVar('MatrixT', bound='MatrixWithUnits')
 
 class MatrixWithUnits:
-    value: ArrayLike
-    unit: ArrayLike
+    value: NDArray
+    unit: NDArray | u.Unit
     """
     Class for a matrix where entries can have differing units, following
     the spirit of astropy Quantities.
@@ -174,14 +175,16 @@ class MatrixWithUnits:
     def _infer_dtype(val: ArrayLike) -> DTypeLike:
         """Infer datatype of arbitrary input."""
         val = np.asarray(val, dtype=object).reshape(-1)
-        dtypes = [
+        dtypes = np.asarray([
             (
                 np.dtype(type(el.value))
                 if isinstance(el, u.Quantity)
                 else np.dtype(type(el))
             )
             for el in val
-        ]
+        ],
+        # dtype=np.dtype
+        )
         return np.max(dtypes) if len(dtypes) > 0 else np.dtype(float)  # Default float
 
     def __init__(
@@ -249,8 +252,8 @@ class MatrixWithUnits:
             self.unit = unit
 
     # -- Define cornerstone properties, value and unit ------------------------
-    @property
-    def value(self) -> np.ndarray:
+    @property  # type: ignore[no-redef]
+    def value(self) -> NDArray:
         """
         Numeric values of the matrix.
 
@@ -280,8 +283,8 @@ class MatrixWithUnits:
 
         self._value = value
 
-    @property
-    def unit(self) -> np.ndarray | u.Unit:
+    @property  # type: ignore[no-redef]
+    def unit(self) -> NDArray | u.Unit:
         """
         Units of the matrix.
 
@@ -308,18 +311,14 @@ class MatrixWithUnits:
 
         if not isinstance(unit, self._pure_unit_types):
             # Unit is also array (otherwise would have been converted
-            # in __init__)
+            # in __init__). That is why we ignore index error below,
+            # mypy does not recognize that unit is array here.
             for i, val in np.ndenumerate(unit):
                 assert isinstance(
                     val, self._allowed_unit_types
                 ), f'Need valid unit types for all members of `unit` (not {type(val)}).'
 
-                unit[i] = u.Unit(val)
-                # unit[i] = u.CompositeUnit(1, [val], [1])
-                # Enforces keeping prefixes, needed to avoid numerical errors
-                # that happen at times (apparently during conversion using,
-                # u.Unit, presumably due to scale that is not 1)
-                # -> had other reason, Unit and CompositeUnit are equivalent
+                unit[i] = u.Unit(val)  # type: ignore[index]
 
         self._unit = unit
 
@@ -346,7 +345,7 @@ class MatrixWithUnits:
         # matrix_copy = MatrixWithUnits.copy(matrix)
         return self.__copy__()
 
-    def __eq__(self, other: Any) -> np.ndarray:
+    def __eq__(self, other: Any) -> NDArray:  # type: ignore[override]
         if not isinstance(
             other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_value_types)
         ):
@@ -359,9 +358,11 @@ class MatrixWithUnits:
             # NOT equivalent to == or .__eq__, np.equal has better behaviour
             # (compares unit arrays and scalar units in way we intend to)
 
-    def __ne__(self, other: Any) -> np.ndarray:
+    def __ne__(self, other: Any) -> NDArray:  # type: ignore[override]
         # Has to be implemented, applying not operator to array is not working
         return np.logical_not(self == other)
+
+    # -- Explanation for ignores: we just follow numpy behaviour
 
     def __hash__(self) -> int:
         raise TypeError(
@@ -406,12 +407,14 @@ class MatrixWithUnits:
                     'MatrixWithUnits) or can be converted into a Quantity.'
                 ) from e
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.value.__len__()
 
     # -- Common operations ----------------------------------------------------
     def __neg__(self) -> Self:
-        return self.__class__(-self.value, self.unit)
+        # return self.__class__(-self.value, self.unit)
+        return self.__class__(self.value.__neg__(), self.unit)
+        # return -1 * self
 
     def __abs__(self) -> Self:
         return self.__class__(self.value.__abs__(), self.unit)
@@ -464,7 +467,6 @@ class MatrixWithUnits:
             return NotImplemented
 
     def __rmul__(self, other: Any) -> Self:
-        # Not used anyway, astropy tries to do it and fails
         return self.__mul__(other)
 
     def __truediv__(self, other: Any) -> Self:
@@ -565,7 +567,7 @@ class MatrixWithUnits:
     # -- Selected useful numpy functions/attributes ---------------------------
     def __array__(
         self, copy: Optional[bool] = None, dtype: Optional[Any] = None
-    ) -> np.ndarray:
+    ) -> NDArray:
         """
         Method that handles conversion into an array. We deliberately
         choose to convert only the value, since this will ensure that
@@ -575,7 +577,7 @@ class MatrixWithUnits:
         return np.asarray(self.value, copy=copy, dtype=dtype)
         # return np.asarray(self.value*self.unit, copy=copy, dtype=dtype)
 
-    def view(self, *args) -> Any:
+    def view(self, *args) -> NDArray:
         return self.value.view(*args)  # Or use array somehow?
 
     @property
@@ -630,7 +632,7 @@ class MatrixWithUnits:
 
     # -- Following function copied from astropy Quantity class
     @property
-    def isscalar(self):
+    def isscalar(self) -> bool:
         """
         True if the `value` of this quantity is a scalar, or False if it
         is an array-like object.
@@ -665,10 +667,10 @@ class MatrixWithUnits:
                 ) from e
 
     @property
-    def dtype(self) -> Any:
+    def dtype(self) -> type[u.Quantity]:
         return u.Quantity
 
-    def to_numpy_full(self) -> np.ndarray:
+    def to_numpy_full(self) -> NDArray:
         """
         Return numpy array with Quantities as elements, i.e. the product
         of value and unit. The corresponding array dtype is `object`.
@@ -680,7 +682,7 @@ class MatrixWithUnits:
         """
         return np.asarray(self.value * self.unit, dtype=object)
 
-    def reshape(self, new_shape: SupportsIndex) -> Self:
+    def reshape(self, new_shape: _ShapeLike) -> Self:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array
         if isinstance(self.unit, self._pure_unit_types):
@@ -698,7 +700,7 @@ class MatrixWithUnits:
 
         return matrix.__class__(np.linalg.inv(matrix.value), matrix.unit**-1)
 
-    def diagonal(self, *args, **kwargs):
+    def diagonal(self, *args, **kwargs) -> Self:
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(
                 np.diagonal(self.value, *args, **kwargs).copy(), self.unit
@@ -709,7 +711,7 @@ class MatrixWithUnits:
                 np.diagonal(self.unit, *args, **kwargs).copy(),
             )
 
-    def sqrt(self):
+    def sqrt(self) -> Self:
         return self.__class__(np.sqrt(self.value), self.unit ** (1 / 2))
 
     def cond(self, matrix_norm: float | Literal['fro', 'nuc'] = 'fro') -> float:
@@ -735,6 +737,7 @@ class MatrixWithUnits:
 
     # -- Selected useful astropy functions/attributes -------------------------
     def to_system(self, system: Any) -> Self:
+        # TODO: this does not really mimick what astropy to_system does, right?!
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value, self.unit.to_system(system)[0])
         else:
@@ -752,7 +755,7 @@ class MatrixWithUnits:
 
         return new_matrix
 
-    def decompose(self, bases: Any) -> Self:
+    def decompose(self, bases: Collection[u.UnitBase]) -> Self:
         new_matrix = self.copy()
 
         for index in np.ndindex(new_matrix.shape):
@@ -769,11 +772,11 @@ class MatrixWithUnits:
         """Reshape this matrix into a column vector."""
         return self.reshape((self.size, 1))
 
-    def plot(self, ax: Optional[Any] = None):
+    def plot(self, ax: Optional[Axes] = None) -> Axes:
         # NOTE: all of this code is inspired by heatmap in seaborn, in fact
         # the relative_luminosity function is copied from there
         # -> is done to avoid additional dependencies (pandas, seaborn)
-        import matplotlib as mpl
+        import matplotlib as mpl  # Heavy import, thus only done here (i.e. if really needed)
         import matplotlib.pyplot as plt
 
         def relative_luminance(color):  # pragma: no cover

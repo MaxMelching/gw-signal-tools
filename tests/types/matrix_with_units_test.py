@@ -10,33 +10,38 @@ import matplotlib.pyplot as plt
 # -- Local Package Imports
 from gw_signal_tools.types import MatrixWithUnits
 from gw_signal_tools.test_utils import (
-    assert_allclose_MatrixWithUnits, assert_allequal_MatrixWithUnits
+    assert_allclose_MatrixWithUnits,
+    assert_allequal_MatrixWithUnits,
 )
 from gw_signal_tools import preferred_unit_system
 
 
-example_values = np.array([[42., 24.],
-                           [18., 96.]])
-example_units = np.array([[u.s, u.m],
-                          [u.m, u.s]])
-example_non_si_units = np.array([[2.0 * u.s, u.m],
-                                 [u.m**2, u.s]])
-example_scaled_units = np.array([[u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)],
-                                 [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)]], dtype=object)
+example_values = np.array([[42.0, 24.0], [18.0, 96.0]])
+example_units = np.array([[u.s, u.m], [u.m, u.s]])
+example_non_si_units = np.array([[2.0 * u.s, u.m], [u.m**2, u.s]])
+example_scaled_units = np.array(
+    [
+        [u.Quantity(1e-3, u.s), u.Quantity(1.0, u.m)],
+        [u.Quantity(1e2, u.m), u.Quantity(1.0, u.s)],
+    ],
+    dtype=object,
+)
 
 
-#%% -- Test cornerstone properties, value and unit ----------------------------
+# %% -- Test cornerstone properties, value and unit ---------------------------
 def test_different_inits():
-    value_arr = np.array([[42., 24.], [18., 96.]])  # Quantity converts to float anyway!
+    value_arr = np.array(
+        [[42.0, 24.0], [18.0, 96.0]]
+    )  # Quantity converts to float anyway!
     unit_arr = np.array([[u.s, u.pc], [u.m, u.kg]])
     matrix_1 = MatrixWithUnits(value_arr, unit_arr)
     assert matrix_1.value.dtype == float
 
-    value_unit_arr = value_arr*unit_arr
+    value_unit_arr = value_arr * unit_arr
     matrix_2 = MatrixWithUnits(value_unit_arr)
     assert matrix_2.value.dtype == float
 
-    value_unit_list = [[42*u.s, 24*u.pc], [18*u.m, 96*u.kg]]
+    value_unit_list = [[42 * u.s, 24 * u.pc], [18 * u.m, 96 * u.kg]]
     matrix_3 = MatrixWithUnits(value_unit_list)
     assert matrix_3.value.dtype == float
 
@@ -44,8 +49,14 @@ def test_different_inits():
     assert_allequal_MatrixWithUnits(matrix_1, matrix_3)
 
 
-@pytest.mark.parametrize('quant', [u.Quantity(42., u.s), u.Quantity([42., 24.], u.s),
-                                   MatrixWithUnits(example_values, example_units)])
+@pytest.mark.parametrize(
+    'quant',
+    [
+        u.Quantity(42.0, u.s),
+        u.Quantity([42.0, 24.0], u.s),
+        MatrixWithUnits(example_values, example_units),
+    ],
+)
 def test_quant_input(quant):
     quant_mat = MatrixWithUnits(quant)
     assert_allequal_MatrixWithUnits(quant, quant_mat)
@@ -62,7 +73,9 @@ def test_convert_int():
     assert matrix_int.value.dtype == int
 
 
-@pytest.mark.parametrize('units', [example_units, example_non_si_units, example_scaled_units])
+@pytest.mark.parametrize(
+    'units', [example_units, example_non_si_units, example_scaled_units]
+)
 def test_unit_matrix_reading(units):
     matrix = MatrixWithUnits(example_values, units)
 
@@ -85,21 +98,17 @@ def test_scalar_unit():
     matrix = MatrixWithUnits(example_values, example_units)
     matrix.unit = u.s
 
-    assert_allequal_MatrixWithUnits(
-        matrix,
-        MatrixWithUnits(example_values, u.s)
-    )
+    assert_allequal_MatrixWithUnits(matrix, MatrixWithUnits(example_values, u.s))
 
     matrix = MatrixWithUnits(example_values, u.s)
     matrix.unit = example_units
 
     assert_allequal_MatrixWithUnits(
-        matrix,
-        MatrixWithUnits(example_values, example_units)
+        matrix, MatrixWithUnits(example_values, example_units)
     )
 
 
-#%% -- Test standard class functions ------------------------------------------
+# %% -- Test standard class functions -----------------------------------------
 def test_getting_and_slicing():
     matrix = MatrixWithUnits(example_values, example_units)
 
@@ -107,17 +116,22 @@ def test_getting_and_slicing():
 
     assert_allequal_MatrixWithUnits(matrix[0, 0], MatrixWithUnits(42, u.s))
 
-    assert_allequal_MatrixWithUnits(matrix[:1, :], MatrixWithUnits([42, 24], [u.s, u.m]))
-    assert_allequal_MatrixWithUnits(matrix[:, :1], MatrixWithUnits([[42], [18]], [[u.s], [u.m]]))
-
+    assert_allequal_MatrixWithUnits(
+        matrix[:1, :], MatrixWithUnits([42, 24], [u.s, u.m])
+    )
+    assert_allequal_MatrixWithUnits(
+        matrix[:, :1], MatrixWithUnits([[42], [18]], [[u.s], [u.m]])
+    )
 
     matrix2 = MatrixWithUnits(example_values, example_non_si_units)
 
-    assert_allequal_MatrixWithUnits(matrix2[0], MatrixWithUnits([42, 24], [2.0 * u.s, u.m]))
+    assert_allequal_MatrixWithUnits(
+        matrix2[0], MatrixWithUnits([42, 24], [2.0 * u.s, u.m])
+    )
     assert_allequal_MatrixWithUnits(matrix2[1, 0], MatrixWithUnits(18, u.m**2))
 
 
-@pytest.mark.parametrize('set_val', [-2*u.dimensionless_unscaled, 3*u.pc, 42])
+@pytest.mark.parametrize('set_val', [-2 * u.dimensionless_unscaled, 3 * u.pc, 42])
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_setting(set_val, units):
     matrix = MatrixWithUnits(example_values, units).copy()
@@ -134,10 +148,14 @@ def test_setting(set_val, units):
 def test_eq():
     matrix_in_s1 = MatrixWithUnits(example_values, u.s)
 
-    assert np.all(np.equal(matrix_in_s1 == matrix_in_s1, True))  # Trivial, but must work
+    assert np.all(
+        np.equal(matrix_in_s1 == matrix_in_s1, True)
+    )  # Trivial, but must work
 
     # -- Test that equality between scalar and array unit works
-    matrix_in_s2 = MatrixWithUnits(example_values, np.full(example_values.shape, u.s, dtype=object))
+    matrix_in_s2 = MatrixWithUnits(
+        example_values, np.full(example_values.shape, u.s, dtype=object)
+    )
     assert np.all(np.equal(matrix_in_s1 == matrix_in_s2, True))
 
     matrix_in_m = MatrixWithUnits(example_values, u.m)
@@ -172,13 +190,14 @@ def test_copy():
 
     assert matrix[0, 0] == matrix_copy[0, 0]
 
-    matrix_copy[0, 0] = -2*u.dimensionless_unscaled  # Inplace setting
+    matrix_copy[0, 0] = -2 * u.dimensionless_unscaled  # Inplace setting
 
     assert (matrix[0, 0] == component_val_copy) and (matrix[0, 0] != matrix_copy[0, 0])
 
     # -- Test if equivalent calls work
     matrix_copy = MatrixWithUnits.copy(matrix)
     from copy import copy, deepcopy
+
     matrix_copy = copy(matrix)
     matrix_copy = deepcopy(matrix)
 
@@ -191,38 +210,33 @@ def test_dict_conversion():
     # Apparently, __hash__ is not needed, good
 
 
-#%% -- Test common operations -------------------------------------------------
+# %% -- Test common operations ------------------------------------------------
 def test_addition():
     matrix = MatrixWithUnits(example_values, example_units)
 
     # -- Float addition
     assert_allequal_MatrixWithUnits(
-        matrix + 2.0,
-        MatrixWithUnits(example_values + 2.0, example_units)
+        matrix + 2.0, MatrixWithUnits(example_values + 2.0, example_units)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 + matrix,
-        MatrixWithUnits(2.0 + example_values, example_units)
+        2.0 + matrix, MatrixWithUnits(2.0 + example_values, example_units)
     )
 
     # -- Quantity addition -> only works with scalar unit
     matrix_in_s = MatrixWithUnits(example_values, u.s)
 
     assert_allequal_MatrixWithUnits(
-        matrix_in_s + 2.0 * u.s,
-        MatrixWithUnits(example_values + 2.0, u.s)
+        matrix_in_s + 2.0 * u.s, MatrixWithUnits(example_values + 2.0, u.s)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 * u.s + matrix_in_s,
-        MatrixWithUnits(2.0 + example_values, u.s)
+        2.0 * u.s + matrix_in_s, MatrixWithUnits(2.0 + example_values, u.s)
     )
 
     # -- MatrixWithUnits addition -> similar to test_multiplication
     assert_allequal_MatrixWithUnits(
-        matrix + matrix,
-        MatrixWithUnits(example_values + example_values, example_units)
+        matrix + matrix, MatrixWithUnits(example_values + example_values, example_units)
     )
 
 
@@ -231,32 +245,27 @@ def test_subtraction():
 
     # -- Float subtraction
     assert_allequal_MatrixWithUnits(
-        matrix - 2.0,
-        MatrixWithUnits(example_values - 2.0, example_units)
+        matrix - 2.0, MatrixWithUnits(example_values - 2.0, example_units)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 - matrix,
-        MatrixWithUnits(2.0 - example_values, example_units)
+        2.0 - matrix, MatrixWithUnits(2.0 - example_values, example_units)
     )
 
     # -- Quantity subtraction
     matrix_in_s = MatrixWithUnits(example_values, u.s)
 
     assert_allequal_MatrixWithUnits(
-        matrix_in_s - 2.0 * u.s,
-        MatrixWithUnits(example_values - 2.0, u.s)
+        matrix_in_s - 2.0 * u.s, MatrixWithUnits(example_values - 2.0, u.s)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 * u.s  + matrix_in_s,
-        MatrixWithUnits(2.0 + example_values, u.s)
+        2.0 * u.s + matrix_in_s, MatrixWithUnits(2.0 + example_values, u.s)
     )
 
     # -- MatrixWithUnits subtraction -> similar to test_multiplication
     assert_allequal_MatrixWithUnits(
-        matrix - 0.5 * matrix,
-        MatrixWithUnits(0.5 * example_values, example_units)
+        matrix - 0.5 * matrix, MatrixWithUnits(0.5 * example_values, example_units)
     )
 
 
@@ -266,13 +275,11 @@ def test_multiplication():
 
     # -- Float multiplication
     assert_allequal_MatrixWithUnits(
-        matrix * 2.0,
-        MatrixWithUnits(example_values * 2.0, example_units)
+        matrix * 2.0, MatrixWithUnits(example_values * 2.0, example_units)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 * matrix,
-        MatrixWithUnits(2.0 * example_values, example_units)
+        2.0 * matrix, MatrixWithUnits(2.0 * example_values, example_units)
     )
 
     # -- Verify results of float multiplication coincide with add/sub
@@ -281,52 +288,45 @@ def test_multiplication():
     assert_allequal_MatrixWithUnits(0.5 * matrix, matrix - 0.5 * matrix)
 
     # -- Quantity multiplication
-    example_units_times_s = np.array([[u.s**2, u.m*u.s], [u.m*u.s, u.s**2]])
+    example_units_times_s = np.array([[u.s**2, u.m * u.s], [u.m * u.s, u.s**2]])
 
     assert_allequal_MatrixWithUnits(
-        matrix_in_s * (2.0 * u.s),
-        MatrixWithUnits(example_values * 2.0, u.s * u.s)
+        matrix_in_s * (2.0 * u.s), MatrixWithUnits(example_values * 2.0, u.s * u.s)
     )
 
     assert_allequal_MatrixWithUnits(
         matrix * (2.0 * u.s),
-        MatrixWithUnits(example_values * 2.0, example_units_times_s)
+        MatrixWithUnits(example_values * 2.0, example_units_times_s),
     )
 
     assert_allequal_MatrixWithUnits(
-        (2.0 * u.s) * matrix_in_s,
-        MatrixWithUnits(2.0 * example_values, u.s * u.s)
+        (2.0 * u.s) * matrix_in_s, MatrixWithUnits(2.0 * example_values, u.s * u.s)
     )
 
     assert_allequal_MatrixWithUnits(
         (2.0 * u.s) * matrix,
-        MatrixWithUnits(2.0 * example_values, example_units_times_s)
+        MatrixWithUnits(2.0 * example_values, example_units_times_s),
     )
 
     # -- Unit multiplication
     assert_allequal_MatrixWithUnits(
-        matrix_in_s * u.s,
-        MatrixWithUnits(example_values, u.s**2)
+        matrix_in_s * u.s, MatrixWithUnits(example_values, u.s**2)
     )
     assert_allequal_MatrixWithUnits(
-        matrix * u.s,
-        MatrixWithUnits(example_values, example_units_times_s)
+        matrix * u.s, MatrixWithUnits(example_values, example_units_times_s)
     )
 
     assert_allequal_MatrixWithUnits(
-        u.s * matrix_in_s,
-        MatrixWithUnits(example_values, u.s**2)
+        u.s * matrix_in_s, MatrixWithUnits(example_values, u.s**2)
     )
 
     assert_allequal_MatrixWithUnits(
-        u.s * matrix,
-        MatrixWithUnits(example_values, example_units_times_s)
+        u.s * matrix, MatrixWithUnits(example_values, example_units_times_s)
     )
 
     # -- MatrixWithUnit Multiplication -> similar to test_power
     assert_allequal_MatrixWithUnits(
-        matrix * matrix,
-        MatrixWithUnits(example_values**2, example_units**2)
+        matrix * matrix, MatrixWithUnits(example_values**2, example_units**2)
     )
 
 
@@ -336,67 +336,60 @@ def test_division():
 
     # -- Float division
     assert_allequal_MatrixWithUnits(
-        matrix / 2.0,
-        MatrixWithUnits(example_values / 2.0, example_units)
+        matrix / 2.0, MatrixWithUnits(example_values / 2.0, example_units)
     )
 
     assert_allequal_MatrixWithUnits(
-        2.0 / matrix,
-        MatrixWithUnits(2.0 / example_values, 1 / example_units)
+        2.0 / matrix, MatrixWithUnits(2.0 / example_values, 1 / example_units)
     )
 
     # -- Quantity division
-    example_units_by_s = np.array([[u.dimensionless_unscaled, u.m/u.s],
-                                   [u.m/u.s, u.dimensionless_unscaled]])
-    s_by_example_units = np.array([[u.dimensionless_unscaled, u.s/u.m],
-                                   [u.s/u.m, u.dimensionless_unscaled]])
-
-    assert_allequal_MatrixWithUnits(
-        matrix_in_s / (2.0 * u.s),
-        MatrixWithUnits(example_values / 2.0, u.dimensionless_unscaled)
+    example_units_by_s = np.array(
+        [[u.dimensionless_unscaled, u.m / u.s], [u.m / u.s, u.dimensionless_unscaled]]
+    )
+    s_by_example_units = np.array(
+        [[u.dimensionless_unscaled, u.s / u.m], [u.s / u.m, u.dimensionless_unscaled]]
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix / (2.0 * u.s),
-        MatrixWithUnits(example_values / 2.0, example_units_by_s)
+        matrix_in_s / (2.0 * u.s),
+        MatrixWithUnits(example_values / 2.0, u.dimensionless_unscaled),
+    )
+
+    assert_allequal_MatrixWithUnits(
+        matrix / (2.0 * u.s), MatrixWithUnits(example_values / 2.0, example_units_by_s)
     )
 
     assert_allequal_MatrixWithUnits(
         (2.0 * u.s) / matrix_in_s,
-        MatrixWithUnits(2.0 / example_values, u.dimensionless_unscaled)
+        MatrixWithUnits(2.0 / example_values, u.dimensionless_unscaled),
     )
 
     assert_allequal_MatrixWithUnits(
-        (2.0 * u.s) / matrix,
-        MatrixWithUnits(2.0 / example_values, s_by_example_units)
+        (2.0 * u.s) / matrix, MatrixWithUnits(2.0 / example_values, s_by_example_units)
     )
 
     # -- Unit division
     assert_allequal_MatrixWithUnits(
-        matrix_in_s / u.s,
-        MatrixWithUnits(example_values, u.dimensionless_unscaled)
+        matrix_in_s / u.s, MatrixWithUnits(example_values, u.dimensionless_unscaled)
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix / u.s,
-        MatrixWithUnits(example_values, example_units_by_s)
+        matrix / u.s, MatrixWithUnits(example_values, example_units_by_s)
     )
 
     assert_allequal_MatrixWithUnits(
-        u.s / matrix_in_s,
-        MatrixWithUnits(1/example_values, u.dimensionless_unscaled)
+        u.s / matrix_in_s, MatrixWithUnits(1 / example_values, u.dimensionless_unscaled)
     )
 
     assert_allequal_MatrixWithUnits(
-        u.s / matrix,
-        MatrixWithUnits(1/example_values, s_by_example_units)
+        u.s / matrix, MatrixWithUnits(1 / example_values, s_by_example_units)
     )
 
     # -- MatrixWithUnit Division -> similar to test_power
     assert_allequal_MatrixWithUnits(
         matrix / matrix,
-        MatrixWithUnits(np.ones((2, 2)),
-                        np.full((2, 2), u.dimensionless_unscaled))
+        MatrixWithUnits(np.ones((2, 2)), np.full((2, 2), u.dimensionless_unscaled)),
     )
 
 
@@ -404,22 +397,19 @@ def test_power():
     matrix = MatrixWithUnits(example_values, example_units)
 
     assert_allequal_MatrixWithUnits(
-        matrix**2,
-        MatrixWithUnits(example_values**2, example_units**2)
+        matrix**2, MatrixWithUnits(example_values**2, example_units**2)
     )
 
     assert_allequal_MatrixWithUnits(matrix * matrix, matrix**2)
 
-
     assert_allequal_MatrixWithUnits(
         matrix**0,
-        MatrixWithUnits(np.ones((2, 2)),
-                        np.full((2, 2), u.dimensionless_unscaled))
+        MatrixWithUnits(np.ones((2, 2)), np.full((2, 2), u.dimensionless_unscaled)),
     )
 
     assert_allclose_MatrixWithUnits(
-        matrix**(1/2),
-        MatrixWithUnits(example_values**(1/2), example_units**(1/2))
+        matrix ** (1 / 2),
+        MatrixWithUnits(example_values ** (1 / 2), example_units ** (1 / 2)),
     )
 
 
@@ -435,18 +425,17 @@ def test_matmul():
 
     # -- Test units support, i.e. multiplication with scalar units etc
     assert_allequal_MatrixWithUnits(
-        matrix_in_s @ matrix_in_s,
-        matrix_in_s @ matrix_in_s_2
+        matrix_in_s @ matrix_in_s, matrix_in_s @ matrix_in_s_2
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix_in_s,
-        MatrixWithUnits(example_values @ example_values, u.s**2)
+        MatrixWithUnits(example_values @ example_values, u.s**2),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix_in_s_2,
-        MatrixWithUnits(example_values @ example_values, example_units_s**2)
+        MatrixWithUnits(example_values @ example_values, example_units_s**2),
     )
 
     assert_allequal_MatrixWithUnits(
@@ -458,12 +447,18 @@ def test_matmul():
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix2,
         # MatrixWithUnits(example_values @ example_values, example_units_2 * example_units_s)
-        MatrixWithUnits(example_values @ example_values, np.array([[u.s**2, u.m * u.s], [u.s**2, u.m * u.s]], dtype=object))
+        MatrixWithUnits(
+            example_values @ example_values,
+            np.array([[u.s**2, u.m * u.s], [u.s**2, u.m * u.s]], dtype=object),
+        ),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix2.T @ matrix_in_s,
-        MatrixWithUnits(example_values.T @ example_values, np.array([[u.s**2, u.s**2], [u.m * u.s, u.m * u.s]], dtype=object))
+        MatrixWithUnits(
+            example_values.T @ example_values,
+            np.array([[u.s**2, u.s**2], [u.m * u.s, u.m * u.s]], dtype=object),
+        ),
     )
 
     # -- Test with rows and columns
@@ -474,32 +469,38 @@ def test_matmul():
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix_col,  # Inner product
-        MatrixWithUnits(42**2 + 24 * 18, u.s**2)
+        MatrixWithUnits(42**2 + 24 * 18, u.s**2),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_col @ matrix_row,  # Outer product
-        MatrixWithUnits(np.array([[42*42, 42*24], [18*42, 18*24]]), u.s**2)
+        MatrixWithUnits(np.array([[42 * 42, 42 * 24], [18 * 42, 18 * 24]]), u.s**2),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ matrix_col,  # Matrix and column
-        MatrixWithUnits(np.array([[42*42 + 24*18], [18*42 + 96*18]]), u.s**2)
+        MatrixWithUnits(np.array([[42 * 42 + 24 * 18], [18 * 42 + 96 * 18]]), u.s**2),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix2.T @ matrix_col,  # Matrix and column
-        MatrixWithUnits(np.array([[42*42 + 18*18], [24*42 + 96*18]]), np.array([[u.s**2], [u.s*u.m]], dtype=object))
+        MatrixWithUnits(
+            np.array([[42 * 42 + 18 * 18], [24 * 42 + 96 * 18]]),
+            np.array([[u.s**2], [u.s * u.m]], dtype=object),
+        ),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix_in_s,  # Row and matrix
-        MatrixWithUnits(np.array([42*42 + 24*18, 42*24 + 24*96]), u.s**2)
+        MatrixWithUnits(np.array([42 * 42 + 24 * 18, 42 * 24 + 24 * 96]), u.s**2),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix2,  # Row and matrix
-        MatrixWithUnits(np.array([42*42 + 24*18, 42*24 + 24*96]), np.array([u.s**2, u.s * u.m], dtype=object))
+        MatrixWithUnits(
+            np.array([42 * 42 + 24 * 18, 42 * 24 + 24 * 96]),
+            np.array([u.s**2, u.s * u.m], dtype=object),
+        ),
     )
 
     # -- Now column/row with non-scalar unit
@@ -510,64 +511,59 @@ def test_matmul():
 
     assert_allequal_MatrixWithUnits(
         matrix_row @ matrix_col,  # Inner product
-        MatrixWithUnits(42**2 + 24 * 18, u.s*u.m)
+        MatrixWithUnits(42**2 + 24 * 18, u.s * u.m),
     )
 
     assert_allequal_MatrixWithUnits(
         matrix_col @ matrix_row,  # Outer product
-        MatrixWithUnits(np.array([[42*42, 42*24], [18*42, 18*24]]),
-                        np.array([[u.s*u.m, u.s**2], [u.m**2, u.m*u.s]], dtype=object))
+        MatrixWithUnits(
+            np.array([[42 * 42, 42 * 24], [18 * 42, 18 * 24]]),
+            np.array([[u.s * u.m, u.s**2], [u.m**2, u.m * u.s]], dtype=object),
+        ),
     )
 
     # -- Test with non-MatrixWithUnits types, which are convertible
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ np.array([[42], [96]]),
-        MatrixWithUnits([[42*42 + 24*96], [18*42 + 96*96]], u.s, dtype=int)
+        MatrixWithUnits([[42 * 42 + 24 * 96], [18 * 42 + 96 * 96]], u.s, dtype=int),
     )
     assert_allequal_MatrixWithUnits(
         matrix_in_s @ u.Quantity([[42], [96]], unit=u.s),
-        MatrixWithUnits([[42*42 + 24*96], [18*42 + 96*96]], u.s**2, dtype=int)
+        MatrixWithUnits([[42 * 42 + 24 * 96], [18 * 42 + 96 * 96]], u.s**2, dtype=int),
     )
 
     # -- Now test rmatmul. Only needs to be done for the non- MatrixWithUnits types
     assert_allequal_MatrixWithUnits(
         np.array([[42, 96]]) @ matrix_in_s,
-        MatrixWithUnits([[42*42 + 96*18, 42*24 + 96*96]], u.s, dtype=int)
+        MatrixWithUnits([[42 * 42 + 96 * 18, 42 * 24 + 96 * 96]], u.s, dtype=int),
     )
     assert_allequal_MatrixWithUnits(
         u.Quantity([[42, 96]], unit=u.s) @ matrix_in_s,
-        MatrixWithUnits([[42*42 + 96*18, 42*24 + 96*96]], u.s**2, dtype=int)
+        MatrixWithUnits([[42 * 42 + 96 * 18, 42 * 24 + 96 * 96]], u.s**2, dtype=int),
     )
 
 
 @pytest.mark.parametrize('sign', [+1, -1])
 def test_abs(sign):
-    matrix = MatrixWithUnits(sign*example_values, example_units)
+    matrix = MatrixWithUnits(sign * example_values, example_units)
     matrix_abs = MatrixWithUnits(np.abs(example_values), example_units)
 
     assert_allequal_MatrixWithUnits(abs(matrix), matrix_abs)
 
 
-#%% -- Test numpy functions ---------------------------------------------------
+# %% -- Test numpy functions --------------------------------------------------
 def test_transposing():
     matrix = MatrixWithUnits(example_values, example_units)
 
     assert_allequal_MatrixWithUnits(
         matrix.T,
-        MatrixWithUnits(
-            np.array([[42, 18], [24, 96]]),
-            example_units  # Is symmetric
-        )
+        MatrixWithUnits(np.array([[42, 18], [24, 96]]), example_units),  # Is symmetric
     )
 
     matrix2 = MatrixWithUnits(example_values, u.s)
 
     assert_allequal_MatrixWithUnits(
-        matrix2.T,
-        MatrixWithUnits(
-            np.array([[42, 18], [24, 96]]),
-            u.s
-        )
+        matrix2.T, MatrixWithUnits(np.array([[42, 18], [24, 96]]), u.s)
     )
 
 
@@ -604,13 +600,11 @@ def test_shape(units):
 def test_reshape(new_shape):
     matrix = MatrixWithUnits(example_values, example_units)
 
-    matrix2 = MatrixWithUnits(np.reshape(example_values, new_shape),
-                              np.reshape(example_units, new_shape))
-
-    assert_allequal_MatrixWithUnits(
-        MatrixWithUnits.reshape(matrix, new_shape),
-        matrix2
+    matrix2 = MatrixWithUnits(
+        np.reshape(example_values, new_shape), np.reshape(example_units, new_shape)
     )
+
+    assert_allequal_MatrixWithUnits(MatrixWithUnits.reshape(matrix, new_shape), matrix2)
 
 
 def test_isscalar():
@@ -628,8 +622,15 @@ def test_ndim(units):
     assert matrix.ndim == 2
 
 
-@pytest.mark.parametrize('values', [example_values, np.array([42], dtype=int),
-    np.array([42.], dtype=float), np.array([42.j], dtype=complex)])
+@pytest.mark.parametrize(
+    'values',
+    [
+        example_values,
+        np.array([42], dtype=int),
+        np.array([42.0], dtype=float),
+        np.array([42.0j], dtype=complex),
+    ],
+)
 def test_dtype(values):
     matrix = MatrixWithUnits(values, u.s, convert_int=False)
 
@@ -658,10 +659,7 @@ def test_inv():
     matrix = MatrixWithUnits(example_values, u.s)
     matrix_inv = MatrixWithUnits.inv(matrix)
 
-    assert_allclose_MatrixWithUnits(
-        matrix @ matrix_inv,
-        MatrixWithUnits(np.eye(2))
-    )
+    assert_allclose_MatrixWithUnits(matrix @ matrix_inv, MatrixWithUnits(np.eye(2)))
 
     test_units_arr = np.array([u.s, u.m, u.kg], dtype=object)
     test_units = np.outer(test_units_arr, test_units_arr)
@@ -675,36 +673,33 @@ def test_inv():
         matrix2 @ matrix2_inv,
         MatrixWithUnits(
             np.eye(3),
-            np.array([[u.dimensionless_unscaled, u.s / u.m, u.s / u.kg],
-                      [u.m / u.s, u.dimensionless_unscaled, u.m / u.kg],
-                      [u.kg / u.s, u.kg / u.m, u.dimensionless_unscaled]]),
+            np.array(
+                [
+                    [u.dimensionless_unscaled, u.s / u.m, u.s / u.kg],
+                    [u.m / u.s, u.dimensionless_unscaled, u.m / u.kg],
+                    [u.kg / u.s, u.kg / u.m, u.dimensionless_unscaled],
+                ]
+            ),
             # Unit result calculated by hand
         ),
         atol=1e-15,  # Account for numerical errors
-        rtol=0.0
+        rtol=0.0,
     )
 
 
 def test_diagonal():
     matrix = MatrixWithUnits(example_values, example_units)
 
-    assert_allequal_MatrixWithUnits(
-        matrix.diagonal(),
-        MatrixWithUnits([42, 96], u.s)
-    )
+    assert_allequal_MatrixWithUnits(matrix.diagonal(), MatrixWithUnits([42, 96], u.s))
 
     matrix_in_s = MatrixWithUnits(example_values, u.s)
 
     assert_allequal_MatrixWithUnits(
-        matrix_in_s.diagonal(),
-        MatrixWithUnits([42, 96], u.s)
+        matrix_in_s.diagonal(), MatrixWithUnits([42, 96], u.s)
     )
 
     # -- Testing args
-    assert_allequal_MatrixWithUnits(
-        matrix_in_s.diagonal(1),
-        MatrixWithUnits([24], u.s)
-    )
+    assert_allequal_MatrixWithUnits(matrix_in_s.diagonal(1), MatrixWithUnits([24], u.s))
 
 
 def test_sqrt():
@@ -712,7 +707,7 @@ def test_sqrt():
 
     assert_allequal_MatrixWithUnits(
         matrix.sqrt(),
-        MatrixWithUnits(np.sqrt(example_values), example_units**(1/2))
+        MatrixWithUnits(np.sqrt(example_values), example_units ** (1 / 2)),
     )
 
 
@@ -726,7 +721,7 @@ def test_cond():
     matrix.cond('nuc')
 
 
-#%% -- Test astropy functions -------------------------------------------------
+# %% -- Test astropy functions ------------------------------------------------
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_to_system(units):
     matrix = MatrixWithUnits(example_values, units)
@@ -736,7 +731,7 @@ def test_to_system(units):
 
 
 def test_to():
-    matrix = MatrixWithUnits([42., 96.], [u.m, u.km])
+    matrix = MatrixWithUnits([42.0, 96.0], [u.m, u.km])
 
     matrix[0] = matrix[0].to(u.km)
     assert_allequal_MatrixWithUnits(matrix, MatrixWithUnits([0.042, 96], [u.km, u.km]))
@@ -747,7 +742,7 @@ def test_to():
         matrix_nm,
         MatrixWithUnits([0.042e12, 96e12], [u.nm, u.nm]),
         atol=0.0,
-        rtol=1e-15  # Numerical errors, I think in initialization
+        rtol=1e-15,  # Numerical errors, I think in initialization
     )
 
 
@@ -757,27 +752,42 @@ def test_decompose():
     matrix_dec = matrix.decompose(bases=preferred_unit_system.bases)
     assert_allclose_MatrixWithUnits(
         matrix_dec,
-        MatrixWithUnits(example_values*np.array([[1., 1.], [(u.km/u.pc).si.scale, (u.h/u.s).si.scale]]), [[u.Msun, u.pc], [u.pc, u.s]]),
-        atol=1e-12, rtol=0.
+        MatrixWithUnits(
+            example_values
+            * np.array([[1.0, 1.0], [(u.km / u.pc).si.scale, (u.h / u.s).si.scale]]),
+            [[u.Msun, u.pc], [u.pc, u.s]],
+        ),
+        atol=1e-12,
+        rtol=0.0,
     )
 
-    matrix_dec_2 = matrix.decompose(bases=[u.Unit(1e-6*u.Msun), u.km, u.h])
+    matrix_dec_2 = matrix.decompose(bases=[u.Unit(1e-6 * u.Msun), u.km, u.h])
     assert_allclose_MatrixWithUnits(
         matrix_dec_2,
-        MatrixWithUnits(example_values*np.array([[1e6, (u.pc/u.km).si.scale], [1., 1.]]), [[u.Unit(1e-6*u.Msun), u.km], [u.km, u.h]]),
-        atol=0., rtol=1e-15
+        MatrixWithUnits(
+            example_values * np.array([[1e6, (u.pc / u.km).si.scale], [1.0, 1.0]]),
+            [[u.Unit(1e-6 * u.Msun), u.km], [u.km, u.h]],
+        ),
+        atol=0.0,
+        rtol=1e-15,
     )
 
     matrix_dec_3 = matrix.copy()
-    matrix_dec_3[0, :] = matrix_dec_3[0, :].decompose(bases=[u.Unit(1e-6*u.Msun), u.km])
+    matrix_dec_3[0, :] = matrix_dec_3[0, :].decompose(
+        bases=[u.Unit(1e-6 * u.Msun), u.km]
+    )
     assert_allclose_MatrixWithUnits(
         matrix_dec_3,
-        MatrixWithUnits(example_values*np.array([[1e6, (u.pc/u.km).si.scale], [1., 1.]]), [[u.Unit(1e-6*u.Msun), u.km], [u.km, u.h]]),
-        atol=0., rtol=1e-15
+        MatrixWithUnits(
+            example_values * np.array([[1e6, (u.pc / u.km).si.scale], [1.0, 1.0]]),
+            [[u.Unit(1e-6 * u.Msun), u.km], [u.km, u.h]],
+        ),
+        atol=0.0,
+        rtol=1e-15,
     )
 
 
-#%% -- Test custom additions --------------------------------------------------
+# %% -- Test custom additions -------------------------------------------------
 @pytest.mark.parametrize('given_ax', [True, False])
 def test_plot(given_ax):
     if given_ax:
@@ -798,6 +808,7 @@ def test_plot(given_ax):
 
     # Main goal is to make sure there are no errors
 
+
 @pytest.mark.parametrize('units', [example_units, u.s])
 def test_to_row_to_col(units):
     matrix = MatrixWithUnits(example_values, units)
@@ -809,7 +820,7 @@ def test_to_row_to_col(units):
     assert col.shape == (4, 1)
 
 
-#%% -- Test error raising -----------------------------------------------------
+# %% -- Test error raising ----------------------------------------------------
 class Errors(unittest.TestCase):
     matrix = MatrixWithUnits(example_values, example_units)
     matrix_in_s = MatrixWithUnits(example_values, u.s)
@@ -870,7 +881,7 @@ class Errors(unittest.TestCase):
             self.matrix / [1, 2, 3]
 
         with self.assertRaises(TypeError):
-            self.matrix**[1, 2, 3]
+            self.matrix ** [1, 2, 3]
 
     def test_quantity_addition(self):
         # -- Test that unequal units throw error
@@ -933,8 +944,8 @@ class Errors(unittest.TestCase):
         with self.assertRaises(AssertionError):
             matrix.ndim
 
-        matrix._unit = 42  # Has no size etc, so this does not fail.
-                           # But is also not valid unit, other error origin
+        matrix._unit = 42
+        # Has no size etc, so this does not fail. But is also not valid unit, other error origin.
 
         with self.assertRaises(ValueError):
             matrix.size

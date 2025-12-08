@@ -24,17 +24,20 @@ def test_psd():
 
 
 def test_inner_prod_kwargs():
-    livingston = Detector('L1', psd_o3_l1, f_range=[10.*u.Hz, 1024.*u.Hz])
+    livingston = Detector('L1', psd_o3_l1, f_range=[10.0 * u.Hz, 1024.0 * u.Hz])
 
     assert livingston.name == 'L1'
     assert np.all(np.equal(livingston.psd, psd_o3_l1))
-    assert livingston.inner_prod_kwargs == {'f_range': [10.*u.Hz, 1024.*u.Hz],
-                                            'psd': psd_o3_l1}
+    assert livingston.inner_prod_kwargs == {
+        'f_range': [10.0 * u.Hz, 1024.0 * u.Hz],
+        'psd': psd_o3_l1,
+    }
 
 
 def test_repr():
     hanford = Detector('H1', psd_o3_h1)
     print(hanford)
+
 
 def test_equal():
     hanford = Detector('H1', psd_o3_h1)
@@ -44,7 +47,8 @@ def test_equal():
     assert hanford != livingston
     assert hanford != Detector('H1', psd_o3_l1)
     assert hanford != Detector('L1', psd_o3_h1)
-    assert hanford != Detector('H1', psd_o3_h1, f_range=[10.*u.Hz, 1024.*u.Hz])
+    assert hanford != Detector('H1', psd_o3_h1, f_range=[10.0 * u.Hz, 1024.0 * u.Hz])
+
 
 def test_update():
     hanford = Detector('H1', psd_o3_h1)
@@ -55,15 +59,22 @@ def test_update():
     updated_hanford = hanford.update(new_psd=psd_no_noise)
     assert updated_hanford == Detector('H1', psd_no_noise)
 
-    updated_hanford = hanford.update(f_range=[20.*u.Hz, 2048.*u.Hz])
-    assert updated_hanford == Detector('H1', psd_o3_h1, f_range=[20.*u.Hz, 2048.*u.Hz])
+    updated_hanford = hanford.update(f_range=[20.0 * u.Hz, 2048.0 * u.Hz])
+    assert updated_hanford == Detector(
+        'H1', psd_o3_h1, f_range=[20.0 * u.Hz, 2048.0 * u.Hz]
+    )
 
     hanford = Detector('H1', psd_o3_h1)
-    updated_hanford = hanford.update(new_name='H1-updated', f_range=[20.*u.Hz, 2048.*u.Hz])
-    assert updated_hanford == Detector('H1-updated', psd_o3_h1, f_range=[20.*u.Hz, 2048.*u.Hz])
+    updated_hanford = hanford.update(
+        new_name='H1-updated', f_range=[20.0 * u.Hz, 2048.0 * u.Hz]
+    )
+    assert updated_hanford == Detector(
+        'H1-updated', psd_o3_h1, f_range=[20.0 * u.Hz, 2048.0 * u.Hz]
+    )
+
 
 def test_copy():
-    hanford = Detector('H1', psd_o3_h1, f_range=[10.*u.Hz, 1024.*u.Hz])
+    hanford = Detector('H1', psd_o3_h1, f_range=[10.0 * u.Hz, 1024.0 * u.Hz])
     copied_hanford = hanford.__copy__()
 
     assert copied_hanford == hanford

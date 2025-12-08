@@ -1,8 +1,11 @@
 # -- Standard Lib Imports
+from __future__ import annotations
+from dataclasses import dataclass, field
 from typing import Any
 
 # -- Third Party Imports
 from gwpy.frequencyseries import FrequencySeries
+import numpy as np
 
 
 __doc__ = """
@@ -14,7 +17,13 @@ needed by functions in `gw_signal_tools`.
 __all__ = ('Detector',)
 
 
+@dataclass(frozen=True)
 class Detector:
+    name: str
+    psd: FrequencySeries
+    inner_prod_kwargs: dict[str, Any] = field(
+        default_factory=dict, repr=False, init=False
+    )
     """
     Basic representation of a gravitational wave (GW) detector for use
     in the context of waveforms.
@@ -39,66 +48,57 @@ class Detector:
         passed as a dictionary and not via keyword arguments).
     """
 
-    def __init__(self, name: str, psd: FrequencySeries, **kw_args) -> None:
-        """Initializa a ``Detector``."""
-        self.name = name
-        self.psd = psd
-        # TODO: make default psd? No noise one?
-        self.inner_prod_kwargs = kw_args
+    def __init__(self, name: str, psd: FrequencySeries, **kw_args):
+        # -- Use object.__setattr__ for frozen dataclassto circumvent missing setters
+        object.__setattr__(self, 'name', name)
+        object.__setattr__(self, 'psd', psd)
+        object.__setattr__(self, 'inner_prod_kwargs', kw_args | {'psd': psd})
 
-    @property
-    def name(self):
-        """Name of the detector."""
-        return self._name
+        # -- Validate types
+        if not isinstance(name, str):
+            raise TypeError('`name` must be a string.')
+        if not isinstance(psd, FrequencySeries):
+            raise TypeError('`psd` must be a FrequencySeries.')
 
-    @name.setter
-    def name(self, name: str) -> None:
-        assert isinstance(name, str), 'New `name` must be a string.'
-        self._name = name
-
-    @name.deleter
-    def name(self) -> None:
-        try:
-            del self._name
-        except AttributeError:  # pragma: no cover
-            pass
-
-    @property
-    def psd(self):
-        """Power spectral density (PSD) of the detector."""
-        return self._psd
-
-    @psd.setter
-    def psd(self, psd: FrequencySeries) -> None:
-        assert isinstance(
-            psd, FrequencySeries
-        ), 'New `psd` must be a GWpy ``FrequencySeries``.'
-        self._psd = psd
-
-    @psd.deleter
-    def psd(self) -> None:
-        try:
-            del self._psd
-        except AttributeError:  # pragma: no cover
-            pass
-
-    @property
-    def inner_prod_kwargs(self) -> dict:
-        """Arguments for inner product calculations that shall be used
-        specifically for this detector.
+    def update(
+        self,
+        new_name: str | None = None,
+        new_psd: FrequencySeries | None = None,
+        **kw_args,
+    ) -> Detector:
         """
-        return self._inner_prod_kwargs
+        Create a copy of this ``Detector`` with updated properties.
+        The recommended way to replace attributes of ``Detector`` is to
+        use this method ``Detector`` is a frozen dataclass.
 
-    @inner_prod_kwargs.setter
-    def inner_prod_kwargs(self, kw_args: dict[str, Any]) -> None:
-        self._inner_prod_kwargs = kw_args | {'psd': self.psd}
+        Parameters
+        ----------
+        new_name : str, optional, default = None
+            New name of the detector. If `None`, the current name is
+            kept.
+        new_psd : ~gwpy.frequencyseries.FrequencySeries, optional, default = None
+            New power spectral density of the detector. If `None`,
+            the current PSD is kept.
+        kw_args :
+            Additional keyword arguments that will be used to update
+            the inner product keyword arguments. If an argument with
+            the same name already exists, it will be overwritten.
+        """
+        new_kw_args = (
+            self.inner_prod_kwargs
+            | kw_args
+            | dict(psd=new_psd if new_psd is not None else self.psd)
+        )
+        return Detector(
+            name=new_name if new_name is not None else self.name,
+            **new_kw_args,
+        )
 
-    @inner_prod_kwargs.deleter
-    def inner_prod_kwargs(self) -> None:
-        try:
-            del self._inner_prod_kwargs
-        except AttributeError:  # pragma: no cover
-            pass
+    def copy(self) -> Detector:
+        return self.update()
+
+    def __copy__(self) -> Detector:
+        return self.copy()
 
     def __repr__(self) -> str:
         # -- Basically copying what GWpy Array does
@@ -106,7 +106,17 @@ class Detector:
         indent = ' ' * len(prefix)
         attr_str = ''
         for attr in ['name', 'psd']:
-        # for attr in ['name', 'psd', 'inner_prod_kwargs']:
             attr_str += f'\n{indent}{attr}: {repr(getattr(self, attr))}'
-        attr_str += f'\n{indent}inner_prod_kwargs: ' + repr({k: v for k, v in self.inner_prod_kwargs.items() if k != 'psd'})
+        attr_str += f'\n{indent}inner_prod_kwargs: ' + repr(
+            {k: v for k, v in self.inner_prod_kwargs.items() if k != 'psd'}
+        )
         return prefix + attr_str.lstrip('\n').lstrip(' ') + ')>'
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, Detector):
+            return NotImplemented
+        return (
+            self.name == other.name
+            and np.all(np.equal(self.psd, other.psd))
+            and self.inner_prod_kwargs == other.inner_prod_kwargs
+        )

@@ -100,17 +100,14 @@ class FisherMatrix:
 
     See Also
     --------
-    gwsignal.fisher.fisher_matrix :
+    gw_signal_tools.fisher.fisher_matrix :
         Routine used for calculation of the Fisher matrix.
-    gwsignal.fisher.get_waveform_derivative_1D_with_convergence, gw_signal_tools.fisher.get_waveform_derivative_1D_numdifftools:
-        Routine used for calculation of involved derivatives. Used by
-        `~gwsignal.fisher_utils.fisher_matrix`.
     numpy.linalg.inv :
         Routine used for inversion of the Fisher matrix.
 
     Notes
     -----
-    In principle, instances of this class constain much more information
+    In principle, instances of this class contain much more information
     than "just" the Fisher matrix ``FisherMatrix.fisher``, for example
     its inverse ``FisherMatrix.fisher_inverse``. However, to provide an
     intuitive behaviour and remembering the class name, certain
@@ -250,7 +247,7 @@ class FisherMatrix:
 
         # self._check_cond()
         # TODO: make final decision if this is required. But I do not
-        # think so, because we might not want to inver and then cond
+        # think so, because we might not want to invert and then cond
         # does not really matter.
 
     @property

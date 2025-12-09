@@ -577,7 +577,7 @@ def optimized_inner_product(
     """
     Lower level function for inner product calculation. Only accepts
     signals at identical frequency ranges and then carries out the
-    actual integral calcutation via an IFFT.
+    actual integral calculation via an IFFT.
 
     In contrast to :code:`inner_product_computation`, this function
     optimizes the inner product over time and phase shifts.

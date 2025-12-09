@@ -77,7 +77,8 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
 
     Custom attributes defined by us are :code:`.deriv` and
     :code:`.deriv_info`, which have analogous names to the ones defined
-    in :code:`gw_signal_tools.WaveformDerivativeGWSignaltools`.
+    in :code:`~gw_signal_tools.waveform.deriv.
+    WaveformDerivativeGWSignaltools`.
 
 
     Arbitrary function that is used for waveform generation. The
@@ -180,7 +181,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             return deriv
 
         # -- Test for valid point, potentially adjusting method
-        self.test_base_step()
+        self.test_point()
 
         self.full_output = True
         deriv, info = super().__call__(x)
@@ -212,21 +213,20 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         # else:
         #     return 1e-2*_par_val
 
-    def test_base_step(self) -> None:
+    def test_point(self) -> None:
         """
         Check if `self.point` contains potentially tricky values, e.g.
-        mass ratios close to 1. If yes, a subsequent adjustment takes
-        place.
+        mass ratios close to 1. If yes, a subsequent adjustment of step
+        sizes etc may be performed.
         """
         default_bounds = (-np.inf, np.inf)
-        lower_bound, upper_bound = self._param_bound_storage.get(
+        lower_bound, upper_bound = self.param_bounds.get(
             self.param_to_vary, default_bounds
         )
-        if self.param_to_vary == 'mass_ratio':
-            # -- Depending on chosen convention, bounds might have to be corrected
-            if self.param_center_val > 1:
-                lower_bound, upper_bound = self._param_bound_storage.get(
-                    self.param_to_vary, default_bounds
+        if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
+            # -- In this convention, bounds have to be corrected
+                lower_bound, upper_bound = self.param_bounds.get(
+                    'inverse_mass_ratio', default_bounds
                 )
 
         _base_step = self.step.base_step

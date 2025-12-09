@@ -18,13 +18,14 @@ class WaveformDerivative:
 
     Parameters
     ----------
-    deriv_routine : Literal or Callable, optional
+    deriv_routine : string or Callable, optional
         Available routines, i.e. they keys of
         The routine that could be used. Can be either a callable object
-        (ideally, a class inherited from ``~gw_signal_tools.waveform.deriv.WaveformDerivativeBase``
-        because many users of the ``WaveformDerivative`` class expect
-        certain properties to be defined) or a string that is registered
-        in `~gw_signal_tools.waveform.WaveformDerivative.deriv_routine_class_map`.
+        (ideally, a class inherited from ``~gw_signal_tools.waveform.
+        deriv.WaveformDerivativeBase`` because many users of the
+        ``WaveformDerivative`` class expect certain properties to be
+        defined) or a string that is registered in `~gw_signal_tools.
+        waveform.WaveformDerivative.deriv_routine_class_map`.
         Default is `'numdifftools'`.
     *args, **kw_args :
         Arguments passed on to the selected derivative class.

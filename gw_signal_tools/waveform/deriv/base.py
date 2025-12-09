@@ -7,7 +7,7 @@ import numpy as np
 import astropy.units as u
 
 # -- Local Package Imports
-from ..inner_product import param_bounds
+from ..inner_product import param_bounds as _param_bounds
 from ...types import WFGen
 
 
@@ -40,11 +40,11 @@ class WaveformDerivativeBase:
     def __call__(self) -> Any:
         return NotImplementedError
 
-    _param_bound_storage = param_bounds.copy()
+    _param_bound_storage = _param_bounds.copy()
 
     @property
-    def param_bounds(self, param: str) -> tuple[float, float]:
-        return self._param_bound_storage[param]
+    def param_bounds(self) -> dict[str, tuple[float, float]]:
+        return self._param_bound_storage
 
     @param_bounds.setter
     def param_bounds(self, param: str, bounds: list[float, float]) -> None:
@@ -66,17 +66,16 @@ class WaveformDerivativeBase:
     def test_point(self) -> None:
         """
         Check if `self.point` contains potentially tricky values, e.g.
-        mass ratios close to 1. If yes, a subsequent adjustment takes
-        place.
+        mass ratios close to 1. If yes, a subsequent adjustment of step
+        sizes etc may be performed.
         """
         default_bounds = (-np.inf, np.inf)
-        lower_bound, upper_bound = self._param_bound_storage.get(
+        lower_bound, upper_bound = self.param_bounds.get(
             self.param_to_vary, default_bounds
         )
-        if self.param_to_vary == 'mass_ratio':
-            # -- Depending on chosen convention, bounds might have to be corrected
-            if self.param_center_val > 1:
-                lower_bound, upper_bound = self._param_bound_storage.get(
+        if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
+            # -- In this convention, bounds have to be corrected
+                lower_bound, upper_bound = self.param_bounds.get(
                     'inverse_mass_ratio', default_bounds
                 )
 

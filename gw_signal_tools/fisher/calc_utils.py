@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 import warnings
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Callable
 
 # -- Third Party Imports
 import numpy as np
@@ -16,6 +16,7 @@ from ..waveform import (
     WaveformDerivativeGWSignaltools,
     WaveformDerivativeNumdifftools,
     WaveformDerivativeAmplitudePhase,
+    WaveformDerivative,
 )
 from ..types import MatrixWithUnits, FDWFGen
 from ..test_utils import allclose_quantity
@@ -97,7 +98,7 @@ def fisher_matrix(
     point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: FDWFGen,
-    deriv_routine: Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'],
+    deriv_routine: str | Callable,
     return_info: bool = False,
     **deriv_and_inner_prod_kwargs,
 ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
@@ -142,11 +143,11 @@ def fisher_matrix(
         A convenient option is to use the method
         :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
-    deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase'], optional, default = 'gw_signal_tools'
-        Determines the class used for numerical differentiation
-        (``WaveformDerivativeGWSignaltools``,
-        ``WaveformDerivativeNumdifftools`` or
-        ``WaveformDerivativeAmplitudePhase``).
+    deriv_routine : string or Callable
+        Determines the class used for numerical differentiation. The
+        only requirement on this argument is that it is accepted by the
+        ``~gw_signal_tools.waveform.deriv.WaveformDerivative`` class
+        as the `deriv_routine` argument.
     return_info : boolean, optional, default = True
         Whether to return information collected during the derivative
         calculations. Can be used as a sort of custom cache to also
@@ -207,44 +208,23 @@ def fisher_matrix(
     deriv_info = {}
 
     for i, param in enumerate(params_to_vary):
-        match deriv_routine:
-            # -- Manual case check because of different info return
-            # -- and different usage of _inner_prod_kwargs
-            case 'gw_signal_tools':
-                full_deriv = WaveformDerivativeGWSignaltools(
-                    point=point,
-                    param_to_vary=param,
-                    wf_generator=wf_generator,
-                    **deriv_and_inner_prod_kwargs,
-                )
+        full_deriv = WaveformDerivative(
+            point=point,
+            param_to_vary=param,
+            wf_generator=wf_generator,
+            deriv_routine=deriv_routine,
+            # **_deriv_kw_args,
+            **deriv_and_inner_prod_kwargs,  # interesting that we get no error here. maybe we just never pass stuff in tests? or nd.Derivative ignores unknown kwargs? -> maybe then it's even better to pass them, in case some other class wants to use them...
+        )
 
-                deriv, info = full_deriv.deriv, full_deriv.deriv_info
-                info['deriv'] = deriv
-                fisher_matrix[i, i] = info['norm_squared']
-            case 'numdifftools':
-                full_deriv = WaveformDerivativeNumdifftools(
-                    point=point,
-                    param_to_vary=param,
-                    wf_generator=wf_generator,
-                    **_deriv_kw_args,
-                )
+        deriv, info = full_deriv.deriv, full_deriv.deriv_info
+        info['deriv'] = deriv
+        # fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
+        if deriv_routine == 'gw_signal_tools':
+            fisher_matrix[i, i] = info['norm_squared']
+        else:
+            fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
 
-                deriv, info = full_deriv.deriv, full_deriv.deriv_info
-                info['deriv'] = deriv
-                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
-            case 'amplitude_phase':
-                full_deriv = WaveformDerivativeAmplitudePhase(
-                    point=point,
-                    param_to_vary=param,
-                    wf_generator=wf_generator,
-                    **_deriv_kw_args,
-                )
-
-                deriv, info = full_deriv.deriv, full_deriv.deriv_info
-                info['deriv'] = deriv
-                fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
-            case _:  # pragma: no cover
-                raise ValueError('Invalid `deriv_routine`.')
 
         deriv_info[param] = info
         # TODO: maybe convert to namedtuple?

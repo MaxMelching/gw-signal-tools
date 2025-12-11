@@ -40,27 +40,11 @@ class WaveformDerivativeBase:
     def __call__(self) -> Any:
         return NotImplementedError
 
-    _param_bound_storage = _param_bounds.copy()
+    _param_bound_storage: dict[str, tuple[float, float]] = _param_bounds.copy()
 
     @property
     def param_bounds(self) -> dict[str, tuple[float, float]]:
         return self._param_bound_storage
-
-    @param_bounds.setter
-    def param_bounds(self, param: str, bounds: list[float, float]) -> None:
-        """
-        Specify bounds for a parameter that does not have registered
-        bounds yet, or update parameter bounds.
-
-        Parameters
-        ----------
-        param : str
-            The parameter for which bounds shall be specified.
-        bounds : list[float, float]
-            Lower and upper bound.
-        """
-        assert len(bounds) == 2, 'Need exactly one lower and one upper bound.'
-        self._param_bound_storage[param] = bounds
 
     # TODO: do we need test_point? I guess yeah; for autodiff, it can just check if the point itself is valid I guess?
     def test_point(self) -> None:
@@ -88,7 +72,6 @@ class WaveformDerivativeBase:
         lower_violation, upper_violation = violation(_base_step)
 
         # -- Potentially more code that you want to have here
-        return NotImplementedError
 
     # -- In case calling seems unintuitive, create attribute
     @property

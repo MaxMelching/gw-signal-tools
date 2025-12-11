@@ -113,10 +113,18 @@ def test_pad_to_dx_too_large():
 
 @pytest.mark.parametrize('df', [hp_f_coarse.df, hp_f_fine.df, 0.007*u.Hz, 0.001*u.Hz])
 @pytest.mark.parametrize('full_metadata', [False, True])
-def test_signal_at_dx_exact(df, full_metadata):
+@pytest.mark.parametrize('with_unit', [False, True])
+def test_signal_at_dx_exact(df, full_metadata, with_unit):
+    if not with_unit:
+        df_unit = df.unit
+        df = df.value
+
     hp_f_interp = signal_at_dx(hp_f_fine, df, full_metadata=full_metadata)
 
-    assert_quantity_equal(df, hp_f_interp.df)
+    if with_unit:
+        assert_quantity_equal(df, hp_f_interp.df)
+    else:
+        assert_quantity_equal(df*df_unit, hp_f_interp.df)
 
 
 @pytest.mark.parametrize('xindex', [[0, 0.1], [0, 0.125]])  # Test with and without interpolation
@@ -167,7 +175,7 @@ def test_signal_at_xindex_interp_and_padding(f_low, f_high, df):
     else:
         hp_f_at_df = hp_f_at_df[hp_f_at_df.size - min_size:]
         hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[hp_f_at_target_frequs_restricted_1.size - min_size:]
-    
+
 
     assert_allclose_quantity(hp_f_at_df.frequencies, hp_f_at_target_frequs_restricted_1.frequencies, atol=df.value, rtol=0.0)
     assert_allclose_quantity(hp_f_at_df, hp_f_at_target_frequs_restricted_1, atol=2e-24, rtol=0.0)
@@ -224,7 +232,7 @@ def test_signal_at_xindex_interp_and_filling(f_low, f_high, df):
     else:
         hp_f_at_df = hp_f_at_df[hp_f_at_df.size - min_size:]
         hp_f_at_target_frequs_restricted_1 = hp_f_at_target_frequs_restricted_1[hp_f_at_target_frequs_restricted_1.size - min_size:]
-    
+
 
     assert_allclose_quantity(hp_f_at_df.frequencies, hp_f_at_target_frequs_restricted_1.frequencies, atol=df.value, rtol=0.0)
     assert_allclose_quantity(hp_f_at_df, hp_f_at_target_frequs_restricted_1, atol=1e-24, rtol=0.0)
@@ -340,9 +348,9 @@ def test_adjust_x_range_none_args():
 # is about nature of its value (power of two or not)
 def test_adjust_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    
+
     hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -362,7 +370,7 @@ def test_adjust_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
         # estimates of the number of points to pad/cut off may be flawed
         # and deviate by a single sample
         assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
-        
+
         size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
         hp_f_cropped = hp_f_cropped[:size_min]
         hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
@@ -385,9 +393,9 @@ def test_adjust_x_range_cropping_and_padding_exact(df, f_crop_low, f_crop_high):
 # pad_to_dx does good job (not necessarily related to adjust_x_range)
 def test_adjust_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_high):
     hp_f, _ = fd_wf_gen(wf_params | {'deltaF': df})
-    
+
     hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -407,7 +415,7 @@ def test_adjust_x_range_cropping_and_padding_not_exact(df, f_crop_low, f_crop_hi
         # estimates of the number of points to pad/cut off may be flawed
         # and deviate by a single sample
         assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
-        
+
         size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
         hp_f_cropped = hp_f_cropped[:size_min]
         hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
@@ -451,7 +459,7 @@ def test_adjust_x_range_cropping_and_padding_unequal(frequ_mode, f_crop_low, f_c
 
     hp_f = signal_at_xindex(hp_f_fine, frequs)
     hp_f_restricted = adjust_x_range(hp_f, x_range=[f_crop_low, f_crop_high])
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -471,7 +479,7 @@ def test_adjust_x_range_cropping_and_padding_unequal(frequ_mode, f_crop_low, f_c
         # estimates of the number of points to pad/cut off may be flawed
         # and deviate by a single sample
         assert abs(hp_f_cropped.size - hp_f_restricted_cropped.size) < 2
-        
+
         size_min = min(hp_f_cropped.size, hp_f_restricted_cropped.size)
         hp_f_cropped = hp_f_cropped[:size_min]
         hp_f_restricted_cropped = hp_f_restricted_cropped[:size_min]
@@ -526,11 +534,11 @@ def test_adjust_x_range_filling(df, f_fill_low, f_fill_high):
     if f_fill_low > hp_f.f0:
         assert_allclose_quantity(hp_f_restricted_cropped.f0, f_fill_low,
                                 atol=df.value, rtol=0.0)
-    
+
     if f_fill_high < hp_f.frequencies[-1]:
         assert_allclose_quantity(hp_f_restricted_cropped.frequencies[-1], f_fill_high,
                                  atol=df.value, rtol=0.0)
-        
+
     # In respective else case, nothing should happen to the frequency ranges
     # because there is nothing to do here (by design, no filling over range
     # [f_min f_max] is applied). We have checked this by ensuring
@@ -574,7 +582,7 @@ def test_adjust_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f
                              atol=df.value, rtol=0.0)
     assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
                              atol=df.value, rtol=0.0)
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes a method similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -604,7 +612,7 @@ def test_adjust_x_range_arg_interplay(df, f_crop_low, f_crop_high, f_fill_low, f
 
     assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_2)
     assert_quantity_equal(0.0 * _CORRECT_H_UNIT_FREQU, hp_f_restricted_cropped_3)
-    
+
     # assert_allclose_quantity(hp_f_restricted_cropped_2.f0, f_crop_low,
     #                          atol=df.value, rtol=0.0)
     # assert_allclose_quantity(hp_f_restricted.frequencies[-1], f_crop_high,
@@ -623,7 +631,7 @@ def test_adjust_x_range_with_padding_and_cropping_exact(df):
     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
     hp_f_restricted = adjust_x_range(hp_f, x_range=[0.0, f_crop_high],
                                        fill_range=[f_crop_low, None])
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -645,7 +653,7 @@ def test_adjust_x_range_with_padding_and_cropping_not_exact(df):
     hp_f = hp_f[hp_f.frequencies >= f_crop_low]  # Cut off so no start at f=0
     hp_f_restricted = adjust_x_range(hp_f, x_range=[0.0, f_crop_high],
                                        fill_range=[f_crop_low, None])
-    
+
     # NOTE: we will not use Series.crop to get the comparisons because it
     # utilizes computations similar to what is done in adjust_x_range.
     # Instead, more straightforward array slicing is used
@@ -690,11 +698,11 @@ def test_adjust_x_range_synthetic():
         [0.3, 5.8],  # More than 0.5 * dx away from target
     ]:
         inexact_pad_signal = adjust_x_range(mock_signal, inexact_pad_range, copy=True)
-        
+
         assert inexact_pad_signal.xindex[0] <= inexact_pad_range[0]  # For floor in x_lower < signal.x0
         assert inexact_pad_signal.xindex[0] == 0  # For floor in x_lower < signal.x0
         # assert inexact_pad_signal.xindex[0] == 1  # For ceil in x_lower < signal.x0
-        
+
         assert inexact_pad_signal.xindex[-1] >= inexact_pad_range[-1]  # For ceil in x_upper > signal.xindex[-1]
         assert inexact_pad_signal.xindex[-1] == 6  # For ceil in x_upper > signal.xindex[-1]
         # assert inexact_pad_signal.xindex[-1] == 5  # For floor in x_upper > signal.xindex[-1]
@@ -815,7 +823,7 @@ def test_fill_x_range_synthetic(fill_val):
 
             for i in [0, 3, 4]:
                 assert inexact_fill_signal[i] == fill_val
-            
+
             for i in [1, 2]:
                 assert inexact_fill_signal[i] != fill_val
 
@@ -828,7 +836,7 @@ def test_fill_x_range_synthetic_irregular(fill_val):
         lambda x, y: adjust_x_range(x, fill_range=y, fill_val=fill_val, copy=True),
         lambda x, y: fill_x_range(x, fill_val, fill_bounds=y, copy=True),
     ]:
-        
+
         exact_fill_range = [2, 4]
         exact_fill_signal = fill_func(mock_signal, exact_fill_range)
         assert exact_fill_signal[0] == fill_val
@@ -843,7 +851,7 @@ def test_fill_x_range_synthetic_irregular(fill_val):
 
             for i in [0, 5, 6]:
                 assert inexact_fill_signal[i] == fill_val
-            
+
             for i in [1, 2, 3, 4]:
                 assert inexact_fill_signal[i] != fill_val
 
@@ -883,7 +891,7 @@ def test_get_strain_no_extrinsic():
     hp_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='plus')
     hc_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='cross')
     h_f_test = get_strain(wf_params, 'frequency', generator=gen, mode='mixed')
-    
+
     assert_quantity_equal(hp_f_fine, hp_f_test)
     assert_quantity_equal(hc_f_fine, hc_f_test)
 
@@ -898,7 +906,7 @@ def test_get_strain_no_extrinsic():
 def test_get_strain_extrinsic():
     ext_params = {'det': 'H1', 'ra': 0.2*u.rad, 'dec': 0.2*u.rad,
                   'psi': 0.5*u.rad, 'tgps': 1126259462}
-    
+
     from lalsimulation.gwsignal.core.gw import GravitationalWavePolarizations
 
     params = wf_params | ext_params
@@ -928,7 +936,7 @@ class GetStrainErrorRaising(unittest.TestCase):
     def test_mode_checking(self):
         with self.assertRaises(ValueError):
             get_strain(wf_params, 'time', generator=gen, mode='mode')
-    
+
     def test_extr_params_checking(self):
         with self.assertRaises(ValueError):
             get_strain(wf_params | {'psi': 0.5*u.rad}, 'time', generator=gen)
@@ -941,22 +949,22 @@ def test_get_wf_generator_cache():
     with enable_caching_locally():
         wf_gen = get_wf_generator('IMRPhenomXPHM', cache=True)
         wf_gen.cache_info()
-    
+
         wf_gen = get_wf_generator('IMRPhenomXPHM', cache=False)
         with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
             wf_gen.cache_info()
-        
+
         wf_gen = get_wf_generator('IMRPhenomXPHM')
         wf_gen.cache_info()
 
     with disable_caching_locally():
         wf_gen = get_wf_generator('IMRPhenomXPHM', cache=True)
         wf_gen.cache_info()
-    
+
         wf_gen = get_wf_generator('IMRPhenomXPHM', cache=False)
         with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
             wf_gen.cache_info()
-        
+
         wf_gen = get_wf_generator('IMRPhenomXPHM')
         with pytest.raises(AttributeError, match="'function' object has no attribute 'cache_info'"):
             wf_gen.cache_info()

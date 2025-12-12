@@ -1,5 +1,7 @@
 # -- Standard Lib Imports
-from __future__ import annotations  # Enables type hinting own type in a class
+from __future__ import (
+    annotations,
+)  # Enables type hinting own type in a class. Plus "if TYPE_CHECKING" block.
 from typing import Optional, Any, Literal, Self, TypeVar, TYPE_CHECKING, Collection
 
 # -- Third Party Imports
@@ -21,6 +23,7 @@ __all__ = ('MatrixWithUnits',)
 
 
 MatrixT = TypeVar('MatrixT', bound='MatrixWithUnits')
+
 
 class MatrixWithUnits:
     value: NDArray
@@ -175,15 +178,16 @@ class MatrixWithUnits:
     def _infer_dtype(val: ArrayLike) -> DTypeLike:
         """Infer datatype of arbitrary input."""
         val = np.asarray(val, dtype=object).reshape(-1)
-        dtypes = np.asarray([
-            (
-                np.dtype(type(el.value))
-                if isinstance(el, u.Quantity)
-                else np.dtype(type(el))
-            )
-            for el in val
-        ],
-        # dtype=np.dtype
+        dtypes = np.asarray(
+            [
+                (
+                    np.dtype(type(el.value))
+                    if isinstance(el, u.Quantity)
+                    else np.dtype(type(el))
+                )
+                for el in val
+            ],
+            # dtype=np.dtype
         )
         return np.max(dtypes) if len(dtypes) > 0 else np.dtype(float)  # Default float
 
@@ -569,16 +573,14 @@ class MatrixWithUnits:
             return self.__matmul__(_other)
 
     def __rmatmul__(self, other) -> Self:
-        if isinstance(other, MatrixWithUnits):
-            return other @ self
-        else:
+        if not isinstance(other, MatrixWithUnits):
             try:
-                _other = self.__class__(other)
+                other = self.__class__(other)
             except:
                 # No conversion possible, cannot do matrix multiplication
                 return NotImplemented
 
-            return _other.__matmul__(self)
+        return other.__matmul__(self)
 
     # TODO: implement iadd, isub, imul etc. for inplace operations
 

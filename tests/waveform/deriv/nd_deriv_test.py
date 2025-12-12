@@ -54,13 +54,13 @@ pc.default_dict.pop('mass2', None);
 def test_point_calls(param, routine):
     nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
                                   deriv_routine=routine)
-    
+
     point = wf_params[param]
     deriv_scalar = nd_deriv(point.value)
     deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
 
     avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
-    
+
     assert_allclose_series(deriv_scalar, deriv_quantity,
                            atol=2e-4*avg_peak_height, rtol=1.1e-15)
     # -- atol for total_mass. Not sure where it comes from, maybe from
@@ -70,33 +70,11 @@ def test_point_calls(param, routine):
     # -- conversions that translate into derivatives.
 
 
-@pytest.mark.parametrize('param', ['total_mass', 'distance'])
-@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
-def test_point_calls(param, routine):
-    nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
-                                  deriv_routine=routine)
-    
-    point = wf_params[param]
-    deriv_scalar = nd_deriv(point.value)
-    deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
-
-    avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
-
-    assert_allclose_series(deriv_scalar, deriv_quantity,
-                           atol=4e-4*avg_peak_height, rtol=0.)
-                        #    rtol=1.1e-15)  # Numerical errors. Sufficient for distance
-    # -- atol for total_mass. Comes from very small errors in astropy
-    # -- conversions, which yield e.g. 99.99999999999999 instead of 100.
-    # -- This has impact on generated waveforms, thus deviation.
-    # -- Sub-percent maximal relative deviation (measuring on scale of
-    # -- peak) is still acceptable, though.
-
-
 @pytest.mark.parametrize(
     'param, param_val, invalid_step', [
         ['total_mass', 10*u.Msun, 15.],
         ['mass_ratio', 0.1*u.dimensionless_unscaled, 0.2],
-        # ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2],
+        ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2],
         # -- Works in test_deriv, but not here. One segment of frequency
         # -- interval is badly approximated by numdifftools
         ['mass_ratio', 0.9*u.dimensionless_unscaled, 1.],  # Not backward because lower bound also violated
@@ -122,16 +100,13 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
         wf_params | {param: param_val},
         param,
         wf_generator,
-        deriv_routine=routine
+        deriv_routine=routine,
     )
 
     deriv_1_eval = deriv_1()
     deriv_2_eval = deriv_2()
 
-    avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.
-    
-    assert_allclose_series(deriv_1_eval, deriv_2_eval,
-                           atol=1e-3*avg_peak_height, rtol=7e-4)
+    assert_allclose_series(deriv_1_eval, deriv_2_eval, atol=0, rtol=0)
     # -- Either very low relative deviation or the deviations are
     # -- essentially zero on scale of derivative (0.1% of peak). Latter
     # -- mainly needed for issues at high frequency end

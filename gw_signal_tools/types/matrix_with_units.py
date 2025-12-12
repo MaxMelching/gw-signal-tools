@@ -394,12 +394,12 @@ class MatrixWithUnits:
 
                 self.__setitem__(key, value)  # Otherwise scalar case would
                 # require special handling again
-            except TypeError:
+            except TypeError as e:
                 raise TypeError(
                     'Can only set items to data types that have members '
                     '`value` and `unit` (such as astropy Quantities or '
                     'MatrixWithUnits) or can be converted into a Quantity.'
-                )
+                ) from e
 
     def __len__(self):
         return self.value.__len__()
@@ -436,12 +436,11 @@ class MatrixWithUnits:
     def __sub__(self, other: Any) -> Self:
         try:
             return self.__add__(other.__neg__())
-        except AttributeError:  # no __neg__ for example
+        except AttributeError as e:  # no __neg__ for example
             raise TypeError(
                 f'Addition between {type(other)} and `MatrixWithUnit` is not '
                 'supported.'
-            )
-
+            ) from e
     def __rsub__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__neg__().__add__(other)
@@ -662,14 +661,14 @@ class MatrixWithUnits:
             ), 'Instance is invalid, `value` and `unit` have incompatible sizes.'
 
             return value_size
-        except AttributeError:
+        except AttributeError as e:
             # Might be scalar unit, then everything is fine
             if isinstance(self.unit, self._pure_unit_types):
                 return value_size
             else:
                 raise ValueError(
                     'Instance is invalid, `value` and `unit` have incompatible sizes.'
-                )
+                ) from e
 
     @property
     def shape(self) -> tuple[int, ...]:
@@ -683,14 +682,14 @@ class MatrixWithUnits:
             ), 'Instance is invalid, `value` and `unit` have incompatible shapes.'
 
             return value_shape
-        except AttributeError:
+        except AttributeError as e:
             # Might be scalar unit, then everything is fine
             if isinstance(self.unit, self._pure_unit_types):
                 return value_shape
             else:
                 raise ValueError(
                     'Instance is invalid, `value` and `unit` have incompatible shapes.'
-                )
+                ) from e
 
     # -- Following function copied from astropy Quantity class
     @property
@@ -719,14 +718,14 @@ class MatrixWithUnits:
             ), 'Instance is invalid, `value` and `unit` have incompatible ndim.'
 
             return value_ndim
-        except AttributeError:
+        except AttributeError as e:
             # Might be scalar unit, then everything is fine
             if isinstance(self.unit, self._pure_unit_types):
                 return value_ndim
             else:
                 raise ValueError(
                     'Instance is invalid, `value` and `unit` have incompatible ndim.'
-                )
+                ) from e
 
     @property
     def dtype(self) -> Any:

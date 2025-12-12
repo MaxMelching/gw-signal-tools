@@ -100,7 +100,7 @@ def test_single_det_consistency():
     'total_mass',
     ['total_mass'],
     ['total_mass', 'mass_ratio'],
-    pytest.param(['chirp_mass'], marks=pytest.mark.xfail(raises=AssertionError | KeyError,  # Error depends on routine
+    pytest.param(['chirp_mass'], marks=pytest.mark.xfail(raises=KeyError,  # Error depends on routine
         strict=True, reason='Invalid parameter')),
 ])
 def test_params(params):

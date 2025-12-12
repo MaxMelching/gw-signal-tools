@@ -376,13 +376,13 @@ except ImportError:
 
         try:
             df = u.Quantity(df, unit=frequ_unit)
-        except u.UnitConversionError:
+        except u.UnitConversionError as e:
             # -- Conversion only fails if df is already Quantity and has
             # -- non-matching unit, so we can assume that df.unit works
             raise ValueError(
                 f'Need consistent units for `df` ({df.unit}) and '
                 f'`signals.frequencies` ({frequ_unit}).'
-            )
+            ) from e
 
         # -- Compute what would be current df of FT
         df_current = 1.0 / (signal.size * signal.dt)

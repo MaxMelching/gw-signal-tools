@@ -577,7 +577,7 @@ def optimized_inner_product(
     """
     Lower level function for inner product calculation. Only accepts
     signals at identical frequency ranges and then carries out the
-    actual integral calcutation via an IFFT.
+    actual integral calculation via an IFFT.
 
     In contrast to :code:`inner_product_computation`, this function
     optimizes the inner product over time and phase shifts.
@@ -1007,8 +1007,8 @@ param_bounds: dict[str, tuple[float, float]] = {
     'spin2z': (-1.0, 1.0),
     'chi_1': (0.0, 1.0),
     'chi_2': (0.0, 1.0),
-    # 'inclination': (0.0, np.pi),
-    # 'theta_jn': (0.0, np.pi),
+    'inclination': (0.0, np.pi),
+    'theta_jn': (0.0, np.pi),
     'sin_inclination': (0.0, 1.0),
     'sin_theta_jn': (0.0, 1.0),
     'f_ref': (0.0, np.inf),

@@ -70,28 +70,6 @@ def test_point_calls(param, routine):
     # -- conversions that translate into derivatives.
 
 
-@pytest.mark.parametrize('param', ['total_mass', 'distance'])
-@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
-def test_point_calls(param, routine):
-    nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
-                                  deriv_routine=routine)
-
-    point = wf_params[param]
-    deriv_scalar = nd_deriv(point.value)
-    deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
-
-    avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
-
-    assert_allclose_series(deriv_scalar, deriv_quantity,
-                           atol=4e-4*avg_peak_height, rtol=0.)
-                        #    rtol=1.1e-15)  # Numerical errors. Sufficient for distance
-    # -- atol for total_mass. Comes from very small errors in astropy
-    # -- conversions, which yield e.g. 99.99999999999999 instead of 100.
-    # -- This has impact on generated waveforms, thus deviation.
-    # -- Sub-percent maximal relative deviation (measuring on scale of
-    # -- peak) is still acceptable, though.
-
-
 @pytest.mark.parametrize(
     'param, param_val, invalid_step', [
         ['total_mass', 10*u.Msun, 15.],

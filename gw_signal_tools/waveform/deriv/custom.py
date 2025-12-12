@@ -13,7 +13,7 @@ import matplotlib as mpl
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
 from ...logging import logger
-from ..inner_product import norm, inner_product
+from ..inner_product import norm, inner_product, param_bounds as _param_bounds
 from ...types import WFGen
 
 
@@ -162,6 +162,12 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         self.point = point
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
+        self._param_bound_storage = _param_bounds.copy()
+        # super().__init__(
+        #     point=point,
+        #     param_to_vary=param_to_vary,
+        #     wf_generator=wf_generator,
+        # )
 
         if step_sizes is None:
             self.step_sizes = np.reshape(

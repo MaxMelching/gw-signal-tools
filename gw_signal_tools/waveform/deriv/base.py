@@ -36,11 +36,10 @@ class WaveformDerivativeBase:
         self._point = point
         self._param_to_vary = param_to_vary
         self._wf_generator = wf_generator
+        self._param_bound_storage = _param_bounds.copy()
 
     def __call__(self) -> Any:
         return NotImplementedError
-
-    _param_bound_storage: dict[str, tuple[float, float]] = _param_bounds.copy()
 
     @property
     def param_bounds(self) -> dict[str, tuple[float, float]]:

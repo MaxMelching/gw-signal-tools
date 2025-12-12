@@ -100,6 +100,7 @@ def fisher_matrix(
     wf_generator: FDWFGen,
     deriv_routine: str | Callable,
     return_info: bool = False,
+    pass_inn_prod_kwargs_to_deriv: bool = False,
     **deriv_and_inner_prod_kwargs,
 ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
     r"""
@@ -152,6 +153,14 @@ def fisher_matrix(
         Whether to return information collected during the derivative
         calculations. Can be used as a sort of custom cache to also
         return derivatives.
+    pass_inn_prod_kwargs_to_deriv : bool, optional, default = False
+        If True, all keyword arguments in `deriv_and_inner_prod_kwargs`
+        are passed on to the derivative routine as well. Otherwise, only
+        those keyword arguments that are not recognized as inner product
+        arguments are passed on. This might be useful if the routine
+        uses, e.g., a convergence scheme that is based on inner product
+        values. Should be passed, e.g., when using
+        ``deriv_routine='gw_signal_tools'``.
     deriv_and_inner_prod_kwargs :
         All other keyword arguments are automatically separated and then
         passed to the derivative and inner product routines involved in
@@ -213,8 +222,7 @@ def fisher_matrix(
             param_to_vary=param,
             wf_generator=wf_generator,
             deriv_routine=deriv_routine,
-            # **_deriv_kw_args,
-            **deriv_and_inner_prod_kwargs,  # interesting that we get no error here. maybe we just never pass stuff in tests? or nd.Derivative ignores unknown kwargs? -> maybe then it's even better to pass them, in case some other class wants to use them...
+            **(deriv_and_inner_prod_kwargs if pass_inn_prod_kwargs_to_deriv else _deriv_kw_args),
         )
 
         deriv, info = full_deriv.deriv, full_deriv.deriv_info
@@ -223,8 +231,7 @@ def fisher_matrix(
         if deriv_routine == 'gw_signal_tools':
             fisher_matrix[i, i] = info['norm_squared']
         else:
-            fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
-
+            fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2  # type: ignore[operator]
 
         deriv_info[param] = info
         # TODO: maybe convert to namedtuple?

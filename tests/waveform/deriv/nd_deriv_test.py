@@ -5,64 +5,70 @@ import matplotlib.pyplot as plt
 
 # -- Local Package Imports
 from gw_signal_tools.waveform import (
-    WaveformDerivativeGWSignaltools, WaveformDerivativeNumdifftools,
-    WaveformDerivativeAmplitudePhase, WaveformDerivative, get_wf_generator
+    WaveformDerivativeGWSignaltools,
+    WaveformDerivativeNumdifftools,
+    WaveformDerivativeAmplitudePhase,
+    WaveformDerivative,
+    get_wf_generator,
 )
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally
 from gw_signal_tools.test_utils import assert_allclose_series
 
 
-#%% -- Initializing commonly used variables -----------------------------------
-f_min = 20.*u.Hz
-f_max = 1024.*u.Hz
+# %% -- Initializing commonly used variables ----------------------------------
+f_min = 20.0 * u.Hz
+f_max = 1024.0 * u.Hz
 
-wf_params = HashableDict({
-    'total_mass': 100.*u.solMass,
-    'mass_ratio': 0.42*u.dimensionless_unscaled,
-    'deltaT': 1./2048.*u.s,
-    'f22_start': f_min,
-    'f_max': f_max,
-    'deltaF': 2**-5*u.Hz,
-    'f22_ref': 20.*u.Hz,
-    'phi_ref': 0.*u.rad,
-    'distance': 1.*u.Mpc,
-    'inclination': 0.0*u.rad,
-    'eccentricity': 0.*u.dimensionless_unscaled,
-    'longAscNodes': 0.*u.rad,
-    'meanPerAno': 0.*u.rad,
-    'condition': 0
-})
+wf_params = HashableDict(
+    {
+        'total_mass': 100.0 * u.solMass,
+        'mass_ratio': 0.42 * u.dimensionless_unscaled,
+        'deltaT': 1.0 / 2048.0 * u.s,
+        'f22_start': f_min,
+        'f_max': f_max,
+        'deltaF': 2**-5 * u.Hz,
+        'f22_ref': 20.0 * u.Hz,
+        'phi_ref': 0.0 * u.rad,
+        'distance': 1.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
+        'condition': 0,
+    }
+)
 
 test_params = ['total_mass', 'mass_ratio']
 
 
 with enable_caching_locally():
-# with disable_caching_locally():
+    # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
     wf_generator = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc
-pc.default_dict.pop('mass1', None);
-pc.default_dict.pop('mass2', None);
+
+pc.default_dict.pop('mass1', None)
+pc.default_dict.pop('mass2', None)
 
 
-#%% -- Class Tests ------------------------------------------------------------
+# %% -- Class Tests -----------------------------------------------------------
 @pytest.mark.parametrize('param', ['total_mass', 'distance'])
 @pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
 def test_point_calls(param, routine):
-    nd_deriv = WaveformDerivative(wf_params, param, wf_generator,
-                                  deriv_routine=routine)
+    nd_deriv = WaveformDerivative(wf_params, param, wf_generator, deriv_routine=routine)
 
     point = wf_params[param]
     deriv_scalar = nd_deriv(point.value)
     deriv_quantity = nd_deriv(point.decompose(bases=u.si.bases))
 
-    avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.
+    avg_peak_height = (deriv_scalar.max() + deriv_quantity.max()).value / 2.0
 
-    assert_allclose_series(deriv_scalar, deriv_quantity,
-                           atol=2e-4*avg_peak_height, rtol=1.1e-15)
+    assert_allclose_series(
+        deriv_scalar, deriv_quantity, atol=2e-4 * avg_peak_height, rtol=1.1e-15
+    )
     # -- atol for total_mass. Not sure where it comes from, maybe from
     # -- little error in conversions. Sub-percent maximal relative
     # -- deviation (measuring on scale of peak) is still fine, though.
@@ -71,18 +77,23 @@ def test_point_calls(param, routine):
 
 
 @pytest.mark.parametrize(
-    'param, param_val, invalid_step', [
-        ['total_mass', 10*u.Msun, 15.],
-        ['mass_ratio', 0.1*u.dimensionless_unscaled, 0.2],
-        ['mass_ratio', 0.8*u.dimensionless_unscaled, 0.2],
+    'param, param_val, invalid_step',
+    [
+        ['total_mass', 10 * u.Msun, 15.0],
+        ['mass_ratio', 0.1 * u.dimensionless_unscaled, 0.2],
+        ['mass_ratio', 0.8 * u.dimensionless_unscaled, 0.2],
         # -- Works in test_deriv, but not here. One segment of frequency
         # -- interval is badly approximated by numdifftools
-        ['mass_ratio', 0.9*u.dimensionless_unscaled, 1.],  # Not backward because lower bound also violated
-        ['mass_ratio', 1.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled],
+        [
+            'mass_ratio',
+            0.9 * u.dimensionless_unscaled,
+            1.0,
+        ],  # Not backward because lower bound also violated
+        ['mass_ratio', 1.1 * u.dimensionless_unscaled, 0.2 * u.dimensionless_unscaled],
         # -- Following tests do not work, sym_mass_ratio is not in wf_params
         # ['sym_mass_ratio', 0.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
         # ['sym_mass_ratio', 0.2*u.dimensionless_unscaled, 0.1*u.dimensionless_unscaled, 'backward'],
-    ]
+    ],
 )
 @pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
 def test_invalid_step_size(param, param_val, invalid_step, routine):
@@ -91,7 +102,7 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
         param,
         wf_generator,
         base_step=invalid_step,
-        deriv_routine=routine
+        deriv_routine=routine,
     )
     # -- Idea: provoke error for complete coverage, then use same step
     # -- size as below
@@ -112,7 +123,7 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
     # -- mainly needed for issues at high frequency end
 
 
-#%% -- Comparison with custom Derivative class --------------------------------
+# %% -- Comparison with custom Derivative class -------------------------------
 # print(WaveformDerivativeGWSignaltools.__dict__)
 # print(WaveformDerivativeNumdifftools.__dict__)
 # -- To check that docstring is transferred
@@ -132,9 +143,7 @@ nd_deriv = WaveformDerivativeNumdifftools(
 )
 
 gwsignal_deriv = WaveformDerivativeGWSignaltools(
-    point=wf_params,
-    param_to_vary=test_param,
-    wf_generator=wf_generator
+    point=wf_params, param_to_vary=test_param, wf_generator=wf_generator
 )
 
 amp_phase_deriv = WaveformDerivativeAmplitudePhase(
@@ -151,7 +160,7 @@ fig, [ax1, ax2, ax3] = plt.subplots(figsize=(18, 24), nrows=3)
 # ax1.plot(test_3.deriv, ':', label='AmplitudePhase')
 
 # eval_point = wf_params[test_param]
-eval_point = wf_params[test_param]*0.9
+eval_point = wf_params[test_param] * 0.9
 # eval_point = wf_params[test_param]*1.2
 # ax1.plot(nd_deriv(eval_point), '-', label='Numdifftools')
 # # ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}), '--', label='GWSignaltools')
@@ -185,15 +194,26 @@ ax2.legend()
 # ax3.plot((nd_deriv.deriv - amp_phase_deriv.deriv).abs(), '--', label='Numdifftools - AmplitudePhase')
 # ax3.plot((gwsignal_deriv.deriv - amp_phase_deriv.deriv).abs(), ':', label='GWSignaltools - AmplitudePhase')
 
-ax3.plot((nd_deriv_eval - gwsignal_deriv_eval).abs(), '-', label='Numdifftools - GWSignaltools')
-ax3.plot((nd_deriv_eval - amp_phase_deriv_eval).abs(), '--', label='Numdifftools - AmplitudePhase')
-ax3.plot((gwsignal_deriv_eval - amp_phase_deriv_eval).abs(), ':', label='GWSignaltools - AmplitudePhase')
+ax3.plot(
+    (nd_deriv_eval - gwsignal_deriv_eval).abs(),
+    '-',
+    label='Numdifftools - GWSignaltools',
+)
+ax3.plot(
+    (nd_deriv_eval - amp_phase_deriv_eval).abs(),
+    '--',
+    label='Numdifftools - AmplitudePhase',
+)
+ax3.plot(
+    (gwsignal_deriv_eval - amp_phase_deriv_eval).abs(),
+    ':',
+    label='GWSignaltools - AmplitudePhase',
+)
 
 ax3.legend()
 
 # plt.show()
 plt.close()  # -- Activate when running pytest
-
 
 
 # -- Testing n-dim output

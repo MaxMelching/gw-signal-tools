@@ -11,7 +11,12 @@ import numpy as np
 from ..test_utils import allclose_quantity
 
 
-__all__ = ('_UNIT_CONV_ERR', '_q_convert', '_compare_series_xindex', '_assert_ft_compatible')
+__all__ = (
+    '_UNIT_CONV_ERR',
+    '_q_convert',
+    '_compare_series_xindex',
+    '_assert_ft_compatible',
+)
 
 __doc__ = """
 Little helper file containing functions and other definitions that help
@@ -46,7 +51,7 @@ def _q_convert(
             ) from e
 
 
-def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
+def _compare_series_xindex(*s: Series, enforce_dx: bool = True) -> None:
     """
     Checks if input is mutually compatible, raises error if not.
 
@@ -81,7 +86,9 @@ def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
     # sense because this operation is also O(n), one can also just use
     # checks on all frequencies)
 
-    if enforce_dx and not allclose_quantity(s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0):
+    if enforce_dx and not allclose_quantity(
+        s1.xindex, s2.xindex, atol=0.5 * s1.dx.value, rtol=0.0
+    ):
         # -- Note: this atol checks for equality up to sampling accuracy
         # -- Note: this automatically checks for equal size
         raise ValueError(
@@ -89,7 +96,9 @@ def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
             'Maximum allowed deviation is 0.5*dx.'
         )
 
-    if not enforce_dx and not np.all(abs(s1.xindex - s2.xindex)[:-1] <= 0.5*abs(np.diff(s1.xindex))):
+    if not enforce_dx and not np.all(
+        abs(s1.xindex - s2.xindex)[:-1] <= 0.5 * abs(np.diff(s1.xindex))
+    ):
         # -- Unequal spacing was given, allowed for inner_product_computation
         raise ValueError(
             'Signals must have sufficiently equal xindex. '
@@ -97,7 +106,7 @@ def _compare_series_xindex(*s: list[Series], enforce_dx: bool = True) -> None:
         )
 
 
-def _assert_ft_compatible(*fs: list[FrequencySeries]) -> None:
+def _assert_ft_compatible(*fs: FrequencySeries) -> None:
     """
     Checks if input has correct format for a Fourier transformation,
     raises error if not.
@@ -107,9 +116,11 @@ def _assert_ft_compatible(*fs: list[FrequencySeries]) -> None:
             _assert_ft_compatible(val)
         return None
 
-    fs = fs[0]
-    assert allclose_quantity(fs.f0.value, 0.0, atol=0.0, rtol=0.0) or allclose_quantity(
-        -(fs.f0 + fs.df), fs.frequencies[-1], atol=fs.df.value, rtol=0.0
+    fs_ = fs[0]
+    assert allclose_quantity(
+        fs_.f0.value, 0.0, atol=0.0, rtol=0.0
+    ) or allclose_quantity(
+        -(fs_.f0 + fs_.df), fs_.frequencies[-1], atol=fs_.df.value, rtol=0.0
     ), (
         'All signals must start either at f=0 or be symmetric around f=0, '
         'where the latter refers to the case of an odd sample size. For an '

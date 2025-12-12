@@ -21,7 +21,7 @@ from gw_signal_tools import (
 plt.style.use(PLOT_STYLE_SHEET)
 
 
-# %% -- Initializing commonly used variables -----------------------------------
+# %% -- Initializing commonly used variables ----------------------------------
 f_min = 20.0 * u.Hz
 f_max = 1024.0 * u.Hz
 
@@ -191,7 +191,7 @@ def test_params_to_project(params_to_project):
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
 
 
-# %% -- Confirm that certain errors are raised ---------------------------------
+# %% -- Confirm that certain errors are raised --------------------------------
 class ErrorRaising(unittest.TestCase):
     param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]

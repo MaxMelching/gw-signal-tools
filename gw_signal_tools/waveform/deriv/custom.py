@@ -11,75 +11,18 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 # -- Local Package Imports
-from ..logging import logger
-from .inner_product import norm, inner_product, param_bounds
-from .nd_deriv import WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase
-from ..types import WFGen
+from .base import WaveformDerivativeBase
+from ...logging import logger
+from ..inner_product import norm, inner_product, param_bounds as _param_bounds
+from ...types import WFGen
 
 
-__doc__ = """
-Module for the ``WaveformDerivative`` and
-``WaveformDerivativeGWSignaltools`` classes.
-"""
+__doc__ = """Module for the ``WaveformDerivativeGWSignaltools`` class."""
 
-__all__ = ('WaveformDerivative', 'WaveformDerivativeGWSignaltools')
+__all__ = ('WaveformDerivativeGWSignaltools',)
 
 
-class WaveformDerivative:
-    r"""
-    Constructor class for numerical derivative of waveforms. This class
-    allows to choose between different implementations by passing the
-    .code:`deriv_routine` argument. All other arguments are passed on to
-    the selected derivative class.
-
-    Parameters
-    ----------
-    deriv_routine : Literal['gw_signal_tools', 'numdifftools', 'amplitude_phase']
-        Available routines. Default is `'numdifftools'`.
-
-    Returns
-    -------
-    Instance of requested class.
-
-    Notes
-    -----
-    Here we compare the different available derivative routines.
-
-        - 'gw_signal_tools': usually the fastest method, but can can
-        lack accuracy for certain configurations (since it only refines
-        estimate for whole frequency range, not parts of it)
-
-        - 'numdifftools': can do adaptive refinement only for certain
-        frequencies where convergence is slower, making it potentially
-        more reliable than the previous routine. However, this also
-        requires more waveform calls, making the calculation slower.
-
-        - 'amplitude_phase': may be beneficial for accuracy in case
-        strain oscillates fast and thus has steep derivative. Then,
-        looking at amplitude and phase separately should yield much more
-        well-posed functions. For usual applications though, it may be
-        significantly slower than the other routines. After all, two
-        derivatives have to be calculated, which means it involves the
-        waveform calls. But in case other routines fail, it might be
-        worth a try. Moreover, this issue depends on whether waveform
-        caching is activated or not.
-    """
-
-    def __new__(cls, *args, **kw_args):
-        deriv_routine = kw_args.pop('deriv_routine', 'numdifftools')
-
-        match deriv_routine:
-            case 'gw_signal_tools':
-                return WaveformDerivativeGWSignaltools(*args, **kw_args)
-            case 'numdifftools':
-                return WaveformDerivativeNumdifftools(*args, **kw_args)
-            case 'amplitude_phase':
-                return WaveformDerivativeAmplitudePhase(*args, **kw_args)
-            case _:
-                raise ValueError(f"Invalid deriv_routine '{deriv_routine}'.")
-
-
-class WaveformDerivativeGWSignaltools:
+class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     r"""
     Calculate the derivative of an arbitrary waveform with respect to
     an arbitrary input parameter in frequency domain, using a selection
@@ -94,7 +37,7 @@ class WaveformDerivativeGWSignaltools:
 
         In principle, the keys can be arbitrary, only two requirements
         have to be fulfilled: (i) the dictionary must be accepted by
-        :code:`wf_generator` since it is given as input to this functoin
+        :code:`wf_generator` since it is given as input to this function
         and (ii) :code:`param_to_vary` has to be accessible as a key
         (except one of the special cases mentioned in the description of
         :code:`params_to_vary` is true).
@@ -130,7 +73,7 @@ class WaveformDerivativeGWSignaltools:
         :code:`~gw_signal_tools.waveform.get_wf_generator`, which
         generates a suitable function from a few arguments.
     step_sizes : list[float], optional, default = None
-        Step sizes used in the numerical differention. Based on the
+        Step sizes used in the numerical differentiation. Based on the
         evaluation point, these are used as relative or absolute steps.
     start_step_size: float, optional, default = 1e-2
         Alternative way to control the relative step sizes. Determines
@@ -219,6 +162,12 @@ class WaveformDerivativeGWSignaltools:
         self.point = point
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
+        self._param_bound_storage = _param_bounds.copy()
+        # super().__init__(
+        #     point=point,
+        #     param_to_vary=param_to_vary,
+        #     wf_generator=wf_generator,
+        # )
 
         if step_sizes is None:
             self.step_sizes = np.reshape(
@@ -364,11 +313,10 @@ class WaveformDerivativeGWSignaltools:
     @convergence_threshold.setter
     def convergence_threshold(self, convergence_threshold: Optional[float]) -> None:
         if convergence_threshold is None:
-            match self.convergence_check:
-                case 'diff_norm':
-                    convergence_threshold = 0.001
-                case 'mismatch':
-                    convergence_threshold = 0.001
+            if self.convergence_check == 'diff_norm':
+                convergence_threshold = 0.001
+            elif self.convergence_check == 'mismatch':
+                convergence_threshold = 0.001
 
         self._convergence_threshold = convergence_threshold
 
@@ -620,7 +568,7 @@ class WaveformDerivativeGWSignaltools:
                     self._convergence_vals += [np.inf]
                     continue
                 else:
-                    raise ValueError(err_msg)
+                    raise err  # raise from err?
 
             derivative_norm = norm(deriv_param, **self.inner_prod_kwargs) ** 2
 
@@ -641,17 +589,16 @@ class WaveformDerivativeGWSignaltools:
         for the current values in `self._derivative_vals`.
         """
         if len(self._derivative_vals) >= 2:
-            match self.convergence_check:
-                case 'diff_norm':
-                    crit_val = norm(
-                        self._derivative_vals[-1] - self._derivative_vals[-2],
-                        **self.inner_prod_kwargs,
-                    ) / np.sqrt(self._deriv_norms[-1])
-                case 'mismatch':
-                    # Compute mismatch, using that we already know norms
-                    crit_val = 1.0 - inner_product(
-                        self._derivative_vals[-1],
-                        self._derivative_vals[-2],
+            if self.convergence_check == 'diff_norm':
+                crit_val = norm(
+                    self._derivative_vals[-1] - self._derivative_vals[-2],
+                    **self.inner_prod_kwargs,
+                ) / np.sqrt(self._deriv_norms[-1])
+            elif self.convergence_check == 'mismatch':
+                # Compute mismatch, using that we already know norms
+                crit_val = 1.0 - inner_product(
+                    self._derivative_vals[-1],
+                    self._derivative_vals[-2],
                         **self.inner_prod_kwargs,
                     ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
         else:
@@ -673,17 +620,14 @@ class WaveformDerivativeGWSignaltools:
                 self.point[self.param_to_vary] = new_point * self.param_center_val.unit
         return self.deriv
 
-    _param_bound_storage = param_bounds.copy()
-    param_bounds = WaveformDerivativeNumdifftools.param_bounds
-
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?
 
     def test_point(self, step_size: float) -> None:
         """
-        Check if `self.point` contains potentially tricky
-        values, e.g. mass ratios close to 1. If yes, a subsequent
-        adjustment takes place.
+        Check if `self.point` contains potentially tricky values, e.g.
+        mass ratios close to 1. If yes, a subsequent adjustment of step
+        sizes etc may be performed.
 
         Parameters
         ----------
@@ -695,14 +639,13 @@ class WaveformDerivativeGWSignaltools:
         # -- used by the routine (also adds proper unit)
 
         default_bounds = (-np.inf, np.inf)
-        lower_bound, upper_bound = self._param_bound_storage.get(
+        lower_bound, upper_bound = self.param_bounds.get(
             self.param_to_vary, default_bounds
         )
-        if self.param_to_vary == 'mass_ratio':
-            # -- Depending on chosen convention, bounds might have to be corrected
-            if self.param_center_val > 1:
-                lower_bound, upper_bound = self._param_bound_storage.get(
-                    self.param_to_vary, default_bounds
+        if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
+            # -- In this convention, bounds have to be corrected
+                lower_bound, upper_bound = self.param_bounds.get(
+                    'inverse_mass_ratio', default_bounds
                 )
 
         lower_violation = self._lower_point_checker(step_size, lower_bound)
@@ -898,7 +841,7 @@ class WaveformDerivativeGWSignaltools:
         RuntimeError
             If no derivates have been calculated.
         """
-        from ..plotting import latexparams
+        from ...plotting import latexparams
 
         # -- Note: importing here is nice because then, custom additions
         # -- will not cause an error

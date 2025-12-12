@@ -14,7 +14,7 @@ from gw_signal_tools.test_utils import (
 from gw_signal_tools.waveform import (
     get_wf_generator, norm, WaveformDerivativeGWSignaltools,
     WaveformDerivativeNumdifftools, WaveformDerivativeAmplitudePhase,
-    WaveformDerivative
+    WaveformDerivative, WaveformDerivativeBase
 )
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally
@@ -77,6 +77,48 @@ def test_all_routines():
     with pytest.raises(ValueError, match='Invalid deriv_routine'):
         full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
                                         deriv_routine='')
+
+
+def test_class_passing():
+    full_deriv = WaveformDerivative(
+        wf_params,
+        'total_mass',
+        wf_generator,
+        deriv_routine=WaveformDerivativeNumdifftools
+    )
+    assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+
+def test_str_mapping():
+    # WaveformDerivative.deriv_routine_class_map['custom_routine'] = WaveformDerivativeNumdifftools
+    # full_deriv = WaveformDerivative(
+    #     wf_params,
+    #     'total_mass',
+    #     wf_generator,
+    #     deriv_routine='custom_routine'
+    # )
+
+    # assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
+
+    class CustomDeriv(WaveformDerivativeBase):
+        pass
+
+    WaveformDerivative.deriv_routine_class_map['custom_routine'] = CustomDeriv
+    full_deriv = WaveformDerivative(
+        wf_params,
+        'total_mass',
+        wf_generator,
+        deriv_routine='custom_routine'
+    )
+
+    assert isinstance(full_deriv, CustomDeriv)
+
+    WaveformDerivative.deriv_routine_class_map.pop('custom_routine')
+
+    with pytest.raises(ValueError, match='Invalid deriv_routine'):
+        full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator,
+                                        deriv_routine='custom_routine')
+
 
 
 #%% -- Characterizing gwsignaltools derivative --------------------------------
@@ -240,7 +282,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
 
 
     # TODO: also include WaveformDerivativeAmplitudePhase?
-    
+
 
     mask = deriv.frequencies <= 256.0 * u.Hz
 
@@ -260,7 +302,7 @@ def test_wf_deriv_numdifftools(param_to_vary, crit):
     # -- Very good agreement, supports claim above that most severe
     # -- relative differences occur around zeros, where impact is not
     # -- very high. Note that no frequency regions are excluded here
-    
+
 
     # -- Eye test: here are plots of the derivatives
     # plt.plot(deriv.real)

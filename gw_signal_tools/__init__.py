@@ -10,10 +10,9 @@ Repository with files surrounding computations with waveforms from lal.
 """
 
 # -- Make certain paths available for easy access
-from os.path import dirname as _path_dirname
-PACKAGE_PATH: str = _path_dirname(__file__)
+from os.path import dirname as _path_dirname, join as _path_join
 
-from os.path import join as _path_join
+PACKAGE_PATH: str = _path_dirname(__file__)
 PLOT_STYLE_SHEET: str = _path_join(PACKAGE_PATH, 'plot_stylesheet.sty')
 
 # -- Set preferred unit system here (can be changed)

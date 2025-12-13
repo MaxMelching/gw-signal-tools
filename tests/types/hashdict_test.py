@@ -18,7 +18,7 @@ def test_union():
         isinstance(left_merge, HashableDict)  # Check correct type
         and left_merge['a'] == 1  # Check correct merge
     )  # or method
-    
+
     right_merge = dict_no_hash | dict_hash
     assert (
         isinstance(right_merge, HashableDict)  # Check correct type
@@ -31,6 +31,7 @@ def test_union():
 
     assert not isinstance(dict_no_hash | dict_no_hash, HashableDict)
     # -- Ensure that interplay of regular dictionaries is unaffected
+
 
 def test_copy():
     # -- Make sure that copy is still a HashableDict

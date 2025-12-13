@@ -1,10 +1,14 @@
 # -- Standard Lib Imports
 # from functools import cached_property  # TODO: use for some stuff?
-from typing import Any
+from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
+from typing import Any, TYPE_CHECKING
 
 # -- Third Party Imports
 import numpy as np
 import astropy.units as u
+
+if TYPE_CHECKING:
+    from gwpy.types import Series
 
 # -- Local Package Imports
 from ..inner_product import param_bounds as _param_bounds
@@ -38,8 +42,8 @@ class WaveformDerivativeBase:
         self._wf_generator = wf_generator
         self._param_bound_storage = _param_bounds.copy()
 
-    def __call__(self) -> Any:
-        return NotImplementedError
+    def __call__(self) -> Series:
+        return NotImplemented
 
     @property
     def param_bounds(self) -> dict[str, tuple[float, float]]:
@@ -58,9 +62,9 @@ class WaveformDerivativeBase:
         )
         if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
             # -- In this convention, bounds have to be corrected
-                lower_bound, upper_bound = self.param_bounds.get(
-                    'inverse_mass_ratio', default_bounds
-                )
+            lower_bound, upper_bound = self.param_bounds.get(
+                'inverse_mass_ratio', default_bounds
+            )
 
         _base_step = self.step.base_step
         _par_val = self.param_center_val.value
@@ -74,7 +78,7 @@ class WaveformDerivativeBase:
 
     # -- In case calling seems unintuitive, create attribute
     @property
-    def deriv(self) -> Any:
+    def deriv(self) -> Series:
         """Alias for calling with no arguments."""
         return self.__call__()
 

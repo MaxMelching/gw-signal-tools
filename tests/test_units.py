@@ -4,11 +4,14 @@ import astropy.units as u
 
 # -- Local package imports
 from gw_signal_tools.units import gw_signal_tools_units
+
 # Do NOT import preferred_unit_system here, want to test the one from package
 
 
 # Could also test with units=[u.astrophys, gw_signal_tools_units]
-@pytest.mark.parametrize('unit', [u.pc, u.s, u.Msun, u.A, u.cd, u.rad, u.K, u.mol, u.strain])
+@pytest.mark.parametrize(
+    'unit', [u.pc, u.s, u.Msun, u.A, u.cd, u.rad, u.K, u.mol, u.strain]
+)
 def test_pure_base_units(unit):
     if unit == u.rad:
         assert unit.to_system(gw_signal_tools_units)[0] == u.dimensionless_unscaled
@@ -16,7 +19,7 @@ def test_pure_base_units(unit):
     else:
         assert unit.to_system(gw_signal_tools_units)[0] == unit
         assert unit.compose(units=gw_signal_tools_units)[0] == unit
-    
+
     unit.si  # Is fallback option, access must work
 
 
@@ -27,8 +30,7 @@ def test_composite_units():
     test_unit_converted2 = test_unit.compose(units=gw_signal_tools_units)[0]
 
     assert test_unit_converted1 == test_unit_converted2
-    assert test_unit_converted1 == (1/u.s)
-
+    assert test_unit_converted1 == (1 / u.s)
 
     test_unit = u.pc.si * u.Msun.si
 
@@ -47,7 +49,6 @@ def test_composite_units():
     assert test_unit_converted1 == test_unit_converted1
     assert test_unit_converted1 == (u.Mpc * u.Msun)
 
-
     test_unit = u.Unit(4e6 * u.pc.si * u.Msun.si)
 
     test_unit_converted1 = test_unit.to_system(gw_signal_tools_units)[0]
@@ -55,7 +56,6 @@ def test_composite_units():
 
     assert test_unit_converted1 == test_unit_converted1
     assert test_unit_converted1 == (4 * u.Mpc * u.Msun)
-
 
     test_unit = u.Unit(42e9 * u.pc.si * u.Msun.si)
 
@@ -77,7 +77,10 @@ def test_strain_definition():
 
     assert strain2.compose(units=gw_signal_tools_units)[0] != u.dimensionless_unscaled
 
-    assert u.dimensionless_unscaled.compose(units=gw_signal_tools_units)[0] == u.dimensionless_unscaled
+    assert (
+        u.dimensionless_unscaled.compose(units=gw_signal_tools_units)[0]
+        == u.dimensionless_unscaled
+    )
 
 
 def test_docstring():

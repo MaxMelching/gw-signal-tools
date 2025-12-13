@@ -14,7 +14,7 @@ import matplotlib as mpl
 from .base import WaveformDerivativeBase
 from ...logging import logger
 from ..inner_product import norm, inner_product, param_bounds as _param_bounds
-from ...types import WFGen
+from ...types import FDWFGen
 
 
 __doc__ = """Module for the ``WaveformDerivativeGWSignaltools`` class."""
@@ -147,7 +147,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         self,
         point: dict[str, u.Quantity],
         param_to_vary: str,
-        wf_generator: WFGen,
+        wf_generator: FDWFGen,
         step_sizes: Optional[list[float] | np.ndarray] = None,
         start_step_size: Optional[float] = 1e-2,
         convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
@@ -222,7 +222,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             del self._deriv
 
     @property
-    def param_to_vary(self):
+    def param_to_vary(self) -> str:
         """
         Parameter that derivative is taken with respect to.
 
@@ -245,16 +245,16 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             del self._deriv
 
     @property
-    def wf_generator(self):
+    def wf_generator(self) -> FDWFGen:
         """
         Generator for waveform model that is differentiated.
 
-        :type: `~gw_signal_tools.types.WFGen`
+        :type: `~gw_signal_tools.types.FDWFGen`
         """
         return self._wf_generator
 
     @wf_generator.setter
-    def wf_generator(self, generator: WFGen) -> None:
+    def wf_generator(self, generator: FDWFGen) -> None:
         self._wf_generator = generator
         self.wf = generator(self.point)
 
@@ -281,11 +281,11 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     #     # TODO: do we have to make sure it is list that we append here?
 
     @property
-    def step_sizes(self) -> dict[int, list[int]]:
+    def step_sizes(self) -> list[float] | np.ndarray[float]:
         return self._step_sizes
 
     @step_sizes.setter
-    def step_sizes(self, step_sizes: list[int]):
+    def step_sizes(self, step_sizes: list[float] | np.ndarray[float]):
         self._step_sizes = step_sizes
 
     @property
@@ -369,7 +369,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         self._wf = wf
 
     @property
-    def deriv(self):
+    def deriv(self) -> FrequencySeries | TimeSeries:
         """
         The derivative at the selected point.
 
@@ -417,7 +417,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         # -> of course with logger.info output
 
         # -- Test for valid point
-        self.test_point(0.0)
+        self._current_step_size = 0.0
+        self.test_point()
 
         self.is_converged = False
         self.refine_numb = 0
@@ -547,7 +548,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         """
         # for i, step_size in enumerate(self.step_sizes[-1]):
         for i, step_size in enumerate(self.step_sizes):
-            self.test_point(step_size)
+            self._current_step_size = step_size
+            self.test_point()
 
             try:
                 deriv_param = self.deriv_routine(step_size)
@@ -599,8 +601,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
                 crit_val = 1.0 - inner_product(
                     self._derivative_vals[-1],
                     self._derivative_vals[-2],
-                        **self.inner_prod_kwargs,
-                    ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
+                    **self.inner_prod_kwargs,
+                ) / np.sqrt(self._deriv_norms[-1] * self._deriv_norms[-2])
         else:
             crit_val = np.inf
 
@@ -623,7 +625,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?
 
-    def test_point(self, step_size: float) -> None:
+    def test_point(self) -> None:
         """
         Check if `self.point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
@@ -634,7 +636,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         step_size : float
             Current step size that produced an 'Input domain error'.
         """
-        step_size = self.abs_or_rel_step_size(step_size)
+        step_size = self.abs_or_rel_step_size(self._current_step_size)
         # -- This is important, determines step size that is actually
         # -- used by the routine (also adds proper unit)
 
@@ -644,9 +646,9 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         )
         if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
             # -- In this convention, bounds have to be corrected
-                lower_bound, upper_bound = self.param_bounds.get(
-                    'inverse_mass_ratio', default_bounds
-                )
+            lower_bound, upper_bound = self.param_bounds.get(
+                'inverse_mass_ratio', default_bounds
+            )
 
         lower_violation = self._lower_point_checker(step_size, lower_bound)
         upper_violation = self._upper_point_checker(step_size, upper_bound)

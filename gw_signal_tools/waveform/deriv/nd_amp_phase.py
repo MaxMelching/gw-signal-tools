@@ -1,10 +1,14 @@
 # -- Standard Lib Imports
-from typing import Callable, Any
+from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
+from typing import Callable, TYPE_CHECKING
 
 # -- Third Party Imports
 import numdifftools as nd
 import astropy.units as u
 import numpy as np
+
+if TYPE_CHECKING:
+    from gwpy.types import Series
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
@@ -101,7 +105,9 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
     ) -> None:
         # -- Initialize WaveformDerivativeBase attributes
         super().__init__(
-            point, param_to_vary, wf_generator,
+            point,
+            param_to_vary,
+            wf_generator,
         )
 
         # -- Check if parameter has analytical derivative
@@ -141,7 +147,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         self._abs_deriv = nd.Derivative(abs_wrapper, *args, **kwds)
         self._phase_deriv = nd.Derivative(phase_wrapper, *args, **kwds)
 
-    def __call__(self, x=None) -> Any:
+    def __call__(self, x=None) -> Series:
         # -- Check if analytical derivative has already been calculated
         if hasattr(self, '_ana_deriv'):
             return self._ana_deriv
@@ -215,15 +221,18 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         )
         if (self.param_to_vary == 'mass_ratio') and (self.param_center_val > 1):
             # -- In this convention, bounds have to be corrected
-                lower_bound, upper_bound = self.param_bounds.get(
-                    'inverse_mass_ratio', default_bounds
-                )
+            lower_bound, upper_bound = self.param_bounds.get(
+                'inverse_mass_ratio', default_bounds
+            )
 
         _base_step = self.abs_deriv.step.base_step  # Same for phase_deriv
         # TODO: should we check both separately?
         _par_val = self.param_center_val.value
 
-        violation = lambda step: ( _par_val - step <= lower_bound, _par_val + step >= upper_bound )
+        violation = lambda step: (
+            _par_val - step <= lower_bound,
+            _par_val + step >= upper_bound,
+        )
         lower_violation, upper_violation = violation(_base_step)
 
         # -- Check if base_step needs change
@@ -293,7 +302,6 @@ if nd.__version__ <= '0.9.41':  # pragma: no cover
     from numdifftools.limits import _Limit
     import warnings
 
-
     def _add_error_to_outliers_fixed(der, trim_fact=2):  # pragma: no cover
         """
         discard any estimate that differs wildly from the
@@ -324,6 +332,5 @@ if nd.__version__ <= '0.9.41':  # pragma: no cover
         ) * (a_median > 1e-8) + ((der < p25 - 1.5 * iqr) + (p75 + 1.5 * iqr < der))
         errors = outliers * np.abs(der - median)
         return errors
-
 
     _Limit._add_error_to_outliers = staticmethod(_add_error_to_outliers_fixed)

@@ -44,7 +44,9 @@ __all__ = (
 )
 
 
-def _determine_x_range(x_range, *s):
+def _determine_x_range(
+    x_range: tuple[u.Quantity, u.Quantity] | list[u.Quantity] | None, *s
+) -> tuple[u.Quantity, u.Quantity]:
     """Inner product helper to determine the range of x-values."""
     x_unit = s[0].xunit
     x_lower, x_upper = (
@@ -89,7 +91,6 @@ def _determine_x_range(x_range, *s):
             )
 
         assert x_lower < x_upper, 'Given lower bound must be smaller than upper bound.'
-
 
         # -- New upper bound must be smaller than current upper bound,
         # -- otherwise no values for the range are available in signals
@@ -308,6 +309,7 @@ def inner_product(
             )
         else:
             from ..PSDs import psd_no_noise
+
             psd = psd_no_noise.copy()
 
             # -- Make sure units are consistent with input. PSD is always a
@@ -406,7 +408,9 @@ def inner_product(
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
         try:
-            df = _q_convert(max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies')
+            df = _q_convert(
+                max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies'
+            )
         except AttributeError:
             # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
             if frequ_unit._is_equivalent(u.Hz):

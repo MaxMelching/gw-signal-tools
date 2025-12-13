@@ -23,7 +23,7 @@ __all__ = (
 
 
 # -- Quantity equalities
-def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args, **kwargs) -> bool:
+def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args, **kwargs) -> np.bool_:
     """
     Wrapper to apply numpy function `isclose` to astropy Quantities
     (a `~numpy.all` wrapper is also added to support arrays as well).

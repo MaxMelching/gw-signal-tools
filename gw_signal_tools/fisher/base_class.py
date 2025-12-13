@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Callable
+from typing import Optional, Any, Literal, Self, TYPE_CHECKING
 
 # from functools import cached_property
 # TODO: use for .fisher and .fisher_inverse?
@@ -9,9 +9,11 @@ from typing import Optional, Any, Literal, Callable
 # -- Third Party Imports
 import numpy as np
 import matplotlib as mpl
-from gwpy.frequencyseries import FrequencySeries
 from gwpy.types import Array
 import astropy.units as u
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 # -- Local Package Imports
 from ..units import preferred_unit_system
@@ -141,8 +143,6 @@ class FisherMatrix:
         self.wf_generator = wf_generator
         self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
-        # -- We rely on return_info = True, thus set it now
-        self.metadata['return_info'] = True
 
         if len(self.metadata) > len(self.default_metadata) + 1:  # +1 for return_info
             # -- Arguments for inner product may be given, extract
@@ -217,7 +217,7 @@ class FisherMatrix:
         }  # Avoid linear search through parameters, instead hashing
 
     @property
-    def nparams(self):
+    def nparams(self) -> int:
         """
         Number of parameters constituting the Fisher matrix.
 
@@ -231,7 +231,7 @@ class FisherMatrix:
             # -- Conservative threshold choice for double precision,
             # -- as quoted e.g. in gwbench paper
             logger.info(
-            # logger.warning(  # TODO: change to warning? Because high cond is serious issue... -> would have to adjust logger disabling
+                # logger.warning(  # TODO: change to warning? Because high cond is serious issue... -> would have to adjust logger disabling
                 f'This Fisher matrix has a condition number of {cond_numb}, '
                 'meaning it is ill-conditioned.'
             )
@@ -242,7 +242,7 @@ class FisherMatrix:
             point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
-            **self.metadata,
+            **(self.metadata | {'return_info': True}),
         )
 
         # self._check_cond()
@@ -305,7 +305,7 @@ class FisherMatrix:
         return self.fisher.__getattribute__(name)
 
     @property
-    def deriv_info(self) -> dict:
+    def deriv_info(self) -> dict[str, dict[str, Any]]:
         """
         Collection of information about derivatives that have been
         calculated (just the `deriv_info` from each derivative class.)
@@ -319,7 +319,9 @@ class FisherMatrix:
 
         return self._deriv_info
 
-    def get_param_indices(self, params: Optional[str | list[str]] = None) -> list[int]:
+    def get_param_indices(
+        self, params: Optional[str | list[str]] = None
+    ) -> NDArray[np.int_]:
         """
         Get indices that correspond to certain parameter names in
         :code:`self.params_to_vary`.
@@ -335,7 +337,7 @@ class FisherMatrix:
             Indices of :code:`params` in :code:`self.params_to_vary`.
         """
         if params is None:
-            return self.nparams * [True]  # Simply take all parameters
+            return np.arange(self.nparams)  # Simply take all parameters
 
         if isinstance(params, str):
             params = [params]
@@ -354,7 +356,9 @@ class FisherMatrix:
 
         return param_indices
 
-    def get_sub_matrix_indices(self, params: str | list[str]) -> tuple[np.ndarray, ...]:
+    def get_sub_matrix_indices(
+        self, params: str | list[str]
+    ) -> tuple[NDArray[np.int_], ...]:
         """
         Get indices for all matrix components of this instance that
         contain the given set of parameters. In other words, one can
@@ -368,7 +372,7 @@ class FisherMatrix:
 
         Returns
         -------
-        tuple[np.ndarray, ...]
+        tuple[NDArray[np.int_], ...]
             Index grid of :code:`params`.
 
         See Also
@@ -391,12 +395,14 @@ class FisherMatrix:
         new_params_to_vary: Optional[str | list[str]] = None,
         new_wf_generator: Optional[FDWFGen] = None,
         **new_metadata,
-    ) -> FisherMatrix:
-        """
+    ) -> Self:
+        f"""
         Generate a Fisher matrix with properties like the current
         instance has, but selected updates.
-        Note that this creates a new instance of ``FisherMatrix`` since
-        updating properties would require new calculation anyway.
+
+        Note that this creates a new instance of
+        ``{self.__class__.__name__}`` since updating properties would
+        require new calculation anyway.
 
         Parameters
         ----------
@@ -427,13 +433,13 @@ class FisherMatrix:
             for the calculations that are carried out.
 
             Convenient options are the methods
-            :code:`~gw_signal_tools.waveform.get_wf_generator`
-            or :code:`FisherMatrix.get_wf_generator`, which generate a
-            suitable function from a few arguments.
+            :code:`~gw_signal_tools.waveform.get_wf_generator` or
+            :code:`{self.__class__.__name__}.get_wf_generator`, which
+            generate a suitable function from a few arguments.
 
         Returns
         -------
-        ~gw_signal_tools.fisher_matrix.FisherMatrix
+        ~gw_signal_tools.fisher_matrix.{self.__class__.__name__}
             New Fisher matrix, calculated with updated metadata.
         """
         if new_point is None:
@@ -450,7 +456,7 @@ class FisherMatrix:
         else:
             _new_metadata = self.metadata
 
-        out = FisherMatrix(
+        out = self.__class__(
             new_point,
             new_params_to_vary,
             new_wf_generator,
@@ -460,7 +466,7 @@ class FisherMatrix:
 
         return out
 
-    def project_fisher(self, params: str | list[str]) -> FisherMatrix:
+    def project_fisher(self, params: str | list[str]) -> Self:
         """
         Project Fisher matrix so that its components now live in the
         orthogonal subspace to certain parameters (corresponds to
@@ -504,9 +510,9 @@ class FisherMatrix:
             )
         sub_matrix_inv = np.linalg.inv(sub_matrix)
 
-        full_inv = np.zeros(2 * (self.nparams,))
-        full_inv[index_grid] = sub_matrix_inv
-        full_inv = MatrixWithUnits(full_inv, self.unit**-1)
+        full_inv = MatrixWithUnits(np.zeros(2 * (self.nparams,)))
+        full_inv.value[index_grid] = sub_matrix_inv
+        full_inv.unit = self.unit**-1
 
         fisher = self.fisher
         index_grid_out = self.get_sub_matrix_indices(out.params_to_vary)
@@ -699,7 +705,7 @@ class FisherMatrix:
         if isinstance(optimize_fisher, str):
             optimize_fisher = [optimize_fisher]
 
-        optimization_info = {}
+        optimization_info: dict[str, Any] = {}
 
         # -- Update keywords from initial input to the instance
         inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
@@ -1250,13 +1256,13 @@ class FisherMatrix:
     __repr__ = Array.__repr__
     __str__ = Array.__str__
 
-    def __copy__(self) -> FisherMatrix:
-        new_matrix = FisherMatrix(
+    def __copy__(self) -> Self:
+        new_matrix = self.__class__(
             point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             direct_computation=False,
-            **self.metadata,
+            **(self.metadata | {'return_info': True}),
         )
         new_matrix._wf_generator = self.wf_generator  # Avoid another wrapper call
         new_matrix._wf_generator = self.wf_generator  # Avoid another wrapper call
@@ -1272,5 +1278,5 @@ class FisherMatrix:
 
         return new_matrix
 
-    def copy(self) -> FisherMatrix:
+    def copy(self) -> Self:
         return self.__copy__()

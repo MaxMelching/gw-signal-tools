@@ -59,11 +59,13 @@ setuptools.setup(
     # -- Optional dependencies
     extras_require={
         'dev': [
-            'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
-            'mypy',
-            'pytest',
+            'black',
             'coverage',
+            'mypy',
+            'pre-commit',
             'pycbc',
+            'pytest',
+            'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
         ],
         'pyseobnr': 'pyseobnr',
         'jupyter': 'jupyter',

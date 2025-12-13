@@ -91,13 +91,16 @@ def pad_to_dx(
                 dtype=signal.dtype,
             ).append(signal)
         elif where == 'end':
-            return signal.append(type(signal)(
-                np.zeros(number_to_append),
-                unit=signal.unit,
-                x0=signal.xindex[-1] + signal.dx,
-                dx=signal.dx,
-                dtype=signal.dtype,
-            ), inplace=False)
+            return signal.append(
+                type(signal)(
+                    np.zeros(number_to_append),
+                    unit=signal.unit,
+                    x0=signal.xindex[-1] + signal.dx,
+                    dx=signal.dx,
+                    dtype=signal.dtype,
+                ),
+                inplace=False,
+            )
         else:
             raise ValueError(f'Invalid value {where} given for \'where\'.')
     else:
@@ -174,7 +177,7 @@ def adjust_x_range(
     xunit = signal.xunit
 
     if x_range is None:
-        x_range = [None, None]  # Needed below
+        x_range = (None, None)  # Needed below
         x_lower = signal.xindex[0]
         x_upper = signal.xindex[-1]
     elif len(x_range) != 2:
@@ -211,17 +214,23 @@ def adjust_x_range(
                     'for equally sampled signals.'
                 )
 
-            lower_number = np.searchsorted(
-                signal.xindex.value,
-                x_lower,
-                side='right',
-            ) - 1
+            lower_number = (
+                np.searchsorted(
+                    signal.xindex.value,
+                    x_lower,
+                    side='right',
+                )
+                - 1
+            )
 
-            upper_number = np.searchsorted(
-                signal.xindex.value,
-                x_upper,
-                side='left',
-            ) + 1
+            upper_number = (
+                np.searchsorted(
+                    signal.xindex.value,
+                    x_upper,
+                    side='left',
+                )
+                + 1
+            )
             # -- GWpy uses side='left' without subtraction for both cases,
             # -- but we found better results for this here. Is likely
             # -- related to the fact that we want to KEEP elements at
@@ -319,7 +328,7 @@ def adjust_x_range(
     if copy and not _copied:
         signal = signal.copy()
 
-    signal = fill_x_range(signal, fill_val, [x_fill_lower, x_fill_upper], copy=False)
+    signal = fill_x_range(signal, fill_val, (x_fill_lower, x_fill_upper), copy=False)
 
     return signal
 
@@ -480,7 +489,7 @@ def signal_at_dx(
         np.arange(
             signal.x0.to_value(signal.xunit),
             signal.xindex[-1].to_value(signal.xunit),
-            step=dx.to_value(signal.xunit),
+            step=_q_convert(dx, signal.xunit, 'dx', 'signal').value,
         )
         << signal.xunit
     )

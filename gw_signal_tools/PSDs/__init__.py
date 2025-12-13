@@ -14,12 +14,32 @@ from ..psd import psd_from_file_to_FreqSeries as _psd_reader
 # Maybe do that in file, could also be good way to handle it
 
 
-psd_gw150914 = _psd_reader(_path_join(PSD_PATH, 'GW150914_psd.txt'), name='PSD around GW150914')
-psd_o3_h1 = _psd_reader(_path_join(PSD_PATH, 'O3_H1_asd.txt'), is_asd=True, name='Typical PSD of Hanford detector in O3')
-psd_o3_l1 = _psd_reader(_path_join(PSD_PATH, 'O3_L1_asd.txt'), is_asd=True, name='Typical PSD of Livingston detector in O3')
-psd_o3_v1 = _psd_reader(_path_join(PSD_PATH, 'O3_V1_asd.txt'), is_asd=True, name='Typical PSD of VIRGO detector in O3')
-psd_sim = _psd_reader(_path_join(PSD_PATH, 'sim_psd.txt'), name='PSD values as simulated by `SimNoisePSDaLIGOZeroDetHighPower`')
-psd_no_noise = _psd_reader(_path_join(PSD_PATH, 'no_psd.txt'), name='PSD values that indicate no noise being present')
+psd_gw150914 = _psd_reader(
+    _path_join(PSD_PATH, 'GW150914_psd.txt'), name='PSD around GW150914'
+)
+psd_o3_h1 = _psd_reader(
+    _path_join(PSD_PATH, 'O3_H1_asd.txt'),
+    is_asd=True,
+    name='Typical PSD of Hanford detector in O3',
+)
+psd_o3_l1 = _psd_reader(
+    _path_join(PSD_PATH, 'O3_L1_asd.txt'),
+    is_asd=True,
+    name='Typical PSD of Livingston detector in O3',
+)
+psd_o3_v1 = _psd_reader(
+    _path_join(PSD_PATH, 'O3_V1_asd.txt'),
+    is_asd=True,
+    name='Typical PSD of VIRGO detector in O3',
+)
+psd_sim = _psd_reader(
+    _path_join(PSD_PATH, 'sim_psd.txt'),
+    name='PSD values as simulated by `SimNoisePSDaLIGOZeroDetHighPower`',
+)
+psd_no_noise = _psd_reader(
+    _path_join(PSD_PATH, 'no_psd.txt'),
+    name='PSD values that indicate no noise being present',
+)
 
 # TODO: decide if names shall be capital, indicating they are constants
 # PSD_GW_150914 = _psd_reader(_path_join(PSD_PATH, 'GW150914_psd.txt'), name='PSD around GW150914')

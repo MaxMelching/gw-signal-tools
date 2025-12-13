@@ -26,8 +26,6 @@ MatrixT = TypeVar('MatrixT', bound='MatrixWithUnits')
 
 
 class MatrixWithUnits:
-    value: NDArray
-    unit: NDArray | u.Unit
     """
     Class for a matrix where entries can have differing units, following
     the spirit of astropy Quantities.
@@ -81,9 +79,9 @@ class MatrixWithUnits:
     allows for a flexible usage, where operations can be carried out
     with or without units by using either `MatrixWithUnits.value` or
     `MatrixWithUnits.value * MatrixWithUnits.unit` (where the latter
-    is also the output when printing a class instance).
-
-    -> say that scalar unit also works, whence a u.Quantity is mimicked
+    is also the output when printing a class instance). Note that
+    passing scalar units is also permitted; in that case, the
+    behaviour of the class is very similar to astropy Quantities.
 
     An important point of emphasis, however, is that unit handling is
     not an easy task, especially not for matrices. In particular, some
@@ -96,6 +94,9 @@ class MatrixWithUnits:
 
     Examples
     --------
+    There are several ways to initialize a ``MatrixWithUnits``. Perhaps
+    the most straightforward one is to provide values and units
+    separately, e.g.
     >>> value_matrix = np.array([[42., 96.], [96., 42.]])
     >>> unit_matrix = np.array([[u.s, u.m], [u.m, u.s]], dtype=object)
     >>> matrix = MatrixWithUnits(value_matrix, unit_matrix)
@@ -107,60 +108,100 @@ class MatrixWithUnits:
     >>> print(np.all(matrix.unit == unit_matrix))
     True
 
-    -> mention that MatrixWithUnits(value_matrix*unit_matrix) is equivalent
-
-    Alternatively, one can extract the values by converting to an array,
-    which is supposed to simplify usage and provide an easy way to
-    convert this class into more common data types:
-
-    >>> np.array(matrix)
-    array([[42., 96.],
-           [96., 42.]])
-
-    This enables calling numpy functions directly on instances of
-    ``MatrixWithUnits``, e.g.
-
-    >>> np.linalg.inv(matrix)
-    array([[-0.00563607,  0.01288245],
-           [ 0.01288245, -0.00563607]])
-
-    Note, however, that this only uses the values and does not check
-    whether such an operation would make sense to do with the units
-    of matrix. In case this is your goal, calling `MatrixWithUnits.inv
-    (matrix)` would be the way to go (automatically checks whether or
-    not units are consistent).
-
-
-    In order to get the printed representation, we can simply multiply
-    values and units:
-
-    >>> matrix.value * matrix.unit
+    It is also possible to initialize from the product of values and
+    units, e.g.
+    >>> matrix_equiv = MatrixWithUnits(value_matrix*unit_matrix)
+    >>> print(matrix_equiv)
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    >>> print(np.all(matrix == matrix_equiv))
+    True
 
-    Note, however, that this only works because the class has been
-    initialized from two numpy arrays, where multiplication is
-    supported, and also that the object printed here is now also a
-    numpy array, not a ``MatrixWithUnits`` anymore.
+    Yes, this does form a numpy array, so you may ask why we even need a
+    dedicated ``MatrixWithUnits`` class. The reason is that operations
+    on this numpy array will not work as intended, e.g. matrix
+    inversion, addition, multiplication etc. or operations with other
+    types such as astropy Quantities. The ``MatrixWithUnits`` class
+    implements all these operations in a way that is consistent with the
+    units of the matrix entries.
 
-    It is also possible to initialize using a single unit, e.g.
+    Back to the initialization. One can also provide a list of quantities:
 
+    >>> matrix_equiv_2 = MatrixWithUnits([[42 * u.s, 96 * u.m], [96 * u.m, 42 * u.s]])
+    >>> print(matrix_equiv_2)
+    array([[<Quantity 42. s>, <Quantity 96. m>],
+           [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    >>> print(np.all(matrix == matrix_equiv_2))
+    True
+
+    (Note that initializing with a single unit or even no unit at all
+    also works, just pass a scalar unit or no unit at all.)
     >>> MatrixWithUnits(np.array([[42., 96.], [96., 42.]]), u.s)
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
-
-    and even without a unit:
-
     >>> MatrixWithUnits([[42., 96.], [96., 42.]])
     array([[<Quantity 42.>, <Quantity 96.>],
            [<Quantity 96.>, <Quantity 42.>]], dtype=object)
 
-    Also works with a list of quantities instead of floats:
 
-    >>> MatrixWithUnits([[42.*u.s, 96.*u.m], [96.*u.m, 42.*u.s]])
+    Many numpy and astropy operations are supported directly on instances
+    of ``MatrixWithUnits``, e.g. addition
+    >>> matrix + matrix_equiv_2
+    array([[<Quantity 84. s>, <Quantity 192. m>],
+           [<Quantity 192. m>, <Quantity 84. s>]], dtype=object)
+
+    multiplication (with scalars, units, Quantities, other MatrixWithUnits...)
+
+    >>> matrix * 2 * u.m
+    array([[<Quantity 84. m s>, <Quantity 192. m2>],
+           [<Quantity 192. m2>, <Quantity 84. m s>]], dtype=object)
+    >>> matrix * matrix_equiv
+    array([[<Quantity 1764. s2>, <Quantity 9216. m2>],
+           [<Quantity 9216. m2>, <Quantity 1764. s2>]], dtype=object)
+
+    matrix inversion
+    >>> MatrixWithUnits.inv(matrix)
+    array([[<Quantity -0.00563607 1 / s>,
+            <Quantity 0.01288245 1 / m>],
+           [<Quantity 0.01288245 1 / m>,
+            <Quantity -0.00563607 1 / s>]], dtype=object)
+
+    or matrix multiplication (if units are compatible).
+
+    Even numpy functions may be called on class instances, but beware
+    that they will operatre only on the values, not the units, e.g.
+    >>> np.linalg.inv(matrix)
+    array([[-0.00563607,  0.01288245],
+           [ 0.01288245, -0.00563607]])
+
+    This is in line with the behaviour upon conversion into a numpy array:
+    >>> np.array(matrix)
+    array([[42., 96.],
+           [96., 42.]])
+
+    However, many numpy functions are redefined as class methods to
+    ensure that units are treated correctly. Examples include the matrix
+    inversion we have seen above or transposition,
+    >>> matrix.T
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+
+    taking a sqare root,
+    >>> matrix.sqrt()
+    array([[<Quantity 6.4807407 s(1/2)>,
+            <Quantity 9.79795897 m(1/2)>],
+           [<Quantity 9.79795897 m(1/2)>,
+            <Quantity 6.4807407 s(1/2)>]], dtype=object)
+
+    or selected astropy routines (`to`, `to_system`, `decompose`, ...)
+    >>> from astropy.units import cgs
+    >>> matrix.decompose(bases=cgs.bases)
+    array([[<Quantity 42. s>, <Quantity 9600. cm>],
+           [<Quantity 9600. cm>, <Quantity 42. s>]], dtype=object)
     """
+
+    value: NDArray
+    unit: NDArray | u.Unit
 
     _max_ndim: int = 2  # Max number of dimensions allowed for the matrix
 
@@ -869,4 +910,4 @@ if __name__ == '__main__':  # pragma: no cover
     # -- Run doctests
     import doctest
 
-    doctest.testmod()
+    doctest.testmod(verbose=True)

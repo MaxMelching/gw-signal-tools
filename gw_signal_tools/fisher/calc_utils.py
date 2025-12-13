@@ -222,7 +222,11 @@ def fisher_matrix(
             param_to_vary=param,
             wf_generator=wf_generator,
             deriv_routine=deriv_routine,
-            **(deriv_and_inner_prod_kwargs if pass_inn_prod_kwargs_to_deriv else _deriv_kw_args),
+            **(
+                deriv_and_inner_prod_kwargs
+                if pass_inn_prod_kwargs_to_deriv
+                else _deriv_kw_args
+            ),
         )
 
         deriv, info = full_deriv.deriv, full_deriv.deriv_info

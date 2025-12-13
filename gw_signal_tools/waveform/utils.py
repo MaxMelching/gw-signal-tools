@@ -91,13 +91,16 @@ def pad_to_dx(
                 dtype=signal.dtype,
             ).append(signal)
         elif where == 'end':
-            return signal.append(type(signal)(
-                np.zeros(number_to_append),
-                unit=signal.unit,
-                x0=signal.xindex[-1] + signal.dx,
-                dx=signal.dx,
-                dtype=signal.dtype,
-            ), inplace=False)
+            return signal.append(
+                type(signal)(
+                    np.zeros(number_to_append),
+                    unit=signal.unit,
+                    x0=signal.xindex[-1] + signal.dx,
+                    dx=signal.dx,
+                    dtype=signal.dtype,
+                ),
+                inplace=False,
+            )
         else:
             raise ValueError(f'Invalid value {where} given for \'where\'.')
     else:
@@ -211,17 +214,23 @@ def adjust_x_range(
                     'for equally sampled signals.'
                 )
 
-            lower_number = np.searchsorted(
-                signal.xindex.value,
-                x_lower,
-                side='right',
-            ) - 1
+            lower_number = (
+                np.searchsorted(
+                    signal.xindex.value,
+                    x_lower,
+                    side='right',
+                )
+                - 1
+            )
 
-            upper_number = np.searchsorted(
-                signal.xindex.value,
-                x_upper,
-                side='left',
-            ) + 1
+            upper_number = (
+                np.searchsorted(
+                    signal.xindex.value,
+                    x_upper,
+                    side='left',
+                )
+                + 1
+            )
             # -- GWpy uses side='left' without subtraction for both cases,
             # -- but we found better results for this here. Is likely
             # -- related to the fact that we want to KEEP elements at

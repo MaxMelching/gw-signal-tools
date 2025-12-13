@@ -1,14 +1,17 @@
 # -- Standard Lib Imports
-from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, SupportsIndex
+from __future__ import (
+    annotations,
+)  # Enables type hinting own type in a class. Plus "if TYPE_CHECKING" block.
+from typing import Optional, Any, Literal, Self, TypeVar, TYPE_CHECKING, Collection
 
 # -- Third Party Imports
 import numpy as np
-from numpy.typing import ArrayLike, DTypeLike
 import astropy.units as u
 
-# -- Local Package Imports
-from ..logging import logger
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike, DTypeLike, NDArray
+    from numpy._typing import _ShapeLike
+    from matplotlib.axes import Axes
 
 
 __doc__ = """
@@ -16,7 +19,10 @@ Module for the ``MatrixWithUnits`` class that is intended to enable the
 use of astropy units with matrices.
 """
 
-_all__ = ('MatrixWithUnits',)
+__all__ = ('MatrixWithUnits',)
+
+
+MatrixT = TypeVar('MatrixT', bound='MatrixWithUnits')
 
 
 class MatrixWithUnits:
@@ -73,9 +79,9 @@ class MatrixWithUnits:
     allows for a flexible usage, where operations can be carried out
     with or without units by using either `MatrixWithUnits.value` or
     `MatrixWithUnits.value * MatrixWithUnits.unit` (where the latter
-    is also the output when printing a class instance).
-
-    -> say that scalar unit also works, whence a u.Quantity is mimicked
+    is also the output when printing a class instance). Note that
+    passing scalar units is also permitted; in that case, the
+    behaviour of the class is very similar to astropy Quantities.
 
     An important point of emphasis, however, is that unit handling is
     not an easy task, especially not for matrices. In particular, some
@@ -83,11 +89,14 @@ class MatrixWithUnits:
     with arbitrary units or matrix inversion, both of which only work
     in certain circumstances). If possible, ``MatrixWithUnits``
     -compatible versions of many numpy functions can be accessed via
-    `MatrixWithUnits.funtion` (if you think an implementation would be
+    `MatrixWithUnits.function` (if you think an implementation would be
     possible, but is not available, please contact us).
 
     Examples
     --------
+    There are several ways to initialize a ``MatrixWithUnits``. Perhaps
+    the most straightforward one is to provide values and units
+    separately, e.g.
     >>> value_matrix = np.array([[42., 96.], [96., 42.]])
     >>> unit_matrix = np.array([[u.s, u.m], [u.m, u.s]], dtype=object)
     >>> matrix = MatrixWithUnits(value_matrix, unit_matrix)
@@ -99,60 +108,102 @@ class MatrixWithUnits:
     >>> print(np.all(matrix.unit == unit_matrix))
     True
 
-    -> mention that MatrixWithUnits(value_matrix*unit_matrix) is equivalent
-
-    Alternatively, one can extract the values by converting to an array,
-    which is supposed to simplify usage and provide an easy way to
-    convert this class into more common data types:
-
-    >>> np.array(matrix)
-    array([[42., 96.],
-           [96., 42.]])
-
-    This enables calling numpy functions directly on instances of
-    ``MatrixWithUnits``, e.g.
-
-    >>> np.linalg.inv(matrix)
-    array([[-0.00563607,  0.01288245],
-           [ 0.01288245, -0.00563607]])
-
-    Note, however, that this only uses the values and does not check
-    whether such an operation would make sense to do with the units
-    of matrix. In case this is your goal, calling `MatrixWithUnits.inv
-    (matrix)` would be the way to go (automatically checks whether or
-    not units are consistent).
-
-
-    In order to get the printed representation, we can simply multiply
-    values and units:
-
-    >>> matrix.value * matrix.unit
+    It is also possible to initialize from the product of values and
+    units, e.g.
+    >>> matrix_equiv = MatrixWithUnits(value_matrix*unit_matrix)
+    >>> print(matrix_equiv)
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    >>> print(np.all(matrix == matrix_equiv))
+    True
 
-    Note, however, that this only works because the class has been
-    initialized from two numpy arrays, where multiplication is
-    supported, and also that the object printed here is now also a
-    numpy array, not a ``MatrixWithUnits`` anymore.
+    Yes, this does form a numpy array, so you may ask why we even need a
+    dedicated ``MatrixWithUnits`` class. The reason is that operations
+    on this numpy array will not work as intended, e.g. matrix
+    inversion, addition, multiplication etc. or operations with other
+    types such as astropy Quantities. The ``MatrixWithUnits`` class
+    implements all these operations in a way that is consistent with the
+    units of the matrix entries.
 
-    It is also possible to initialize using a single unit, e.g.
+    Back to the initialization. One can also provide a list of quantities:
 
+    >>> matrix_equiv_2 = MatrixWithUnits([[42 * u.s, 96 * u.m], [96 * u.m, 42 * u.s]])
+    >>> print(matrix_equiv_2)
+    array([[<Quantity 42. s>, <Quantity 96. m>],
+           [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+    >>> print(np.all(matrix == matrix_equiv_2))
+    True
+
+    (Note that initializing with a single unit or even no unit at all
+    also works, just pass a scalar unit or no unit at all.)
     >>> MatrixWithUnits(np.array([[42., 96.], [96., 42.]]), u.s)
     array([[<Quantity 42. s>, <Quantity 96. s>],
            [<Quantity 96. s>, <Quantity 42. s>]], dtype=object)
-
-    and even without a unit:
-
     >>> MatrixWithUnits([[42., 96.], [96., 42.]])
     array([[<Quantity 42.>, <Quantity 96.>],
            [<Quantity 96.>, <Quantity 42.>]], dtype=object)
 
-    Also works with a list of quantities instead of floats:
 
-    >>> MatrixWithUnits([[42.*u.s, 96.*u.m], [96.*u.m, 42.*u.s]])
+    Many numpy and astropy operations are supported directly on instances
+    of ``MatrixWithUnits``, e.g. addition
+    >>> matrix + matrix_equiv_2
+    array([[<Quantity 84. s>, <Quantity 192. m>],
+           [<Quantity 192. m>, <Quantity 84. s>]], dtype=object)
+
+    multiplication (with scalars, units, Quantities, other MatrixWithUnits...)
+
+    >>> matrix * 2 * u.m
+    array([[<Quantity 84. m s>, <Quantity 192. m2>],
+           [<Quantity 192. m2>, <Quantity 84. m s>]], dtype=object)
+    >>> matrix * matrix_equiv
+    array([[<Quantity 1764. s2>, <Quantity 9216. m2>],
+           [<Quantity 9216. m2>, <Quantity 1764. s2>]], dtype=object)
+
+    matrix inversion
+    >>> MatrixWithUnits.inv(matrix)
+    array([[<Quantity -0.00563607 1 / s>,
+            <Quantity 0.01288245 1 / m>],
+           [<Quantity 0.01288245 1 / m>,
+            <Quantity -0.00563607 1 / s>]], dtype=object)
+
+    or matrix multiplication (if units are compatible).
+
+    Even numpy functions may be called on class instances, but beware
+    that they will operatre only on the values, not the units, e.g.
+    >>> np.linalg.inv(matrix)
+    array([[-0.00563607,  0.01288245],
+           [ 0.01288245, -0.00563607]])
+
+    This is in line with the behaviour upon conversion into a numpy array:
+    >>> np.array(matrix)
+    array([[42., 96.],
+           [96., 42.]])
+
+    However, many numpy functions are redefined as class methods to
+    ensure that units are treated correctly. Examples include the matrix
+    inversion we have seen above or transposition,
+    >>> matrix.T
     array([[<Quantity 42. s>, <Quantity 96. m>],
            [<Quantity 96. m>, <Quantity 42. s>]], dtype=object)
+
+    taking a sqare root,
+    >>> matrix.sqrt()
+    array([[<Quantity 6.4807407 s(1/2)>,
+            <Quantity 9.79795897 m(1/2)>],
+           [<Quantity 9.79795897 m(1/2)>,
+            <Quantity 6.4807407 s(1/2)>]], dtype=object)
+
+    or selected astropy routines (`to`, `to_system`, `decompose`, ...)
+    >>> from astropy.units import cgs
+    >>> matrix.decompose(bases=cgs.bases)
+    array([[<Quantity 42. s>, <Quantity 9600. cm>],
+           [<Quantity 9600. cm>, <Quantity 42. s>]], dtype=object)
     """
+
+    value: NDArray
+    unit: NDArray | u.Unit
+
+    _max_ndim: int = 2  # Max number of dimensions allowed for the matrix
 
     # -- Set array priority so that Quantity left addition and
     # -- multiplication with MatrixWithUnits are superseded. Otherwise,
@@ -168,21 +219,24 @@ class MatrixWithUnits:
     def _infer_dtype(val: ArrayLike) -> DTypeLike:
         """Infer datatype of arbitrary input."""
         val = np.asarray(val, dtype=object).reshape(-1)
-        dtypes = [
-            (
-                np.dtype(type(el.value))
-                if isinstance(el, u.Quantity)
-                else np.dtype(type(el))
-            )
-            for el in val
-        ]
+        dtypes = np.asarray(
+            [
+                (
+                    np.dtype(type(el.value))
+                    if isinstance(el, u.Quantity)
+                    else np.dtype(type(el))
+                )
+                for el in val
+            ],
+            # dtype=np.dtype
+        )
         return np.max(dtypes) if len(dtypes) > 0 else np.dtype(float)  # Default float
 
     def __init__(
         self,
         value: ArrayLike,
-        unit: ArrayLike = None,
-        dtype: DTypeLike = None,
+        unit: Optional[ArrayLike | u.Unit] = None,
+        dtype: Optional[DTypeLike] = None,
         convert_int: bool = True,
     ) -> None:
         """Initialize a ``MatrixWithUnits``."""
@@ -216,9 +270,9 @@ class MatrixWithUnits:
                         _unit[index] = u.dimensionless_unscaled
                     else:
                         raise ValueError(
-                            'If a ``MatrixWithUnits`` shall be initialized '
-                            'from a list/array, each element must either be a '
-                            '``float`` or an astropy ``Quantity``.'
+                            f'If a ``{self.__class__.__name__}`` shall be '
+                            'initialized from a list/array, each element must '
+                            'either be a ``float`` or an astropy ``Quantity``.'
                         )
 
             self.value = _value
@@ -243,9 +297,8 @@ class MatrixWithUnits:
             self.unit = unit
 
     # -- Define cornerstone properties, value and unit ------------------------
-    # TODO: add deleters?
-    @property
-    def value(self) -> np.ndarray:
+    @property  # type: ignore[no-redef]
+    def value(self) -> NDArray:
         """
         Numeric values of the matrix.
 
@@ -262,9 +315,9 @@ class MatrixWithUnits:
                 self.value
             ), 'New and old `value` must have equal shape'
 
-            # TODO: also check that len of shape (thus ndim) is not greater than 2?
-            # This class is not really made to handle more than that, not
-            # sure how this could be handled
+            assert (
+                np.ndim(value) <= self._max_ndim
+            ), f'Values cannot have more than {self._max_ndim} dimensions.'
         except AttributeError:
             pass  # New class instance is created, nothing to check
 
@@ -275,8 +328,8 @@ class MatrixWithUnits:
 
         self._value = value
 
-    @property
-    def unit(self) -> np.ndarray:
+    @property  # type: ignore[no-redef]
+    def unit(self) -> NDArray | u.Unit:
         """
         Units of the matrix.
 
@@ -294,23 +347,23 @@ class MatrixWithUnits:
                     'New and old `unit` must have equal shape '
                     '(if both are not a scalar unit).'
                 )
+
+                assert (
+                    np.ndim(unit) <= self._max_ndim
+                ), f'Units cannot have more than {self._max_ndim} dimensions.'
         except AttributeError:
             pass  # New class instance is created
 
         if not isinstance(unit, self._pure_unit_types):
             # Unit is also array (otherwise would have been converted
-            # in __init__)
+            # in __init__). That is why we ignore index error below,
+            # mypy does not recognize that unit is array here.
             for i, val in np.ndenumerate(unit):
                 assert isinstance(
                     val, self._allowed_unit_types
                 ), f'Need valid unit types for all members of `unit` (not {type(val)}).'
 
-                unit[i] = u.Unit(val)
-                # unit[i] = u.CompositeUnit(1, [val], [1])
-                # Enforces keeping prefixes, needed to avoid numerical errors
-                # that happen at times (apparently during conversion using,
-                # u.Unit, presumably due to scale that is not 1)
-                # -> had other reason, Unit and CompositeUnit are equivalent
+                unit[i] = u.Unit(val)  # type: ignore[index]
 
         self._unit = unit
 
@@ -337,15 +390,11 @@ class MatrixWithUnits:
         # matrix_copy = MatrixWithUnits.copy(matrix)
         return self.__copy__()
 
-    def __eq__(self, other: Any) -> np.ndarray:
+    def __eq__(self, other: Any) -> NDArray:  # type: ignore[override]
         if not isinstance(
             other, (MatrixWithUnits, u.Quantity, np.ndarray, self._allowed_value_types)
         ):
-            # Quantities are included here because slicing sometimes returns
-            # them, so throwing error here would not be good
-            raise TypeError(
-                f'Cannot compare ``MatrixWithUnits`` with type {type(other)}.'
-            )
+            return NotImplemented
         else:
             if isinstance(other, (np.ndarray, self._allowed_value_types)):
                 other = other * u.dimensionless_unscaled
@@ -354,14 +403,16 @@ class MatrixWithUnits:
             # NOT equivalent to == or .__eq__, np.equal has better behaviour
             # (compares unit arrays and scalar units in way we intend to)
 
-    def __ne__(self, other: Any) -> np.ndarray:
+    def __ne__(self, other: Any) -> NDArray:  # type: ignore[override]
         # Has to be implemented, applying not operator to array is not working
         return np.logical_not(self == other)
 
+    # -- Explanation for ignores: we just follow numpy behaviour
+
     def __hash__(self) -> int:
         raise TypeError(
-            '`MatrixWithUnits` instances cannot be hashed because they are '
-            'based on numpy arrays, which are in turn unhashable.'
+            f'`{self.__class__.__name__}` instances cannot be hashed because '
+            'they are based on numpy arrays, which are in turn unhashable.'
         )
 
     def __getitem__(self, key: Any) -> Self:
@@ -401,12 +452,14 @@ class MatrixWithUnits:
                     'MatrixWithUnits) or can be converted into a Quantity.'
                 ) from e
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.value.__len__()
 
     # -- Common operations ----------------------------------------------------
     def __neg__(self) -> Self:
-        return self.__class__(-self.value, self.unit)
+        # return self.__class__(-self.value, self.unit)
+        return self.__class__(self.value.__neg__(), self.unit)
+        # return -1 * self
 
     def __abs__(self) -> Self:
         return self.__class__(self.value.__abs__(), self.unit)
@@ -424,10 +477,7 @@ class MatrixWithUnits:
 
             return self.__class__(self.value + other.value, self.unit)
         else:
-            raise TypeError(
-                f'Addition between {type(other)} and `MatrixWithUnit` is not '
-                'supported.'
-            )
+            return NotImplemented
 
     def __radd__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
@@ -436,11 +486,9 @@ class MatrixWithUnits:
     def __sub__(self, other: Any) -> Self:
         try:
             return self.__add__(other.__neg__())
-        except AttributeError as e:  # no __neg__ for example
-            raise TypeError(
-                f'Addition between {type(other)} and `MatrixWithUnit` is not '
-                'supported.'
-            ) from e
+        except AttributeError:  # no __neg__ for example
+            return NotImplemented
+
     def __rsub__(self, other: Any) -> Self:
         # Not used anyway, astropy tries to do it and fails
         return self.__neg__().__add__(other)
@@ -461,84 +509,29 @@ class MatrixWithUnits:
         elif isinstance(other, MatrixWithUnits):
             return self.__class__(self.value * other.value, self.unit * other.unit)
         else:
-            raise TypeError(
-                f'Multiplication between {type(other)} and `MatrixWithUnit`'
-                ' is not supported.'
-            )
+            return NotImplemented
 
     def __rmul__(self, other: Any) -> Self:
-        # Not used anyway, astropy tries to do it and fails
         return self.__mul__(other)
 
-    def __truediv__(self, other):
-        # if isinstance(other, self._allowed_value_types):
-        #     return self.__class__(self.value / other, self.unit)
-        # elif isinstance(other, self._pure_unit_types):
-        #     # ndarray times Unit would produce error, thus do manually
-        #     new_unit = np.empty(self.shape, dtype=object)
-        #     for i, val in np.ndenumerate(self.unit):
-        #         new_unit[i] = u.Unit(val/other)
-        #     return self.__class__(self.value, new_unit)
-        # elif isinstance(other, u.Quantity):
-        #     return self / other.value / other.unit
-        # elif isinstance(other, MatrixWithUnits):
-        #     return self.__class__(self.value / other.value, self.unit / other.unit)
-        # else:
-        #     try:
-        #         return self.__class__(self.value / other, self.unit)
-        #     except:
-        #         raise TypeError(
-        #             f'Division of `MatrixWithUnit` and {type(other)}'
-        #             ' is not supported.'
-        #         )
-
-        try:
-            return self * (1 / other)
-        except:
-            raise TypeError(
-                f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
-            )
+    def __truediv__(self, other: Any) -> Self:
+        return self * (1 / other)
 
     def __rtruediv__(self, other: Any) -> Self:
-        # if isinstance(other, self._allowed_value_types):
-        #     return self.__class__(other / self.value, 1/self.unit)
-        # # Following two are actually handled by astropy (correctly), are left
-        # # here as backup (to show how they work). Thus excluded from coverage
-        # elif isinstance(other, self._pure_unit_types):
-        #     # ndarray times Unit would produce error, thus do manually
-        #     new_unit = np.empty(self.shape, dtype=object)
-        #     for i, val in np.ndenumerate(self.unit):
-        #         new_unit[i] = u.Unit(other/val)
-        #     return self.__class__(1. / self.value, new_unit)
-        # elif isinstance(other, u.Quantity):
-        #     return self.__class__(other.value / self.value, new_unit)
-        # else:
-        #     try:
-        #         return self.__class__(other / self.value, 1/self.unit)
-        #     except:
-        #         raise TypeError(
-        #             f'Division of {type(other)} and `MatrixWithUnit`'
-        #             ' is not supported.'
-        #         )
-
         try:
-            # return other * (1/self)
+            # Note that 1/self cannot be used here since this function
+            # is the one implementing this very operation
             return other * self.__class__(1 / self.value, 1 / self.unit)
         except:
-            raise TypeError(
-                f'Division of `MatrixWithUnit` and {type(other)}' ' is not supported.'
-            )
+            return NotImplemented
 
     def __pow__(self, other: Any) -> Self:
         if isinstance(other, self._allowed_value_types):
             return self.__class__(self.value.__pow__(other), self.unit.__pow__(other))
         else:
-            raise TypeError(
-                'Raising of `MatrixWithUnit` to a non-numeric type like '
-                f'{type(other)} is not supported.'
-            )
+            return NotImplemented
 
-    def __matmul__(self, other):
+    def __matmul__(self, other: Any) -> Self:
         # Problem we have to circumvent: the code "return self.__class__(
         # self.value @ other.value, self.unit @ other.unit)" does not work
         # because astropy units cannot be added (and adding them would also
@@ -554,7 +547,7 @@ class MatrixWithUnits:
             # Need at least 1D output
             if len(new_shape) == 1:
                 raise ValueError(
-                    'For the provided shapes, only ``MatrixWithUnits``'
+                    f'For the provided shapes, only ``{self.__class__.__name__}``'
                     'instances initialized with a scalar unit are permitted. '
                     'If the intention was to perform matrix multiplication '
                     'with a row/column vector, please reshape the instance '
@@ -612,17 +605,30 @@ class MatrixWithUnits:
 
             return self.__class__(new_value, new_unit)
         else:
-            raise TypeError(
-                'Cannot perform matrix multiplication between '
-                f'``MatrixWithUnits`` and ``{type(other)}``.'
-            )
+            try:
+                _other = self.__class__(other)
+            except:
+                # No conversion possible, cannot do matrix multiplication
+                return NotImplemented
+
+            return self.__matmul__(_other)
+
+    def __rmatmul__(self, other) -> Self:
+        if not isinstance(other, MatrixWithUnits):
+            try:
+                other = self.__class__(other)
+            except:
+                # No conversion possible, cannot do matrix multiplication
+                return NotImplemented
+
+        return other.__matmul__(self)
 
     # TODO: implement iadd, isub, imul etc. for inplace operations
 
     # -- Selected useful numpy functions/attributes ---------------------------
     def __array__(
         self, copy: Optional[bool] = None, dtype: Optional[Any] = None
-    ) -> np.ndarray:
+    ) -> NDArray:
         """
         Method that handles conversion into an array. We deliberately
         choose to convert only the value, since this will ensure that
@@ -632,18 +638,12 @@ class MatrixWithUnits:
         return np.asarray(self.value, copy=copy, dtype=dtype)
         # return np.asarray(self.value*self.unit, copy=copy, dtype=dtype)
 
-    def view(self, *args) -> Any:
+    def view(self, *args) -> NDArray:
         return self.value.view(*args)  # Or use array somehow?
 
     @property
-    def T(self):
-        """
-        Transposed Matrix.
-
-        Returns
-        -------
-        :type: `~gw_signal_tools.matrix_with_units.MatrixWithUnits`
-        """
+    def T(self) -> Self:
+        """Transpose of `self`."""
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value.T, self.unit)
         else:
@@ -693,7 +693,7 @@ class MatrixWithUnits:
 
     # -- Following function copied from astropy Quantity class
     @property
-    def isscalar(self):
+    def isscalar(self) -> bool:
         """
         True if the `value` of this quantity is a scalar, or False if it
         is an array-like object.
@@ -728,10 +728,10 @@ class MatrixWithUnits:
                 ) from e
 
     @property
-    def dtype(self) -> Any:
+    def dtype(self) -> type[u.Quantity]:
         return u.Quantity
 
-    def to_numpy_full(self) -> np.ndarray:
+    def to_numpy_full(self) -> NDArray:
         """
         Return numpy array with Quantities as elements, i.e. the product
         of value and unit. The corresponding array dtype is `object`.
@@ -743,7 +743,7 @@ class MatrixWithUnits:
         """
         return np.asarray(self.value * self.unit, dtype=object)
 
-    def reshape(self, new_shape: SupportsIndex) -> Self:
+    def reshape(self, new_shape: _ShapeLike) -> Self:
         # -- Note: arr.reshape() and np.reshape(arr) are equivalent,
         # -- both return a view of the old array
         if isinstance(self.unit, self._pure_unit_types):
@@ -754,14 +754,14 @@ class MatrixWithUnits:
             )
 
     @staticmethod
-    def inv(matrix: MatrixWithUnits) -> Self:
+    def inv(matrix: MatrixT) -> MatrixT:
         assert np.all(
             np.equal(matrix.unit, matrix.T.unit)
         ), 'Need symmetric unit for inversion.'
 
         return matrix.__class__(np.linalg.inv(matrix.value), matrix.unit**-1)
 
-    def diagonal(self, *args, **kwargs):
+    def diagonal(self, *args, **kwargs) -> Self:
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(
                 np.diagonal(self.value, *args, **kwargs).copy(), self.unit
@@ -772,7 +772,7 @@ class MatrixWithUnits:
                 np.diagonal(self.unit, *args, **kwargs).copy(),
             )
 
-    def sqrt(self):
+    def sqrt(self) -> Self:
         return self.__class__(np.sqrt(self.value), self.unit ** (1 / 2))
 
     def cond(self, matrix_norm: float | Literal['fro', 'nuc'] = 'fro') -> float:
@@ -798,6 +798,7 @@ class MatrixWithUnits:
 
     # -- Selected useful astropy functions/attributes -------------------------
     def to_system(self, system: Any) -> Self:
+        # TODO: this does not really mimick what astropy to_system does, right?!
         if isinstance(self.unit, self._pure_unit_types):
             return self.__class__(self.value, self.unit.to_system(system)[0])
         else:
@@ -815,7 +816,7 @@ class MatrixWithUnits:
 
         return new_matrix
 
-    def decompose(self, bases: Any) -> Self:
+    def decompose(self, bases: Collection[u.UnitBase]) -> Self:
         new_matrix = self.copy()
 
         for index in np.ndindex(new_matrix.shape):
@@ -832,11 +833,11 @@ class MatrixWithUnits:
         """Reshape this matrix into a column vector."""
         return self.reshape((self.size, 1))
 
-    def plot(self, ax: Optional[Any] = None):
+    def plot(self, ax: Optional[Axes] = None) -> Axes:
         # NOTE: all of this code is inspired by heatmap in seaborn, in fact
         # the relative_luminosity function is copied from there
         # -> is done to avoid additional dependencies (pandas, seaborn)
-        import matplotlib as mpl
+        import matplotlib as mpl  # Heavy import, thus only done here (i.e. if really needed)
         import matplotlib.pyplot as plt
 
         def relative_luminance(color):  # pragma: no cover
@@ -909,4 +910,4 @@ if __name__ == '__main__':  # pragma: no cover
     # -- Run doctests
     import doctest
 
-    doctest.testmod()
+    doctest.testmod(verbose=True)

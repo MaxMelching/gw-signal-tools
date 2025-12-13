@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any
+from typing import Optional, Any, Self
 import logging
 
 # -- Third Party Imports
@@ -38,12 +38,8 @@ class FisherMatrixNetwork(FisherMatrix):
     params_to_vary : str or list[str]
         Parameter(s) with respect to which the derivatives will be
         computed, the norms of which constitute the Fisher matrix.
-        Must be compatible with :code:`param_to_vary` input to the
-        function :code:`~gw_signal_tools.fisher.fisher_utils.
-        get_waveform_derivative_1D_with_convergence`, i.e. either
-        :code:`'tc'` (equivalent: :code:`'time'`), :code:`'psi'`
-        (equivalent up to a factor: :code:`'phase' = 2*'psi'`) or a key
-        in :code:`point`.
+        Must be a key in :code:`point` or one of :code:`'time'`,
+        :code:`'phase'`.
 
         For time and phase shifts, analytical derivatives are applied.
         This is possible because they contribute only to a factor
@@ -95,6 +91,8 @@ class FisherMatrixNetwork(FisherMatrix):
         Base class of ``FisherMatrixNetwork``.
     """
 
+    _parent = FisherMatrix
+
     def __init__(
         self,
         point: dict[str, u.Quantity],
@@ -120,7 +118,9 @@ class FisherMatrixNetwork(FisherMatrix):
         # -- detrimental because self._calc_fisher needs it, which is
         # -- potentially called in the following.
         _metadata = metadata.copy()
-        _metadata.pop('psd', None)
+        _metadata.pop(
+            'psd', None
+        )  # TODO: we should at least emit a warning if this is passed
         # -- Make sure no psd keyword is present, this is always taken
         # -- from detectors. Would not make sense to pass single PSD for
         # -- a network of multiple detectors anyway.
@@ -181,11 +181,11 @@ class FisherMatrixNetwork(FisherMatrix):
         new_wf_generator: Optional[FDWFGen] = None,
         new_detectors: Optional[Detector | list[Detector]] = None,
         **new_metadata,
-    ) -> FisherMatrixNetwork:
-        """
+    ) -> Self:
+        f"""
         Generate a Fisher matrix network with properties like the
         currentinstance has, but selected updates.
-        Note that this creates a new instance of ``FisherMatrixNetwork``
+        Note that this creates a new instance of ``{self.__class__.__name__}``,
         since updating properties would require new calculation anyway.
 
         Parameters
@@ -220,12 +220,12 @@ class FisherMatrixNetwork(FisherMatrix):
 
             Convenient options are the methods
             :code:`~gw_signal_tools.waveform.get_wf_generator`
-            or :code:`FisherMatrix.get_wf_generator`, which generate a
+            or :code:`{self.__class__.__name__}.get_wf_generator`, which generate a
             suitable function from a few arguments.
 
         Returns
         -------
-        ~gw_signal_tools.fisher_matrix.FisherMatrixNetwork
+        ~gw_signal_tools.fisher_matrix.{self.__class__.__name__}
             New Fisher matrix, calculated with updated metadata.
         """
         if new_point is None:
@@ -245,7 +245,7 @@ class FisherMatrixNetwork(FisherMatrix):
         else:
             _new_metadata = self.metadata
 
-        out = FisherMatrixNetwork(
+        out = self.__class__(
             new_point,
             new_params_to_vary,
             new_wf_generator,
@@ -256,13 +256,13 @@ class FisherMatrixNetwork(FisherMatrix):
 
         return out
 
-    def _prepare_fisher_without_calc(self):
-        """Initialize ``FisherMatrix`` instances for each detector."""
+    def _prepare_fisher_without_calc(self) -> None:
+        f"""Initialize ``{self._parent.__class__.__name__}`` instances for each detector."""
         self._fisher_for_dets = []
 
         for det in self.detectors:
             self._fisher_for_dets += [
-                FisherMatrix(
+                self._parent(
                     point=self.point | {'det': det.name},
                     params_to_vary=self.params_to_vary,
                     wf_generator=self.wf_generator,
@@ -271,7 +271,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 )
             ]
 
-    def _calc_fisher(self):
+    def _calc_fisher(self) -> None:
         """
         Calculate the Fisher matrices for each detector and combine them
         into the network Fisher matrix by adding them together.
@@ -307,7 +307,7 @@ class FisherMatrixNetwork(FisherMatrix):
         params: str | list[str] | None = None,
         optimize: bool | str | list[str] = True,
         optimize_fisher: str | list[str] | None = None,
-        return_diagnostics: bool = False,
+        return_diagnostics: bool | str = False,
         is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
@@ -348,7 +348,9 @@ class FisherMatrixNetwork(FisherMatrix):
                     params=None,  # Get all for now, filter before return
                     optimize=optimize,
                     optimize_fisher=optimize_fisher,
-                    return_diagnostics='deriv_info' if not return_diagnostics else return_diagnostics,
+                    return_diagnostics=(
+                        'deriv_info' if not return_diagnostics else return_diagnostics
+                    ),
                     is_true_point=is_true_point,
                     **inner_prod_kwargs,
                 )
@@ -377,9 +379,8 @@ class FisherMatrixNetwork(FisherMatrix):
             # -- restore the logging level even if there is error.
             logger.setLevel(_logger_level)
 
-
-        FisherMatrix._check_cond(fisher)
-        # -- Just calls fisher.cond, so works although no FisherMatrix instance
+        self.__class__._check_cond(fisher)
+        # -- Just calls fisher.cond, so works although fisher is no FisherMatrix instance
 
         fisher_bias = MatrixWithUnits.inv(fisher) @ (vector + opt_bias)
 
@@ -404,12 +405,13 @@ class FisherMatrixNetwork(FisherMatrix):
 
             fisher_bias = fisher_bias[param_indices]
 
-        if return_diagnostics is False:
+        if not return_diagnostics:
             return fisher_bias
         else:
             return fisher_bias, optimization_info
+            # -- Automatically accounts for str case of return_diagnostics
 
-    systematic_error.__doc__ = FisherMatrix.systematic_error.__doc__
+    systematic_error.__doc__ = _parent.systematic_error.__doc__
 
     def snr(self, **inner_prod_kwargs):
         """
@@ -438,8 +440,8 @@ class FisherMatrixNetwork(FisherMatrix):
 
         return snr**0.5
 
-    def __copy__(self) -> FisherMatrix:
-        new_network = FisherMatrixNetwork(
+    def __copy__(self) -> Self:
+        new_network = self.__class__(
             point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
@@ -455,4 +457,4 @@ class FisherMatrixNetwork(FisherMatrix):
 
         return new_network
 
-    _print_slots = FisherMatrix._print_slots + ('detectors',)
+    _print_slots = _parent._print_slots + ('detectors',)

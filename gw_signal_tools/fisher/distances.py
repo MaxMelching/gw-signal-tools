@@ -10,6 +10,7 @@ from gwpy.types import Series
 from ..fisher import FisherMatrix
 from ..waveform.inner_product import inner_product, norm, overlap
 from ..types import FDWFGen
+from ..waveform._error_helpers import _q_convert
 
 
 __doc__ = """
@@ -123,7 +124,9 @@ def distance(
 
     # -- Check if new interval shall be created, otherwise use param_vals
     if param_step_size is not None:
-        param_step_size = u.Quantity(param_step_size, unit=center_val.unit)
+        param_step_size = _q_convert(
+            param_step_size, center_val.unit, 'param_step_size', 'center_val.unit'
+        )
 
         param_vals = (
             np.arange(

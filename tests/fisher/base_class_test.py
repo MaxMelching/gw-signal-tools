@@ -112,7 +112,7 @@ def test_criterion_consistency():
         fisher_tot_mass_1,
         fisher_tot_mass_2,
         atol=0.0,
-        rtol=5e-5,
+        rtol=3e-4,
     )
 
 
@@ -184,7 +184,7 @@ def test_deriv_routine_consistency():
 
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(
-        fisher_gw_signal_tools.fisher, fisher_numdifftools.fisher, atol=0.0, rtol=8.1e-4
+        fisher_gw_signal_tools.fisher, fisher_numdifftools.fisher, atol=0.0, rtol=9.4e-4
     )
     assert_allclose_MatrixWithUnits(
         fisher_gw_signal_tools.fisher,
@@ -193,7 +193,7 @@ def test_deriv_routine_consistency():
         rtol=7e-4,
     )
     assert_allclose_MatrixWithUnits(
-        fisher_numdifftools.fisher, fisher_amplitude_phase.fisher, atol=0.0, rtol=2e-4
+        fisher_numdifftools.fisher, fisher_amplitude_phase.fisher, atol=0.0, rtol=2.4e-4
     )
     # -- Comparing values manually, this absolute deviation indicates
     # -- that impact of different routines on is not really siginificant

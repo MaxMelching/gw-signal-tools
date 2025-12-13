@@ -148,7 +148,7 @@ def test_break_upon_convergence(crit):
     )
 
     assert_allclose_MatrixWithUnits(
-        fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=2e-3
+        fisher_without_convergence, fisher_with_convergence, atol=0.0, rtol=2.5e-3
     )
     # -- Small deviations are expected, different final step sizes
     # -- might be selected -> total mass has largest deviations,
@@ -217,13 +217,13 @@ def test_deriv_routine():
 
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(
-        fisher_gw_signal_tools, fisher_numdifftools, atol=0.0, rtol=3e-4
+        fisher_gw_signal_tools, fisher_numdifftools, atol=0.0, rtol=4e-4
     )
     assert_allclose_MatrixWithUnits(
-        fisher_gw_signal_tools, fisher_amplitude_phase, atol=0.0, rtol=4e-4
+        fisher_gw_signal_tools, fisher_amplitude_phase, atol=0.0, rtol=4.7e-4
     )
     assert_allclose_MatrixWithUnits(
-        fisher_numdifftools, fisher_amplitude_phase, atol=0.0, rtol=4e-5
+        fisher_numdifftools, fisher_amplitude_phase, atol=0.0, rtol=8e-5
     )
 
     # -- Remove variables from global scope

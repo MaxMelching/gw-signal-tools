@@ -2,78 +2,98 @@
 # (link: https://github.com/gwpy/gwpy/blob/v3.0.7/pyproject.toml)
 
 
-# [build-system]
-# requires = [
-#   'setuptools>=64',
-#   'setuptools_scm>=8',
-#   'wheel',
-# ]
+[build-system]
+requires = [
+  'setuptools>=64',
+  'setuptools_scm>=8',
+  'wheel',
+]
 
-# build-backend = 'setuptools.build_meta'
+build-backend = 'setuptools.build_meta'
 
-# [project]
-# name = 'gw_signal_tools'
-# description = 'Tools for GW Data Analysis'
-# readme = 'README.md'
-# authors = [
-#   {name = 'Max Melching', email = 'max.melching@aei.mpg.de'},
-#   {name = 'Frank Ohme'},
-# ]
+[project]
+name = 'gw_signal_tools'
+description = 'Tools for GW Data Analysis'
+readme = 'README.md'
+# readme = {file = "README.md", content-type = "text/markdown"}
+# license = {file = "LICENSE"}
+authors = [
+  {name = 'Max Melching', email = 'max.melching@aei.mpg.de'},
+  {name = 'Frank Ohme', email = 'frank.ohme@aei.mpg.de'},
+]
+maintainers = [
+  {name = 'Max Melching', email = 'max.melching@aei.mpg.de'},
+]
 
-# # requires
-# requires-python = '==3.11.5'
-# dependencies = [
-#   'lalsuite[lalinference]',
-#   'numpy',
-#   'scipy',
-#   # 'setuptools_scm',
-#   'matplotlib'
-# ]
+# requires
+requires-python = '==3.11.5'
+dependencies = [
+  'gwpy>=3',
+  'lalsuite',
+  'matplotlib!=3.10.0',  # Causes some weird bug at the moment -> new gwpy release should solve this
+  'numdifftools',
+  'numpy',
+  'scipy',
+]
+
+classifiers=[
+  'Operating System :: POSIX',
+  'Operating System :: MacOS',
+  'Topic :: Scientific/Engineering :: Physics',
+  'Intended Audience :: Science/Research',
+  'Programming Language :: Python',
+]
 
 # dynamic properties set by tools
-# dynamic = [
-#   'version',
-# ]
-# not sure if this has an effect as long as [project] commented
-# -> installation still works, so we leave it for future to incorporate
-# -> is probably not really dynamic if commented. But that no error is thrown
-# when running it is good enough for now
-# -> maybe it makes difference when we do not install with -e (editable mode
-# perhaps makes it some kind of dynamic code already)
+dynamic = [
+  'version',
+]
 
 
-# [project.urls]
-# "Source Code" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools'
-# # "Documentation" = ''  # to be built
-# "Bug Tracker" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
+[project.urls]
+"Source Code" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools'
+# "Documentation" = ''  # to be built
+"Bug Tracker" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
 
 
-# [project.optional-dependencies]
-# dev = [
-#   'pycbc',
-#   'mypy',
-#   'pytest',
-#   'coverage'
-# ]
-# jupyter = [
-#   'jupyter'
-# ]
+[project.optional-dependencies]
+dev = [
+  'black',
+  'coverage',
+  'mypy',
+  'pre-commit',
+  'pycbc',
+  'pytest',
+  'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
+]
+jupyter = [
+  'jupyter',
+]
+pyseobnr = [
+  'pyseobnr',
+]
 
 
-# [tool.setuptools.packages.find]
-# # note: this is only required in CI, which otherwise fails because
-# #       GHA is creating a temporary directory that setuptools
-# #       discovers as another top-level package
-# include = [
-#   'gw_signal_tools*',
-# ]
+[tool.setuptools.packages.find]
+# note: this is only required in CI, which otherwise fails because
+#       GHA is creating a temporary directory that setuptools
+#       discovers as another top-level package
+include = [
+  'gw_signal_tools*',
+]
+
+
+[tool.setuptools.package-data]
+# gw_signal_tools = ["*.txt", "*.sty"]  # I think we should be more specific
+gw_signal_tools = ["plot_stylesheet.sty"]
+"gw_signal_tools.PSDs" = ["*.txt"]
 
 
 # How versioning is handled
 # -> important when running 'python -m setuptools_scm', installation
 #    uses one from setup.py because this file has no instructions for that
 [tool.setuptools_scm]
-version_file = 'gw_signal_tools/_version.py'
+write_to = 'gw_signal_tools/_version.py'
 version_scheme = 'no-guess-dev'
 local_scheme = 'dirty-tag'
 fallback_version = 'unknown'  # what is done if no version found -> or ''?
@@ -81,9 +101,9 @@ fallback_version = 'unknown'  # what is done if no version found -> or ''?
 
 # Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file
 
-# [tool.mypy]
-# show_error_codes = True
-# Throws error, but does not seem to be needed
+[tool.mypy]
+show_error_codes = true
+python_version = "3.11"
 
 [[tool.mypy.overrides]]
 module = [

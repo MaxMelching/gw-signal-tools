@@ -16,24 +16,24 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        "total_mass": 100.0 * u.solMass,
-        "mass_ratio": 0.42 * u.dimensionless_unscaled,
-        "deltaT": 1.0 / 2048.0 * u.s,
-        "f22_start": f_min,
-        "f_max": f_max,
-        "f22_ref": 20.0 * u.Hz,
-        "phi_ref": 0.0 * u.rad,
-        "distance": 1.0 * u.Mpc,
-        "inclination": 0.0 * u.rad,
-        "eccentricity": 0.0 * u.dimensionless_unscaled,
-        "longAscNodes": 0.0 * u.rad,
-        "meanPerAno": 0.0 * u.rad,
+        'total_mass': 100.0 * u.solMass,
+        'mass_ratio': 0.42 * u.dimensionless_unscaled,
+        'deltaT': 1.0 / 2048.0 * u.s,
+        'f22_start': f_min,
+        'f_max': f_max,
+        'f22_ref': 20.0 * u.Hz,
+        'phi_ref': 0.0 * u.rad,
+        'distance': 1.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
         # -- det is left out in purpose, shows that it is set automatically
-        "ra": 0.2 * u.rad,
-        "dec": 0.2 * u.rad,
-        "psi": 0.5 * u.rad,
-        "tgps": 1126259462,
-        "condition": 0,
+        'ra': 0.2 * u.rad,
+        'dec': 0.2 * u.rad,
+        'psi': 0.5 * u.rad,
+        'tgps': 1126259462,
+        'condition': 0,
     }
 )
 
@@ -41,34 +41,34 @@ wf_params = HashableDict(
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    phenomx_generator = get_wf_generator("IMRPhenomXPHM")
-    phenomx_cross_generator = get_wf_generator("IMRPhenomXPHM", mode="cross")
-    phenomd_generator = get_wf_generator("IMRPhenomD")
+    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+    phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop("mass1", None)
-pc.default_dict.pop("mass2", None)
+pc.default_dict.pop('mass1', None)
+pc.default_dict.pop('mass2', None)
 
 
-hanford = Detector("H1", psd_no_noise)
-livingston = Detector("L1", psd_no_noise)
+hanford = Detector('H1', psd_no_noise)
+livingston = Detector('L1', psd_no_noise)
 
 
 fisher_tot_mass = FisherMatrixNetwork(
-    wf_params, "total_mass", phenomx_generator, [hanford, livingston]
+    wf_params, 'total_mass', phenomx_generator, [hanford, livingston]
 )
 
 
 # %% -- Simple consistency tests ----------------------------------------------
 def test_single_det_consistency():
     fisher_v1 = FisherMatrixNetwork(
-        wf_params, "total_mass", phenomx_generator, [hanford]
+        wf_params, 'total_mass', phenomx_generator, [hanford]
     )
 
     fisher_v2 = FisherMatrix(
-        wf_params | {"det": "H1"}, "total_mass", phenomx_generator, psd=psd_no_noise
+        wf_params | {'det': 'H1'}, 'total_mass', phenomx_generator, psd=psd_no_noise
     )
 
     assert fisher_v1.fisher == fisher_v2.fisher
@@ -88,17 +88,17 @@ def test_single_det_consistency():
 
 # %% -- Feature tests ---------------------------------------------------------
 @pytest.mark.parametrize(
-    "params",
+    'params',
     [
-        "total_mass",
-        ["total_mass"],
-        ["total_mass", "mass_ratio"],
+        'total_mass',
+        ['total_mass'],
+        ['total_mass', 'mass_ratio'],
         pytest.param(
-            ["chirp_mass"],
+            ['chirp_mass'],
             marks=pytest.mark.xfail(
                 raises=KeyError,  # Error depends on routine
                 strict=True,
-                reason="Invalid parameter",
+                reason='Invalid parameter',
             ),
         ),
     ],
@@ -108,21 +108,21 @@ def test_params(params):
 
 
 @pytest.mark.parametrize(
-    "det",
+    'det',
     [
         hanford,
         [hanford, livingston],
         pytest.param(
-            [Detector("H96", psd_no_noise)],
+            [Detector('H96', psd_no_noise)],
             marks=pytest.mark.xfail(
-                raises=RuntimeError, strict=True, reason="Invalid detector"
+                raises=RuntimeError, strict=True, reason='Invalid detector'
             ),
         ),
     ],
 )
 def test_detector(det):
     print(det)
-    FisherMatrixNetwork(wf_params, "total_mass", phenomx_generator, det)
+    FisherMatrixNetwork(wf_params, 'total_mass', phenomx_generator, det)
 
 
 def test_index_from_det():
@@ -151,50 +151,50 @@ def test_detector_fisher():
 
 
 @pytest.mark.parametrize(
-    "params", [None, "total_mass", ["total_mass", "time", "phase"]]
+    'params', [None, 'total_mass', ['total_mass', 'time', 'phase']]
 )
 def test_sys_error(params):
     fisher = FisherMatrixNetwork(
         wf_params,
-        ["total_mass", "mass_ratio", "time", "phase"],
+        ['total_mass', 'mass_ratio', 'time', 'phase'],
         phenomx_generator,
         [hanford, livingston],
         direct_computation=False,  # To test this option too
     )
 
     fisher.systematic_error(
-        phenomd_generator, "total_mass", optimize=False, return_diagnostics=True
+        phenomd_generator, 'total_mass', optimize=False, return_diagnostics=True
     )
 
-    fisher.systematic_error(phenomd_generator, params, return_diagnostics="deriv_info")
+    fisher.systematic_error(phenomd_generator, params, return_diagnostics='deriv_info')
 
     fisher.systematic_error(phenomd_generator, optimize=True)
 
-    fisher.systematic_error(phenomd_generator, optimize=["time", "phase"])
+    fisher.systematic_error(phenomd_generator, optimize=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize_fisher=["time", "phase"])
+    fisher.systematic_error(phenomd_generator, optimize_fisher=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize="total_mass")
+    fisher.systematic_error(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(
         return_info=False,  # Does not make sense to give, is overwritten. This is what we test here
-        new_params_to_vary=["total_mass", "mass_ratio", "time", "phase"],
+        new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'],
     )
 
     fisher.systematic_error(
         phenomd_generator,
-        params="mass_ratio",
-        optimize="time",
-        optimize_fisher="total_mass",
+        params='mass_ratio',
+        optimize='time',
+        optimize_fisher='total_mass',
     )
 
     fisher.systematic_error(
-        phenomd_generator, optimize=False, optimize_fisher="phase", return_opt_info=True
+        phenomd_generator, optimize=False, optimize_fisher='phase', return_opt_info=True
     )
 
 
 @pytest.mark.parametrize(
-    "inner_prod_kwargs",
+    'inner_prod_kwargs',
     [
         {},
         dict(f_range=[20.0 * u.Hz, 42.0 * u.Hz]),
@@ -206,7 +206,7 @@ def test_snr(inner_prod_kwargs):
     for det in [hanford, livingston]:
         snr += (
             norm(
-                phenomx_generator(wf_params | {"det": det.name}),
+                phenomx_generator(wf_params | {'det': det.name}),
                 psd=det.psd,
                 **inner_prod_kwargs,
             )
@@ -216,14 +216,14 @@ def test_snr(inner_prod_kwargs):
 
 
 @pytest.mark.parametrize(
-    "new_point", [None, wf_params | {"total_mass": 42.0 * u.solMass}]
+    'new_point', [None, wf_params | {'total_mass': 42.0 * u.solMass}]
 )
-@pytest.mark.parametrize("new_params_to_vary", [None, ["mass_ratio", "distance"]])
-@pytest.mark.parametrize("new_wf_generator", [None, phenomx_cross_generator])
-@pytest.mark.parametrize("new_detectors", [None, [hanford]])
+@pytest.mark.parametrize('new_params_to_vary', [None, ['mass_ratio', 'distance']])
+@pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
+@pytest.mark.parametrize('new_detectors', [None, [hanford]])
 @pytest.mark.parametrize(
-    "new_metadata",
-    [None, {"deriv_routine": "gw_signal_tools", "convergence_check": "mismatch"}],
+    'new_metadata',
+    [None, {'deriv_routine': 'gw_signal_tools', 'convergence_check': 'mismatch'}],
 )
 def test_update_attrs(
     new_point, new_params_to_vary, new_wf_generator, new_detectors, new_metadata
@@ -259,13 +259,13 @@ def test_copy():
     fisher_copy._is_projected = True
 
     for attr in [
-        "fisher",
-        "fisher_inverse",
-        "point",
-        "wf_generator",
-        "detectors",
-        "metadata",
-        "deriv_info",
+        'fisher',
+        'fisher_inverse',
+        'point',
+        'wf_generator',
+        'detectors',
+        'metadata',
+        'deriv_info',
     ]:
         assert fisher_tot_mass.__getattribute__(attr) is not None
 

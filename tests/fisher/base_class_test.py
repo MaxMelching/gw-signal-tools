@@ -22,20 +22,20 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        "total_mass": 100.0 * u.solMass,
-        "mass_ratio": 0.42 * u.dimensionless_unscaled,
-        "deltaT": 1.0 / 2048.0 * u.s,
-        "f22_start": f_min,
-        "f_max": f_max,
-        "deltaF": 2**-5 * u.Hz,
-        "f22_ref": 20.0 * u.Hz,
-        "phi_ref": 0.0 * u.rad,
-        "distance": 1.0 * u.Mpc,
-        "inclination": 0.0 * u.rad,
-        "eccentricity": 0.0 * u.dimensionless_unscaled,
-        "longAscNodes": 0.0 * u.rad,
-        "meanPerAno": 0.0 * u.rad,
-        "condition": 0,
+        'total_mass': 100.0 * u.solMass,
+        'mass_ratio': 0.42 * u.dimensionless_unscaled,
+        'deltaT': 1.0 / 2048.0 * u.s,
+        'f22_start': f_min,
+        'f_max': f_max,
+        'deltaF': 2**-5 * u.Hz,
+        'f22_ref': 20.0 * u.Hz,
+        'phi_ref': 0.0 * u.rad,
+        'distance': 1.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
+        'condition': 0,
     }
 )
 
@@ -43,18 +43,18 @@ wf_params = HashableDict(
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    phenomx_generator = get_wf_generator("IMRPhenomXPHM")
-    phenomx_cross_generator = get_wf_generator("IMRPhenomXPHM", mode="cross")
-    phenomd_generator = get_wf_generator("IMRPhenomD")
+    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
+    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
+    phenomd_generator = get_wf_generator('IMRPhenomD')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop("mass1", None)
-pc.default_dict.pop("mass2", None)
+pc.default_dict.pop('mass1', None)
+pc.default_dict.pop('mass2', None)
 
 fisher_tot_mass = FisherMatrix(
-    point=wf_params, params_to_vary="total_mass", wf_generator=phenomx_generator
+    point=wf_params, params_to_vary='total_mass', wf_generator=phenomx_generator
 )
 
 
@@ -81,7 +81,7 @@ def test_inverse():
 
 def test_fisher_calc():
     fisher_tot_mass_2 = fisher_matrix(
-        wf_params, "total_mass", phenomx_generator, deriv_routine="numdifftools"
+        wf_params, 'total_mass', phenomx_generator, deriv_routine='numdifftools'
     )
     assert fisher_tot_mass.fisher == fisher_tot_mass_2
 
@@ -89,20 +89,20 @@ def test_fisher_calc():
 def test_criterion_consistency():
     fisher_tot_mass_1 = fisher_matrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         phenomx_generator,
-        deriv_routine="gw_signal_tools",
+        deriv_routine='gw_signal_tools',
         pass_inn_prod_kwargs_to_deriv=True,
-        convergence_check="diff_norm",
+        convergence_check='diff_norm',
     )
 
     fisher_tot_mass_2 = fisher_matrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         phenomx_generator,
-        deriv_routine="gw_signal_tools",
+        deriv_routine='gw_signal_tools',
         pass_inn_prod_kwargs_to_deriv=True,
-        convergence_check="mismatch",
+        convergence_check='mismatch',
     )
 
     assert_allclose_MatrixWithUnits(
@@ -119,12 +119,12 @@ def test_time_and_phase_shift_consistency():
     t_shift = 3e-2 * u.s
     phase_shift = 2e-1 * u.rad
 
-    calc_params = ["total_mass", "mass_ratio", "distance", "time", "phase"]
+    calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
     fisher_v1 = FisherMatrix(wf_params, calc_params, phenomx_generator)
 
     fisher_v2 = FisherMatrix(
-        wf_params | {"time": t_shift, "phase": phase_shift},
+        wf_params | {'time': t_shift, 'phase': phase_shift},
         calc_params,
         phenomx_generator,
     )
@@ -163,12 +163,12 @@ def test_time_and_phase_shift_consistency():
 
 
 def test_deriv_routine_consistency():
-    calc_params = ["total_mass", "mass_ratio", "distance", "time", "phase"]
+    calc_params = ['total_mass', 'mass_ratio', 'distance', 'time', 'phase']
 
     global fisher_gw_signal_tools, fisher_numdifftools, fisher_amplitude_phase
 
-    for routine in ["gw_signal_tools", "numdifftools", "amplitude_phase"]:
-        globals()[f"fisher_{routine}"] = FisherMatrix(
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        globals()[f'fisher_{routine}'] = FisherMatrix(
             wf_params, calc_params, phenomx_generator, deriv_routine=routine
         )
 
@@ -193,22 +193,22 @@ def test_deriv_routine_consistency():
     # -- that impact of different routines on is not really siginificant
 
     # -- Remove variables from global scope
-    for routine in ["gw_signal_tools", "numdifftools", "amplitude_phase"]:
-        del globals()[f"fisher_{routine}"]
+    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
+        del globals()[f'fisher_{routine}']
 
 
 def test_base_step_consistency():
-    calc_params = ["total_mass", "distance", "time", "phase"]
+    calc_params = ['total_mass', 'distance', 'time', 'phase']
 
     fisher_v1 = FisherMatrix(
-        wf_params, calc_params, phenomx_generator, deriv_routine="numdifftools"
+        wf_params, calc_params, phenomx_generator, deriv_routine='numdifftools'
     )
 
     fisher_v2 = FisherMatrix(
         wf_params,
         calc_params,
         phenomx_generator,
-        deriv_routine="numdifftools",
+        deriv_routine='numdifftools',
         base_step=None,  # Enables automatic selection
     )
 
@@ -224,7 +224,7 @@ def test_covmat():
 
 
 def test_get_indices():
-    test_params = ["total_mass", "time", "phase"]
+    test_params = ['total_mass', 'time', 'phase']
 
     fisher = FisherMatrix(
         wf_params,
@@ -232,23 +232,23 @@ def test_get_indices():
         wf_generator=phenomx_generator,
     )
 
-    indices_1 = fisher.get_param_indices(["time", "phase"])
+    indices_1 = fisher.get_param_indices(['time', 'phase'])
     assert np.all(indices_1 == np.array([1, 2]))
 
-    indices_2 = fisher.get_param_indices(["phase", "time"])
+    indices_2 = fisher.get_param_indices(['phase', 'time'])
     assert np.all(indices_2 == np.array([2, 1]))
 
     indices_2 = fisher.get_param_indices()
     # assert np.all(indices_2 == np.array([True, True, True]))
     assert np.all(indices_2 == np.array([0, 1, 2]))
 
-    grid_1 = fisher.get_sub_matrix_indices(["time", "phase"])
+    grid_1 = fisher.get_sub_matrix_indices(['time', 'phase'])
     sub_matr_1 = [
         [fisher.fisher[1, 1], fisher.fisher[1, 2]],
         [fisher.fisher[2, 1], fisher.fisher[2, 2]],
     ]
 
-    grid_2 = fisher.get_sub_matrix_indices(["phase", "time"])
+    grid_2 = fisher.get_sub_matrix_indices(['phase', 'time'])
     sub_matr_2 = [
         [fisher.fisher[2, 2], fisher.fisher[2, 1]],
         [fisher.fisher[1, 2], fisher.fisher[1, 1]],
@@ -260,17 +260,17 @@ def test_get_indices():
         assert fisher.fisher[grid_2][i, j] == sub_matr_2[i][j]
 
     with pytest.raises(ValueError):
-        fisher.get_param_indices("mass_ratio")
+        fisher.get_param_indices('mass_ratio')
 
 
 @pytest.mark.parametrize(
-    "inner_prod_kwargs",
+    'inner_prod_kwargs',
     [dict(f_range=[f_min, f_max]), dict(df=2**-2, min_dt_prec=1e-5)],
 )
 def test_inner_prod_kwargs(inner_prod_kwargs):
     fisher = FisherMatrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         wf_generator=phenomx_generator,
         return_info=True,
         direct_computation=False,
@@ -282,16 +282,16 @@ def test_inner_prod_kwargs(inner_prod_kwargs):
 def test_attribute_getting():
     fisher = FisherMatrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         wf_generator=phenomx_generator,
         return_info=True,
         direct_computation=False,
     )
-    fisher.project_fisher("total_mass")
+    fisher.project_fisher('total_mass')
 
     fisher = FisherMatrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         wf_generator=phenomx_generator,
         return_info=True,
         direct_computation=False,
@@ -300,7 +300,7 @@ def test_attribute_getting():
 
     fisher = FisherMatrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         wf_generator=phenomx_generator,
         return_info=True,
         direct_computation=False,
@@ -309,7 +309,7 @@ def test_attribute_getting():
 
     fisher = FisherMatrix(
         wf_params,
-        "total_mass",
+        'total_mass',
         wf_generator=phenomx_generator,
         return_info=False,  # Provoke call in __getattr__
         direct_computation=False,
@@ -322,7 +322,7 @@ def test_repr():
 
 
 def test_project():
-    test_params = ["total_mass", "mass_ratio", "time", "phase", "distance"]
+    test_params = ['total_mass', 'mass_ratio', 'time', 'phase', 'distance']
 
     fisher = FisherMatrix(
         wf_params,
@@ -330,77 +330,77 @@ def test_project():
         wf_generator=phenomx_generator,
     )
 
-    project_params = ["time"]
+    project_params = ['time']
     fisher_projected = fisher.project_fisher(project_params)
 
     assert fisher_projected.shape == 2 * (len(test_params) - len(project_params),)
     assert np.all(
         np.equal(
             fisher_projected.params_to_vary,
-            ["total_mass", "mass_ratio", "phase", "distance"],
+            ['total_mass', 'mass_ratio', 'phase', 'distance'],
         )
     )
 
 
-@pytest.mark.parametrize("params", [None, "total_mass", ["total_mass"]])
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
 def test_stat_error(params):
     fisher_tot_mass.statistical_error(params)
 
 
 @pytest.mark.parametrize(
-    "params", [None, "total_mass", ["total_mass", "time", "phase"]]
+    'params', [None, 'total_mass', ['total_mass', 'time', 'phase']]
 )
 def test_sys_error(params):
     fisher = FisherMatrix(
         wf_params,
-        ["total_mass", "time", "phase"],
+        ['total_mass', 'time', 'phase'],
         wf_generator=phenomx_generator,
     )
 
     fisher.systematic_error(
-        phenomd_generator, "total_mass", optimize=False, return_diagnostics=True
+        phenomd_generator, 'total_mass', optimize=False, return_diagnostics=True
     )
 
-    fisher.systematic_error(phenomd_generator, params, return_diagnostics="deriv_info")
+    fisher.systematic_error(phenomd_generator, params, return_diagnostics='deriv_info')
 
     fisher.systematic_error(
         phenomd_generator, optimize=True, return_diagnostics=True, is_true_point=True
     )
 
-    fisher.systematic_error(phenomd_generator, optimize=["time", "phase"])
+    fisher.systematic_error(phenomd_generator, optimize=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize_fisher=["time", "phase"])
+    fisher.systematic_error(phenomd_generator, optimize_fisher=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize="total_mass")
+    fisher.systematic_error(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(
         return_info=False,  # Does not make sense to give, is overwritten. This is what we test here
-        new_params_to_vary=["total_mass", "mass_ratio", "time", "phase"],
+        new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'],
     )
 
     fisher.systematic_error(
         phenomd_generator,
-        params="mass_ratio",
-        optimize="time",
-        optimize_fisher="total_mass",
+        params='mass_ratio',
+        optimize='time',
+        optimize_fisher='total_mass',
     )
 
     fisher.systematic_error(
         phenomd_generator,
         optimize=False,
-        optimize_fisher="phase",
+        optimize_fisher='phase',
         return_diagnostics=True,
     )
 
-    fisher = fisher.update_attrs(deriv_routine="numdifftools")
+    fisher = fisher.update_attrs(deriv_routine='numdifftools')
 
-    fisher.systematic_error(phenomd_generator, optimize="phase")
+    fisher.systematic_error(phenomd_generator, optimize='phase')
 
 
 def test_return_diagnostic():
     fisher = FisherMatrix(
         wf_params,
-        ["total_mass", "time", "phase"],
+        ['total_mass', 'time', 'phase'],
         wf_generator=phenomx_generator,
     )
 
@@ -414,7 +414,7 @@ def test_return_diagnostic():
 
 
 @pytest.mark.parametrize(
-    "inner_prod_kwargs",
+    'inner_prod_kwargs',
     [
         {},
         dict(f_range=[20.0 * u.Hz, 42.0 * u.Hz]),
@@ -447,19 +447,19 @@ def test_plot():
 
 
 def test_get_wf_generator():
-    fisher_tot_mass.get_wf_generator("IMRPhenomXPHM")
+    fisher_tot_mass.get_wf_generator('IMRPhenomXPHM')
 
 
 @pytest.mark.parametrize(
-    "new_point", [None, wf_params | {"total_mass": 42.0 * u.solMass}]
+    'new_point', [None, wf_params | {'total_mass': 42.0 * u.solMass}]
 )
 @pytest.mark.parametrize(
-    "new_params_to_vary", [None, "mass_ratio", ["mass_ratio", "distance"]]
+    'new_params_to_vary', [None, 'mass_ratio', ['mass_ratio', 'distance']]
 )
-@pytest.mark.parametrize("new_wf_generator", [None, phenomx_cross_generator])
+@pytest.mark.parametrize('new_wf_generator', [None, phenomx_cross_generator])
 @pytest.mark.parametrize(
-    "new_metadata",
-    [None, {"deriv_routine": "gw_signal_tools", "convergence_check": "mismatch"}],
+    'new_metadata',
+    [None, {'deriv_routine': 'gw_signal_tools', 'convergence_check': 'mismatch'}],
 )
 def test_update_attrs(new_point, new_params_to_vary, new_wf_generator, new_metadata):
     if new_metadata is None:
@@ -493,12 +493,12 @@ def test_copy():
     fisher_copy._is_projected = True
 
     for attr in [
-        "fisher",
-        "fisher_inverse",
-        "point",
-        "wf_generator",
-        "metadata",
-        "deriv_info",
+        'fisher',
+        'fisher_inverse',
+        'point',
+        'wf_generator',
+        'metadata',
+        'deriv_info',
     ]:
         assert fisher_tot_mass.__getattribute__(attr) is not None
 

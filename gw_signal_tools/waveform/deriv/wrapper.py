@@ -78,7 +78,7 @@ class WaveformDerivative:
             except KeyError as e:
                 raise ValueError(
                     f"Invalid deriv_routine '{deriv_routine}', it is not registered "
-                    "in `~gw_signal_tools.waveform.WaveformDerivative.deriv_routine_class_map`."
+                    'in `~gw_signal_tools.waveform.WaveformDerivative.deriv_routine_class_map`.'
                 ) from e
 
             return deriv_routine_class(*args, **kw_args)
@@ -88,6 +88,6 @@ class WaveformDerivative:
                 return deriv_routine(*args, **kw_args)
             except Exception as e:
                 raise ValueError(
-                    "Either the `deriv_routine` you provided is not callable "
-                    "or one of the arguments passed to it is invalid."
+                    'Either the `deriv_routine` you provided is not callable '
+                    'or one of the arguments passed to it is invalid.'
                 ) from e

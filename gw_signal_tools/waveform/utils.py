@@ -102,7 +102,7 @@ def pad_to_dx(
                 inplace=False,
             )
         else:
-            raise ValueError(f'Invalid value {where} given for \'where\'.')
+            raise ValueError(f"Invalid value {where} given for 'where'.")
     else:
         return signal
 
@@ -660,7 +660,7 @@ def get_strain(
         generator_func = wfm.GenerateFDWaveform
         temp_factor = _CORRECT_H_UNIT_FREQU
     else:
-        raise ValueError('Invalid domain, select either `\'time\'` or `\'frequency\'`.')
+        raise ValueError("Invalid domain, select either `'time'` or `'frequency'`.")
 
     expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
     # extr_params_mask = np.isin(params.keys(), expected_extr_params, assume_unique=True)

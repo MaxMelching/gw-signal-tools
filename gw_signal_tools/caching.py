@@ -11,12 +11,12 @@ from gw_signal_tools import logger
 __doc__ = """The caching module of gw-signal-tools."""
 
 __all__ = (
-    "disable_caching",
-    "enable_caching",
-    "cache_func",
-    "use_caching",
-    "enable_caching_locally",
-    "disable_caching_locally",
+    'disable_caching',
+    'enable_caching',
+    'cache_func',
+    'use_caching',
+    'enable_caching_locally',
+    'disable_caching_locally',
 )
 
 
@@ -43,7 +43,7 @@ _calling_from_context: bool = False
 def disable_caching():
     global _calling_from_context
     if not _calling_from_context:
-        logger.info("Disabling caching")
+        logger.info('Disabling caching')
 
     global cache_func
     cache_func = _dummy_cache
@@ -55,7 +55,7 @@ def disable_caching():
 def enable_caching():
     global _calling_from_context
     if not _calling_from_context:
-        logger.info("Enabling caching")
+        logger.info('Enabling caching')
 
     global cache_func
     cache_func = _cache

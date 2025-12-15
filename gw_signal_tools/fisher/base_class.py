@@ -350,7 +350,7 @@ class FisherMatrix:
             except KeyError as e:
                 # -- param is not in self.params_to_vary
                 raise ValueError(
-                    f'Parameter \'{param}\' was not used to calculate the '
+                    f"Parameter '{param}' was not used to calculate the "
                     'Fisher matrix (which can also mean it was projected out).'
                 ) from e
 

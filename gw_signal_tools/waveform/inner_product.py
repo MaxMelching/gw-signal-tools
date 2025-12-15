@@ -29,16 +29,16 @@ common in GW data analysis and helpers for computation.
 """
 
 __all__ = (
-    "inner_product",
-    "norm",
-    "overlap",
-    "inner_product_computation",
-    "optimized_inner_product",
-    "_INNER_PROD_ARGS",
-    "optimize_overlap",
-    "get_default_opt_params",
-    "test_hm",
-    "test_precessing",
+    'inner_product',
+    'norm',
+    'overlap',
+    'inner_product_computation',
+    'optimized_inner_product',
+    '_INNER_PROD_ARGS',
+    'optimize_overlap',
+    'get_default_opt_params',
+    'test_hm',
+    'test_precessing',
 )
 
 
@@ -56,22 +56,22 @@ def _determine_x_range(
     if x_range is not None:
         if len(x_range) != 2:
             raise ValueError(
-                "`x_range` must contain lower and upper bound for "
-                "integration. One of them or both can be `None`, but "
-                "both have to be specified if `x_range` is given."
+                '`x_range` must contain lower and upper bound for '
+                'integration. One of them or both can be `None`, but '
+                'both have to be specified if `x_range` is given.'
             )
 
         # -- Check if both lower and upper are given or one of them is None
         if x_range[0] is not None:
             x_lower_new = _q_convert(
-                x_range[0], x_unit, "f_range[0]", "signal.frequencies"
+                x_range[0], x_unit, 'f_range[0]', 'signal.frequencies'
             )
         else:
             x_lower_new = x_lower
 
         if x_range[1] is not None:
             x_upper_new = _q_convert(
-                x_range[1], x_unit, "f_range[1]", "signal.frequencies"
+                x_range[1], x_unit, 'f_range[1]', 'signal.frequencies'
             )
         else:
             x_upper_new = x_upper
@@ -83,12 +83,12 @@ def _determine_x_range(
         else:
             # -- Leave lower bound at x_lower, no update
             logger.info(
-                f"Given lower bound of {x_lower_new} is smaller than "
-                "values available from given signals. Taking a lower "
-                f"bound of {x_lower} instead."
+                f'Given lower bound of {x_lower_new} is smaller than '
+                'values available from given signals. Taking a lower '
+                f'bound of {x_lower} instead.'
             )
 
-        assert x_lower < x_upper, "Given lower bound must be smaller than upper bound."
+        assert x_lower < x_upper, 'Given lower bound must be smaller than upper bound.'
 
         # -- New upper bound must be smaller than current upper bound,
         # -- otherwise no values for the range are available in signals
@@ -97,9 +97,9 @@ def _determine_x_range(
         else:
             # -- Leave upper bound at x_upper, no update
             logger.info(
-                f"Given upper bound of {x_upper_new} is larger than "
-                "values available from given signals. Taking an upper "
-                f"bound of {x_upper} instead."
+                f'Given upper bound of {x_upper_new} is larger than '
+                'values available from given signals. Taking an upper '
+                f'bound of {x_upper} instead.'
             )
 
     return x_lower, x_upper
@@ -122,7 +122,7 @@ def inner_product(
     | tuple[
         u.Quantity,
         dict[
-            Literal["match_series", "peak_phase", "peak_time"], u.Quantity | TimeSeries
+            Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries
         ],
     ]
 ):
@@ -255,18 +255,18 @@ def inner_product(
     # -- If necessary, do Fourier transform
     if isinstance(signal1, TimeSeries):
         logger.info(
-            "`signal1` is a ``TimeSeries``, performing an automatic FFT. "
-            "Due to potential issues with conventions and resolution of "
-            "the result, this is discouraged, consider doing it manually."
+            '`signal1` is a ``TimeSeries``, performing an automatic FFT. '
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
         )
 
         signal1 = td_to_fd(signal1)
 
     if isinstance(signal2, TimeSeries):
         logger.info(
-            "`signal2` is a ``TimeSeries``, performing an automatic FFT. "
-            "Due to potential issues with conventions and resolution of "
-            "the result, this is discouraged, consider doing it manually."
+            '`signal2` is a ``TimeSeries``, performing an automatic FFT. '
+            'Due to potential issues with conventions and resolution of '
+            'the result, this is discouraged, consider doing it manually.'
         )
 
         signal2 = td_to_fd(signal2)
@@ -279,7 +279,7 @@ def inner_product(
         frequ_unit = signal1.frequencies.unit
     else:
         raise TypeError(
-            "`signal1` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``."
+            '`signal1` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
 
     # -- NOTE: we do not check for equal units of signals, since there
@@ -289,11 +289,11 @@ def inner_product(
 
     if isinstance(signal2, FrequencySeries):
         assert signal2.frequencies.unit._is_equivalent(frequ_unit), (
-            "Need consistent frequency/time units for `signal1` and `signal2`."
+            'Need consistent frequency/time units for `signal1` and `signal2`.'
         )
     else:
         raise TypeError(
-            "`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``."
+            '`signal2` has to be a GWpy ``TimeSeries`` or ``FrequencySeries``.'
         )
 
     # -- Handling PSD
@@ -319,10 +319,10 @@ def inner_product(
 
     if isinstance(psd, FrequencySeries):
         assert psd.frequencies.unit._is_equivalent(frequ_unit), (
-            "Need consistent frequency/time units for `psd` and other signals."
+            'Need consistent frequency/time units for `psd` and other signals.'
         )
     else:
-        raise TypeError("`psd` has to be a GWpy ``FrequencySeries`` or None.")
+        raise TypeError('`psd` has to be a GWpy ``FrequencySeries`` or None.')
 
     # -- Handling frequency range, needed for every case of return
     f_lower, f_upper = _determine_x_range(f_range, signal1, signal2, psd)
@@ -407,17 +407,17 @@ def inner_product(
     if df is None:
         try:
             df = _q_convert(
-                max(signal1.df, signal2.df), frequ_unit, "df", "signal.frequencies"
+                max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies'
             )
         except AttributeError:
             # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
             if frequ_unit._is_equivalent(u.Hz):
-                df = _q_convert(0.0625 * u.Hz, frequ_unit, "df", "signal.frequencies")
+                df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
             else:
                 # -- We have no idea what frequ_unit is, just set to some number
                 df = 0.0625 * frequ_unit
     else:
-        df = _q_convert(df, frequ_unit, "df", "signal.frequencies")
+        df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- Get signals to same frequencies, i.e. make df
     # -- equal (if necessary) and then restrict range
@@ -572,7 +572,7 @@ def optimized_inner_product(
     | tuple[
         u.Quantity,
         dict[
-            Literal["match_series", "peak_phase", "peak_time"], u.Quantity | TimeSeries
+            Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries
         ],
     ]
 ):
@@ -664,10 +664,10 @@ def optimized_inner_product(
         min_dt_prec = _q_convert(
             min_dt_prec,
             1.0 / frequ_unit,
-            "min_dt_prec",
-            "signal",
-            err_msg="Need consistent (i.e. convertible) units for `%s` (%s)"
-            " and inverse frequency unit of `%s` (%s).",
+            'min_dt_prec',
+            'signal',
+            err_msg='Need consistent (i.e. convertible) units for `%s` (%s)'
+            ' and inverse frequency unit of `%s` (%s).',
         )
 
     # -- Append zeros or bring into correct format so that ifft can be
@@ -725,7 +725,7 @@ def optimized_inner_product(
         )
 
     assert next_power_of_two(full_dft_vals.size) == full_dft_vals.size, (
-        "Consistency check, not your fault if it fails."
+        'Consistency check, not your fault if it fails.'
     )
 
     dt = (1.0 / (full_dft_vals.size * signal1.df)).decompose(
@@ -763,7 +763,7 @@ def optimized_inner_product(
         # -- Evaluation at t0=0 corresponds to usual inner product
         peak_time = 0.0 * match_series.times.unit
         peak_index = np.searchsorted(
-            match_series.xindex.value, peak_time.value, side="left"
+            match_series.xindex.value, peak_time.value, side='left'
         )
         match_result = _match_series[peak_index]
 
@@ -773,9 +773,9 @@ def optimized_inner_product(
         )
 
         return match_result, {
-            "match_series": match_series,
-            "peak_phase": peak_phase,
-            "peak_time": peak_time,
+            'match_series': match_series,
+            'peak_phase': peak_phase,
+            'peak_time': peak_time,
         }
     else:
         return match_result
@@ -793,7 +793,7 @@ def norm(
     | tuple[
         u.Quantity,
         dict[
-            Literal["match_series", "peak_phase", "peak_time"], u.Quantity | TimeSeries
+            Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries
         ],
     ]
 ):
@@ -830,7 +830,7 @@ def norm(
     if isinstance(out, u.Quantity):
         return np.sqrt(out)
     else:
-        out[1]["match_series"] = np.sqrt(out[1]["match_series"])
+        out[1]['match_series'] = np.sqrt(out[1]['match_series'])
         return np.sqrt(out[0]), out[1]
 
 
@@ -844,7 +844,7 @@ def overlap(
     | tuple[
         u.Quantity,
         dict[
-            Literal["match_series", "peak_phase", "peak_time"], u.Quantity | TimeSeries
+            Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries
         ],
     ]
 ):
@@ -894,7 +894,7 @@ def overlap(
     if isinstance(out, u.Quantity):
         return out / normalization
     else:
-        out[1]["match_series"] /= normalization
+        out[1]['match_series'] /= normalization
         return out[0] / normalization, out[1]
 
 
@@ -924,10 +924,10 @@ def test_hm(wf_params: dict[str, u.Quantity], wf_generator: FDWFGen) -> bool:
         configuration.
     """
     phi_val = 0.76 * u.rad  # Some arbitrary shift
-    wf_phizero_shifted = wf_generator(wf_params | {"phi_ref": 0.0 * u.rad}) * np.exp(
+    wf_phizero_shifted = wf_generator(wf_params | {'phi_ref': 0.0 * u.rad}) * np.exp(
         1.0j * 2 * phi_val
     )
-    wf_phinonzero = wf_generator(wf_params | {"phi_ref": phi_val})
+    wf_phinonzero = wf_generator(wf_params | {'phi_ref': phi_val})
 
     if overlap(wf_phizero_shifted, wf_phinonzero) > 0.999:
         # -- Arbitrary value, but should be sufficient to assess
@@ -966,12 +966,12 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
     # TODO: maybe test for valid spin config?
     for i in [1, 2]:
         # -- Check for cartesian components first
-        for index in ["x", "y"]:
+        for index in ['x', 'y']:
             try:
                 # if wf_params[f'spin{i}{index}'] != 0.*u.dimensionless_unscaled:
                 if (
-                    wf_params[f"spin{i}{index}"] != 0.0 * u.dimensionless_unscaled
-                    and wf_params[f"spin{i}z"] != 0.0 * u.dimensionless_unscaled
+                    wf_params[f'spin{i}{index}'] != 0.0 * u.dimensionless_unscaled
+                    and wf_params[f'spin{i}z'] != 0.0 * u.dimensionless_unscaled
                 ):
                     # -- Spins are not parallel to L and not in orbital plane
                     return True
@@ -985,7 +985,7 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
         # -- No precession in cartesian components, but spherical ones
         # -- might be given
         try:
-            if wf_params[f"spin{i}_tilt"] % (np.pi * u.rad) != 0.0 * u.rad:
+            if wf_params[f'spin{i}_tilt'] % (np.pi * u.rad) != 0.0 * u.rad:
                 return True
         except KeyError:
             pass
@@ -996,26 +996,26 @@ def test_precessing(wf_params: dict[str, u.Quantity]) -> bool:
 # -- Preparing optimization function. Some parameters have physical
 # -- bounds that may not be crossed, otherwise waveform error.
 param_bounds: dict[str, tuple[float, float]] = {
-    "total_mass": (0.0, np.inf),
-    "mass1": (0.0, np.inf),
-    "mass2": (0.0, np.inf),
-    "mass_ratio": (0.0, 1.0),
-    "inverse_mass_ratio": (1.0, np.inf),
-    "sym_mass_ratio": (0.0, 0.25),
-    "distance": (0.0, np.inf),
-    "spin1x": (-1.0, 1.0),
-    "spin1y": (-1.0, 1.0),
-    "spin1z": (-1.0, 1.0),
-    "spin2x": (-1.0, 1.0),
-    "spin2y": (-1.0, 1.0),
-    "spin2z": (-1.0, 1.0),
-    "chi_1": (0.0, 1.0),
-    "chi_2": (0.0, 1.0),
-    "inclination": (0.0, np.pi),
-    "theta_jn": (0.0, np.pi),
-    "sin_inclination": (0.0, 1.0),
-    "sin_theta_jn": (0.0, 1.0),
-    "f_ref": (0.0, np.inf),
+    'total_mass': (0.0, np.inf),
+    'mass1': (0.0, np.inf),
+    'mass2': (0.0, np.inf),
+    'mass_ratio': (0.0, 1.0),
+    'inverse_mass_ratio': (1.0, np.inf),
+    'sym_mass_ratio': (0.0, 0.25),
+    'distance': (0.0, np.inf),
+    'spin1x': (-1.0, 1.0),
+    'spin1y': (-1.0, 1.0),
+    'spin1z': (-1.0, 1.0),
+    'spin2x': (-1.0, 1.0),
+    'spin2y': (-1.0, 1.0),
+    'spin2z': (-1.0, 1.0),
+    'chi_1': (0.0, 1.0),
+    'chi_2': (0.0, 1.0),
+    'inclination': (0.0, np.pi),
+    'theta_jn': (0.0, np.pi),
+    'sin_inclination': (0.0, 1.0),
+    'sin_theta_jn': (0.0, 1.0),
+    'f_ref': (0.0, np.inf),
 }
 # -- Note: we do not add angles here because the waveform will not fail
 # -- to generate if we cross some boundary (periodicity).
@@ -1043,15 +1043,15 @@ def get_default_opt_params(
     list[str]
         List of waveform parameters to optimize over.
     """
-    default_opt_params = ["time", "phase"]
+    default_opt_params = ['time', 'phase']
 
     if test_precessing(wf_params):
-        default_opt_params += ["phi_ref", "phi_jl"]
+        default_opt_params += ['phi_ref', 'phi_jl']
         # TODO: find good definition of phi_jl. Bilby seems to use it, but in
         # "wrong order": https://git.ligo.org/lscsoft/bilby/-/blob/master/bilby/gw/source.py#L649
     elif test_hm(wf_params, wf_generator):
         # -- Higher modes still be relevant for non-precessing
-        default_opt_params += ["phi_ref"]
+        default_opt_params += ['phi_ref']
 
     return default_opt_params
 
@@ -1163,15 +1163,15 @@ def optimize_overlap(
         _opt_params = np.array(opt_params)
 
         # -- time and phase indices are accessed frequently, thus store
-        if "time" in _opt_params:
-            time_index = np.argwhere(_opt_params == "time")[0, 0]
-            inner_prod_kwargs["optimize_time"] = True
+        if 'time' in _opt_params:
+            time_index = np.argwhere(_opt_params == 'time')[0, 0]
+            inner_prod_kwargs['optimize_time'] = True
         else:
             time_index = None
 
-        if "phase" in _opt_params:
-            phase_index = np.argwhere(_opt_params == "phase")[0, 0]
-            inner_prod_kwargs["optimize_phase"] = True
+        if 'phase' in _opt_params:
+            phase_index = np.argwhere(_opt_params == 'phase')[0, 0]
+            inner_prod_kwargs['optimize_phase'] = True
         else:
             phase_index = None
 
@@ -1182,26 +1182,26 @@ def optimize_overlap(
             len(_opt_params) == 1
             and (time_index is not None or phase_index is not None)
         ):
-            inner_prod_kwargs["return_opt_info"] = True
+            inner_prod_kwargs['return_opt_info'] = True
             wf2 = vary_wf_generator(wf_params)
 
             _match_val, opt_info = overlap(wf1, wf2, **inner_prod_kwargs)
 
             logger.info(
-                "Optimization was conducted successfully. Remaining "
-                f"waveform mismatch is {1.0 - _match_val:.5f}."
+                'Optimization was conducted successfully. Remaining '
+                f'waveform mismatch is {1.0 - _match_val:.5f}.'
             )
 
             opt_params_results = {}
-            time = opt_info["peak_time"]
-            phase = opt_info["peak_phase"]
+            time = opt_info['peak_time']
+            phase = opt_info['peak_phase']
 
             if time_index is not None:
-                opt_params_results["time"] = time + wf_params.get("time", 0.0 * u.s)
+                opt_params_results['time'] = time + wf_params.get('time', 0.0 * u.s)
 
             if phase_index is not None:
-                opt_params_results["phase"] = phase + wf_params.get(
-                    "phase", 0.0 * u.rad
+                opt_params_results['phase'] = phase + wf_params.get(
+                    'phase', 0.0 * u.rad
                 )
             # -- Important distinction: results contain the "absolute"
             # -- time and phase shifts, that have to be put into the
@@ -1218,9 +1218,9 @@ def optimize_overlap(
         # -- Check if optimization in inner product is carried out
         # -- (can be given as equivalent input to )
         if (
-            inner_prod_kwargs.get("optimize_time_and_phase", False)
-            or inner_prod_kwargs.get("optimize_time", False)
-            or inner_prod_kwargs.get("optimize_phase", False)
+            inner_prod_kwargs.get('optimize_time_and_phase', False)
+            or inner_prod_kwargs.get('optimize_time', False)
+            or inner_prod_kwargs.get('optimize_phase', False)
         ):
             _inner_prod_is_optimized = True
 
@@ -1244,7 +1244,7 @@ def optimize_overlap(
         }
         return vary_wf_generator(wf_args)
 
-    inner_prod_kwargs["return_opt_info"] = False
+    inner_prod_kwargs['return_opt_info'] = False
 
     # -- This setting ensures overlap returns a number, which allows for
     # -- a more convenient loss definition
@@ -1257,10 +1257,10 @@ def optimize_overlap(
     bounds = len(_opt_params) * [(None, None)]
     for i in range(len(_opt_params)):
         bounds[i] = param_bounds.get(_opt_params[i], (None, None))
-        if _opt_params[i] == "mass_ratio" and wf_params["mass_ratio"] > 1:
-            bounds[i] = param_bounds.get("inverse_mass_ratio", (None, None))
+        if _opt_params[i] == 'mass_ratio' and wf_params['mass_ratio'] > 1:
+            bounds[i] = param_bounds.get('inverse_mass_ratio', (None, None))
 
-    result = minimize(fun=loss, x0=init_guess, bounds=bounds, method="Nelder-Mead")
+    result = minimize(fun=loss, x0=init_guess, bounds=bounds, method='Nelder-Mead')
     # -- If possible, will find parameters so that mismatch <= 1e-5
 
     opt_params_results = {param: result.x[i] for i, param in enumerate(_opt_params)}
@@ -1268,7 +1268,7 @@ def optimize_overlap(
         if param in opt_params_results:
             opt_params_results[param] *= param_val.unit
 
-    logger.info(result.message + f" Remaining waveform mismatch is {result.fun:e}.")
+    logger.info(result.message + f' Remaining waveform mismatch is {result.fun:e}.')
 
     wf2 = wf2_shifted(result.x)
 
@@ -1276,16 +1276,16 @@ def optimize_overlap(
         # -- For return of optimized waveform, time and phase have to be
         # -- evaluated in values of optimized inner product result
         _, opt_info = inner_product(
-            wf1, wf2, **(inner_prod_kwargs | {"return_opt_info": True})
+            wf1, wf2, **(inner_prod_kwargs | {'return_opt_info': True})
         )
-        time = opt_info["peak_time"]
-        phase = opt_info["peak_phase"]
+        time = opt_info['peak_time']
+        phase = opt_info['peak_phase']
 
         if time_index is not None:
-            opt_params_results["time"] = time + wf_params.get("time", 0.0 * u.s)
+            opt_params_results['time'] = time + wf_params.get('time', 0.0 * u.s)
 
         if phase_index is not None:
-            opt_params_results["phase"] = phase + wf_params.get("phase", 0.0 * u.rad)
+            opt_params_results['phase'] = phase + wf_params.get('phase', 0.0 * u.rad)
         # -- Important distinction: results contain the "absolute"
         # -- time and phase shifts, that have to be put into the
         # -- waveform generator. For the shift we apply now, part

@@ -13,7 +13,7 @@ from gw_signal_tools.waveform._error_helpers import (
 
 
 @pytest.mark.parametrize(
-    "q, unit",
+    'q, unit',
     [
         (10 * u.km, u.m),
         (1 * u.pc, u.Mpc),
@@ -21,20 +21,20 @@ from gw_signal_tools.waveform._error_helpers import (
             1.0 * u.m,
             u.kg,
             marks=pytest.mark.xfail(
-                raises=ValueError, strict=True, reason="Invalid conversion unit"
+                raises=ValueError, strict=True, reason='Invalid conversion unit'
             ),
         ),
     ],
 )
 def test_q_convert(q, unit):
-    _q_convert(q, unit, "", "")
+    _q_convert(q, unit, '', '')
 
 
 n = 42
 
 
 @pytest.mark.parametrize(
-    "s",
+    's',
     [
         (
             Series(
@@ -110,7 +110,7 @@ n = 42
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=ValueError, strict=True, reason="Non-matching x0"
+                raises=ValueError, strict=True, reason='Non-matching x0'
             ),
         ),
         pytest.param(
@@ -133,7 +133,7 @@ n = 42
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=ValueError, strict=True, reason="Non-matching dx"
+                raises=ValueError, strict=True, reason='Non-matching dx'
             ),
         ),
     ],
@@ -143,7 +143,7 @@ def test_compare_series_xindex_equal_sampling(s):
 
 
 @pytest.mark.parametrize(
-    "s",
+    's',
     [
         (
             Series(
@@ -197,7 +197,7 @@ def test_compare_series_xindex_equal_sampling(s):
             marks=pytest.mark.xfail(
                 raises=ValueError,
                 strict=True,
-                reason="Non-matching xindex, shifted index",
+                reason='Non-matching xindex, shifted index',
             ),
         ),
         pytest.param(
@@ -218,7 +218,7 @@ def test_compare_series_xindex_equal_sampling(s):
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=ValueError, strict=True, reason="Non-matching xindex, dx differs"
+                raises=ValueError, strict=True, reason='Non-matching xindex, dx differs'
             ),
         ),
     ],
@@ -231,7 +231,7 @@ df = 0.5
 
 
 @pytest.mark.parametrize(
-    "s",
+    's',
     [
         (
             FrequencySeries(
@@ -327,7 +327,7 @@ df = 0.5
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=AssertionError, strict=True, reason="Invalid x0 (non-symmetric)"
+                raises=AssertionError, strict=True, reason='Invalid x0 (non-symmetric)'
             ),
         ),
         pytest.param(
@@ -342,7 +342,7 @@ df = 0.5
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=AssertionError, strict=True, reason="Invalid x0 (non-symmetric)"
+                raises=AssertionError, strict=True, reason='Invalid x0 (non-symmetric)'
             ),
         ),  # Should not play role, but still check
         pytest.param(
@@ -365,7 +365,7 @@ df = 0.5
                 ),
             ),
             marks=pytest.mark.xfail(
-                raises=AssertionError, strict=True, reason="Invalid x0"
+                raises=AssertionError, strict=True, reason='Invalid x0'
             ),
         ),  # Only second one invalid, must still recognize
     ],

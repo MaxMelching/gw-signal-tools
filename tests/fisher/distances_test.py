@@ -27,19 +27,19 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        "total_mass": 100.0 * u.solMass,
-        "mass_ratio": 0.42 * u.dimensionless_unscaled,
-        "deltaT": 1.0 / 2048.0 * u.s,
-        "f22_start": f_min,
-        "f_max": f_max,
-        "f22_ref": 20.0 * u.Hz,
-        "phi_ref": 0.0 * u.rad,
-        "distance": 1.0 * u.Mpc,
-        "inclination": 0.0 * u.rad,
-        "eccentricity": 0.0 * u.dimensionless_unscaled,
-        "longAscNodes": 0.0 * u.rad,
-        "meanPerAno": 0.0 * u.rad,
-        "condition": 0,
+        'total_mass': 100.0 * u.solMass,
+        'mass_ratio': 0.42 * u.dimensionless_unscaled,
+        'deltaT': 1.0 / 2048.0 * u.s,
+        'f22_start': f_min,
+        'f_max': f_max,
+        'f22_ref': 20.0 * u.Hz,
+        'phi_ref': 0.0 * u.rad,
+        'distance': 1.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
+        'condition': 0,
     }
 )
 
@@ -47,18 +47,18 @@ wf_params = HashableDict(
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_gen = get_wf_generator("IMRPhenomXPHM")
+    wf_gen = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop("mass1", None)
-pc.default_dict.pop("mass2", None)
+pc.default_dict.pop('mass1', None)
+pc.default_dict.pop('mass2', None)
 
 
-@pytest.mark.parametrize("param_to_vary", ["total_mass", "mass_ratio", "distance"])
-@pytest.mark.parametrize("optimize", [False, True])
-@pytest.mark.parametrize("dist_kind", ["diff_norm", "mismatch_norm"])
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
+@pytest.mark.parametrize('optimize', [False, True])
+@pytest.mark.parametrize('dist_kind', ['diff_norm', 'mismatch_norm'])
 def test_distance(param_to_vary, optimize, dist_kind):
     center_val = wf_params[param_to_vary]
     param_range = u.Quantity([0.9 * center_val, 1.1 * center_val])
@@ -94,7 +94,7 @@ def test_distance(param_to_vary, optimize, dist_kind):
     assert_quantity_equal(param_range, dist_no_step_size.xindex)
 
 
-@pytest.mark.parametrize("param_to_vary", ["total_mass", "mass_ratio", "distance"])
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 def test_linearized_distance(param_to_vary):
     center_val = wf_params[param_to_vary]
     param_range = u.Quantity([0.9 * center_val, 1.1 * center_val])
@@ -117,18 +117,18 @@ def test_linearized_distance(param_to_vary):
     )
 
 
-@pytest.mark.parametrize("param_to_vary", ["total_mass", "mass_ratio", "distance"])
+@pytest.mark.parametrize('param_to_vary', ['total_mass', 'mass_ratio', 'distance'])
 def test_projected_linearized_distance(param_to_vary):
     center_val = wf_params[param_to_vary]
     param_range = u.Quantity([0.9 * center_val, 1.1 * center_val])
     step_size = 5e-2 * center_val
 
     dist1 = linearized_distance(
-        param_to_vary=[param_to_vary, "time", "phase"],
+        param_to_vary=[param_to_vary, 'time', 'phase'],
         param_vals=param_range,
         wf_params=wf_params,
         param_step_size=step_size,
-        params_to_project=["time", "phase"],
+        params_to_project=['time', 'phase'],
         wf_generator=wf_gen,
     )
 
@@ -145,7 +145,7 @@ def test_projected_linearized_distance(param_to_vary):
         param_vals=param_range,
         wf_params=wf_params,
         param_step_size=step_size,
-        params_to_project=["time", "phase"],
+        params_to_project=['time', 'phase'],
         wf_generator=wf_gen,
     )
 
@@ -160,9 +160,9 @@ def test_projected_linearized_distance(param_to_vary):
     assert_allclose_series(dist1, dist2, atol=0.0, rtol=0.0)
 
 
-@pytest.mark.parametrize("params_to_project", [["time", "phase"], "time"])
+@pytest.mark.parametrize('params_to_project', [['time', 'phase'], 'time'])
 def test_params_to_project(params_to_project):
-    param_to_vary = "total_mass"
+    param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]
     param_range = u.Quantity([0.9 * center_val, 1.1 * center_val])
 
@@ -193,7 +193,7 @@ def test_params_to_project(params_to_project):
 
 # %% -- Confirm that certain errors are raised --------------------------------
 class ErrorRaising(unittest.TestCase):
-    param_to_vary = "total_mass"
+    param_to_vary = 'total_mass'
     center_val = wf_params[param_to_vary]
     param_range = u.Quantity([0.9 * center_val, 1.1 * center_val])
     step_size = 5e-2 * center_val
@@ -205,7 +205,7 @@ class ErrorRaising(unittest.TestCase):
                 param_vals=self.param_range,
                 wf_params=wf_params,
                 param_step_size=self.step_size,
-                distance_kind="",
+                distance_kind='',
                 wf_generator=wf_gen,
             )
 
@@ -218,7 +218,7 @@ class ErrorRaising(unittest.TestCase):
                 param_vals=wrong_param_range,
                 wf_params=wf_params,
                 param_step_size=self.step_size,
-                distance_kind="diff_norm",
+                distance_kind='diff_norm',
                 wf_generator=wf_gen,
             )
 
@@ -238,18 +238,18 @@ class ErrorRaising(unittest.TestCase):
                 param_vals=self.param_range,
                 wf_params=wf_params,
                 param_step_size=self.step_size,
-                distance_kind="diff_norm",
+                distance_kind='diff_norm',
                 wf_generator=wf_gen,
             )
 
         with self.assertRaises(ValueError):
             linearized_distance(
-                param_to_vary=[self.param_to_vary, self.param_to_vary, "time", "phase"],
+                param_to_vary=[self.param_to_vary, self.param_to_vary, 'time', 'phase'],
                 param_vals=self.param_range,
                 wf_params=wf_params,
                 param_step_size=self.step_size,
-                distance_kind="diff_norm",
-                params_to_project=["time", "phase"],
+                distance_kind='diff_norm',
+                params_to_project=['time', 'phase'],
                 wf_generator=wf_gen,
             )
 
@@ -260,7 +260,7 @@ class ErrorRaising(unittest.TestCase):
                 param_vals=self.param_range * u.s,
                 wf_params=wf_params,
                 param_step_size=self.step_size,
-                distance_kind="",
+                distance_kind='',
                 wf_generator=wf_gen,
             )
 
@@ -270,6 +270,6 @@ class ErrorRaising(unittest.TestCase):
                 param_vals=self.param_range,
                 wf_params=wf_params,
                 param_step_size=self.step_size * u.s,
-                distance_kind="",
+                distance_kind='',
                 wf_generator=wf_gen,
             )

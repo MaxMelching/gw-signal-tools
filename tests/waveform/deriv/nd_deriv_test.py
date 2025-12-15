@@ -22,41 +22,41 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        "total_mass": 100.0 * u.solMass,
-        "mass_ratio": 0.42 * u.dimensionless_unscaled,
-        "deltaT": 1.0 / 2048.0 * u.s,
-        "f22_start": f_min,
-        "f_max": f_max,
-        "deltaF": 2**-5 * u.Hz,
-        "f22_ref": 20.0 * u.Hz,
-        "phi_ref": 0.0 * u.rad,
-        "distance": 1.0 * u.Mpc,
-        "inclination": 0.0 * u.rad,
-        "eccentricity": 0.0 * u.dimensionless_unscaled,
-        "longAscNodes": 0.0 * u.rad,
-        "meanPerAno": 0.0 * u.rad,
-        "condition": 0,
+        'total_mass': 100.0 * u.solMass,
+        'mass_ratio': 0.42 * u.dimensionless_unscaled,
+        'deltaT': 1.0 / 2048.0 * u.s,
+        'f22_start': f_min,
+        'f_max': f_max,
+        'deltaF': 2**-5 * u.Hz,
+        'f22_ref': 20.0 * u.Hz,
+        'phi_ref': 0.0 * u.rad,
+        'distance': 1.0 * u.Mpc,
+        'inclination': 0.0 * u.rad,
+        'eccentricity': 0.0 * u.dimensionless_unscaled,
+        'longAscNodes': 0.0 * u.rad,
+        'meanPerAno': 0.0 * u.rad,
+        'condition': 0,
     }
 )
 
-test_params = ["total_mass", "mass_ratio"]
+test_params = ['total_mass', 'mass_ratio']
 
 
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_generator = get_wf_generator("IMRPhenomXPHM")
+    wf_generator = get_wf_generator('IMRPhenomXPHM')
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop("mass1", None)
-pc.default_dict.pop("mass2", None)
+pc.default_dict.pop('mass1', None)
+pc.default_dict.pop('mass2', None)
 
 
 # %% -- Class Tests -----------------------------------------------------------
-@pytest.mark.parametrize("param", ["total_mass", "distance"])
-@pytest.mark.parametrize("routine", ["numdifftools", "amplitude_phase"])
+@pytest.mark.parametrize('param', ['total_mass', 'distance'])
+@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
 def test_point_calls(param, routine):
     nd_deriv = WaveformDerivative(wf_params, param, wf_generator, deriv_routine=routine)
 
@@ -77,25 +77,25 @@ def test_point_calls(param, routine):
 
 
 @pytest.mark.parametrize(
-    "param, param_val, invalid_step",
+    'param, param_val, invalid_step',
     [
-        ["total_mass", 10 * u.Msun, 15.0],
-        ["mass_ratio", 0.1 * u.dimensionless_unscaled, 0.2],
-        ["mass_ratio", 0.8 * u.dimensionless_unscaled, 0.2],
+        ['total_mass', 10 * u.Msun, 15.0],
+        ['mass_ratio', 0.1 * u.dimensionless_unscaled, 0.2],
+        ['mass_ratio', 0.8 * u.dimensionless_unscaled, 0.2],
         # -- Works in test_deriv, but not here. One segment of frequency
         # -- interval is badly approximated by numdifftools
         [
-            "mass_ratio",
+            'mass_ratio',
             0.9 * u.dimensionless_unscaled,
             1.0,
         ],  # Not backward because lower bound also violated
-        ["mass_ratio", 1.1 * u.dimensionless_unscaled, 0.2 * u.dimensionless_unscaled],
+        ['mass_ratio', 1.1 * u.dimensionless_unscaled, 0.2 * u.dimensionless_unscaled],
         # -- Following tests do not work, sym_mass_ratio is not in wf_params
         # ['sym_mass_ratio', 0.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
         # ['sym_mass_ratio', 0.2*u.dimensionless_unscaled, 0.1*u.dimensionless_unscaled, 'backward'],
     ],
 )
-@pytest.mark.parametrize("routine", ["numdifftools", "amplitude_phase"])
+@pytest.mark.parametrize('routine', ['numdifftools', 'amplitude_phase'])
 def test_invalid_step_size(param, param_val, invalid_step, routine):
     deriv_1 = WaveformDerivative(
         wf_params | {param: param_val},
@@ -130,7 +130,7 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
 
 
 # test_param = 'total_mass'  # Differences between routines are 1e-4 smaller than actual values. Good agreement
-test_param = "mass_ratio"  # Differences between routines are 1e-4 smaller than actual values. Great agreement
+test_param = 'mass_ratio'  # Differences between routines are 1e-4 smaller than actual values. Great agreement
 # test_param = 'distance'  # Perfectly equal, as expected
 nd_deriv = WaveformDerivativeNumdifftools(
     wf_params,
@@ -171,20 +171,20 @@ nd_deriv_eval = nd_deriv(eval_point)
 gwsignal_deriv_eval = gwsignal_deriv(eval_point)
 amp_phase_deriv_eval = amp_phase_deriv(eval_point)
 
-ax1.plot(nd_deriv(eval_point).real, "-", label="Numdifftools")
+ax1.plot(nd_deriv(eval_point).real, '-', label='Numdifftools')
 # ax1.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).real, '--', label='GWSignaltools')
-ax1.plot(gwsignal_deriv(eval_point).real, "--", label="GWSignaltools")
-ax1.plot(amp_phase_deriv(eval_point).real, ":", label="AmplitudePhase")
+ax1.plot(gwsignal_deriv(eval_point).real, '--', label='GWSignaltools')
+ax1.plot(amp_phase_deriv(eval_point).real, ':', label='AmplitudePhase')
 
-ax1.set_title("Real Part")
+ax1.set_title('Real Part')
 ax1.legend()
 
-ax2.plot(nd_deriv(eval_point).imag, "-", label="Numdifftools")
+ax2.plot(nd_deriv(eval_point).imag, '-', label='Numdifftools')
 # ax2.plot(gwsignal_deriv(wf_params | {test_param: eval_point}).imag, '--', label='GWSignaltools')
-ax2.plot(gwsignal_deriv(eval_point).imag, "--", label="GWSignaltools")
-ax2.plot(amp_phase_deriv(eval_point).imag, ":", label="AmplitudePhase")
+ax2.plot(gwsignal_deriv(eval_point).imag, '--', label='GWSignaltools')
+ax2.plot(amp_phase_deriv(eval_point).imag, ':', label='AmplitudePhase')
 
-ax2.set_title("Imaginary Part")
+ax2.set_title('Imaginary Part')
 ax2.legend()
 
 # ax3.plot(nd_deriv.deriv - gwsignal_deriv.deriv, '-', label='Numdifftools - GWSignaltools')
@@ -196,18 +196,18 @@ ax2.legend()
 
 ax3.plot(
     (nd_deriv_eval - gwsignal_deriv_eval).abs(),
-    "-",
-    label="Numdifftools - GWSignaltools",
+    '-',
+    label='Numdifftools - GWSignaltools',
 )
 ax3.plot(
     (nd_deriv_eval - amp_phase_deriv_eval).abs(),
-    "--",
-    label="Numdifftools - AmplitudePhase",
+    '--',
+    label='Numdifftools - AmplitudePhase',
 )
 ax3.plot(
     (gwsignal_deriv_eval - amp_phase_deriv_eval).abs(),
-    ":",
-    label="GWSignaltools - AmplitudePhase",
+    ':',
+    label='GWSignaltools - AmplitudePhase',
 )
 
 ax3.legend()

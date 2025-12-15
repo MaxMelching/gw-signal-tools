@@ -24,9 +24,9 @@ dealing with errors in package functions.
 """
 
 
-_UNIT_CONV_ERR = '''
+_UNIT_CONV_ERR = """
 Need consistent (i.e. convertible) units for `%s` (%s) and `%s` (%s).
-'''
+"""
 
 
 def _q_convert(

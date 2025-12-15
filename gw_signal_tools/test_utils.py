@@ -55,9 +55,9 @@ def allclose_quantity(arr1: u.Quantity, arr2: u.Quantity, *args, **kwargs) -> np
     if not isinstance(arr2, u.Quantity):
         arr2 = u.Quantity(arr2)
 
-    assert (
-        arr1.unit == arr2.unit
-    ), f'Cannot compare unequal units, {arr1.unit} != {arr2.unit}.'
+    assert arr1.unit == arr2.unit, (
+        f'Cannot compare unequal units, {arr1.unit} != {arr2.unit}.'
+    )
 
     return np.all(np.isclose(arr1.value, arr2.value, *args, **kwargs))
 

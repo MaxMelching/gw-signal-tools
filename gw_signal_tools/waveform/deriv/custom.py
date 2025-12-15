@@ -537,9 +537,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             # Refine in same way that we do with start_step_size
             self.step_sizes = np.reshape(
                 np.outer([current_best_step / 10**i for i in range(4)], [5, 1]), -1
-            )[
-                1:
-            ]  # Indexing makes sure we do not start at 5*start_step_size
+            )[1:]  # Indexing makes sure we do not start at 5*start_step_size
 
     def _iterate_through_step_sizes(self):
         """
@@ -849,7 +847,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         # -- will not cause an error
 
         if len(self._derivative_vals) == 0:
-            raise RuntimeError('No derivative was calculated. ' 'Cannot generate plot.')
+            raise RuntimeError('No derivative was calculated. Cannot generate plot.')
 
         fig = plt.figure()
         ax = fig.subplots(nrows=2, sharex=True)

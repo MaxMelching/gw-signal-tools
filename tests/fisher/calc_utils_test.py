@@ -10,7 +10,7 @@ from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
 from gw_signal_tools.waveform import get_wf_generator
 from gw_signal_tools.fisher import num_diff, fisher_matrix
 from gw_signal_tools.types import HashableDict
-from gw_signal_tools import enable_caching_locally, disable_caching_locally
+from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
 
 
 # %% -- Testing Derivative Methods --------------------------------------------
@@ -42,7 +42,7 @@ def test_num_diff():
     assert_allclose(derivative_vals[-2:], np.cos(x_vals)[-2:], atol=0.0, rtol=0.02)
 
 
-@pytest.mark.parametrize('h', [None, 1e-2, 1e-2 * u.s])
+@pytest.mark.parametrize("h", [None, 1e-2, 1e-2 * u.s])
 def test_num_diff_input(h):
     step_size = 1e-2
     x_vals = np.arange(0.0, 2.0, step=step_size)
@@ -60,48 +60,48 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        'total_mass': 100.0 * u.solMass,
-        'mass_ratio': 0.42 * u.dimensionless_unscaled,
-        'deltaT': 1.0 / 2048.0 * u.s,
-        'f22_start': f_min,
-        'f_max': f_max,
-        'deltaF': 2**-5 * u.Hz,
-        'f22_ref': 20.0 * u.Hz,
-        'phi_ref': 0.0 * u.rad,
-        'distance': 1.0 * u.Mpc,
-        'inclination': 0.0 * u.rad,
-        'eccentricity': 0.0 * u.dimensionless_unscaled,
-        'longAscNodes': 0.0 * u.rad,
-        'meanPerAno': 0.0 * u.rad,
-        'condition': 0,
+        "total_mass": 100.0 * u.solMass,
+        "mass_ratio": 0.42 * u.dimensionless_unscaled,
+        "deltaT": 1.0 / 2048.0 * u.s,
+        "f22_start": f_min,
+        "f_max": f_max,
+        "deltaF": 2**-5 * u.Hz,
+        "f22_ref": 20.0 * u.Hz,
+        "phi_ref": 0.0 * u.rad,
+        "distance": 1.0 * u.Mpc,
+        "inclination": 0.0 * u.rad,
+        "eccentricity": 0.0 * u.dimensionless_unscaled,
+        "longAscNodes": 0.0 * u.rad,
+        "meanPerAno": 0.0 * u.rad,
+        "condition": 0,
     }
 )
 
-test_params = ['total_mass', 'mass_ratio']
+test_params = ["total_mass", "mass_ratio"]
 
 
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_generator = get_wf_generator('IMRPhenomXPHM')
+    wf_generator = get_wf_generator("IMRPhenomXPHM")
 
 # -- Make sure mass1 and mass2 are not in default_dict
-import lalsimulation.gwsignal.core.parameter_conventions as pc
+import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop('mass1', None)
-pc.default_dict.pop('mass2', None)
+pc.default_dict.pop("mass1", None)
+pc.default_dict.pop("mass2", None)
 
 
 # %% -- Fisher consistency checks ---------------------------------------------
-@pytest.mark.parametrize('break_conv', [True, False])
+@pytest.mark.parametrize("break_conv", [True, False])
 def test_convergence_check(break_conv):
     fisher_diff_norm = fisher_matrix(
         wf_params,
         test_params,
         wf_generator,
-        convergence_check='diff_norm',
+        convergence_check="diff_norm",
         break_upon_convergence=break_conv,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -109,9 +109,9 @@ def test_convergence_check(break_conv):
         wf_params,
         test_params,
         wf_generator,
-        convergence_check='mismatch',
+        convergence_check="mismatch",
         break_upon_convergence=break_conv,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -125,7 +125,7 @@ def test_convergence_check(break_conv):
         )
 
 
-@pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
+@pytest.mark.parametrize("crit", ["diff_norm", "mismatch"])
 def test_break_upon_convergence(crit):
     fisher_without_convergence = fisher_matrix(
         wf_params,
@@ -133,7 +133,7 @@ def test_break_upon_convergence(crit):
         wf_generator,
         convergence_check=crit,
         break_upon_convergence=True,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -143,7 +143,7 @@ def test_break_upon_convergence(crit):
         wf_generator,
         convergence_check=crit,
         break_upon_convergence=False,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -155,9 +155,9 @@ def test_break_upon_convergence(crit):
     # -- otherwise rtol=1e-3 would work
 
 
-@pytest.mark.parametrize('conv_crit', ['diff_norm', 'mismatch'])
+@pytest.mark.parametrize("conv_crit", ["diff_norm", "mismatch"])
 def test_optimize(conv_crit):
-    params_to_vary = ['total_mass', 'time', 'phase']
+    params_to_vary = ["total_mass", "time", "phase"]
 
     # -- For diagonal values, optimization must yield same result (up to
     # -- differences in the routines)
@@ -166,7 +166,7 @@ def test_optimize(conv_crit):
         params_to_vary,
         wf_generator,
         convergence_check=conv_crit,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -176,7 +176,7 @@ def test_optimize(conv_crit):
         wf_generator,
         optimize_time_and_phase=True,
         convergence_check=conv_crit,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -191,7 +191,7 @@ def test_start_step_size():
         test_params,
         wf_generator,
         start_step_size=1e-1,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -200,7 +200,7 @@ def test_start_step_size():
         test_params,
         wf_generator,
         start_step_size=1e-2,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
 
@@ -210,22 +210,31 @@ def test_start_step_size():
 
 
 def test_deriv_routine():
-    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
-        globals()[f'fisher_{routine}'] = fisher_matrix(
+    for routine in ["gw_signal_tools", "numdifftools", "amplitude_phase"]:
+        globals()[f"fisher_{routine}"] = fisher_matrix(
             wf_params, test_params, wf_generator, deriv_routine=routine
         )
 
     # -- Ensure mutual consistency
     assert_allclose_MatrixWithUnits(
-        fisher_gw_signal_tools, fisher_numdifftools, atol=0.0, rtol=4e-4
+        fisher_gw_signal_tools,  # noqa: F821
+        fisher_numdifftools,  # noqa: F821
+        atol=0.0,
+        rtol=4e-4,
     )
     assert_allclose_MatrixWithUnits(
-        fisher_gw_signal_tools, fisher_amplitude_phase, atol=0.0, rtol=4.7e-4
+        fisher_gw_signal_tools,  # noqa: F821
+        fisher_amplitude_phase,  # noqa: F821
+        atol=0.0,
+        rtol=4.7e-4,
     )
     assert_allclose_MatrixWithUnits(
-        fisher_numdifftools, fisher_amplitude_phase, atol=0.0, rtol=8e-5
+        fisher_numdifftools,  # noqa: F821
+        fisher_amplitude_phase,  # noqa: F821
+        atol=0.0,
+        rtol=8e-5,
     )
 
     # -- Remove variables from global scope
-    for routine in ['gw_signal_tools', 'numdifftools', 'amplitude_phase']:
-        del globals()[f'fisher_{routine}']
+    for routine in ["gw_signal_tools", "numdifftools", "amplitude_phase"]:
+        del globals()[f"fisher_{routine}"]

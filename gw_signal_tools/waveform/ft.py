@@ -6,18 +6,16 @@ from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 import numpy as np
 import astropy.units as u
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
 
 
 __all__ = (
-    'FT_CONVENTION_DEFAULT',
-    'td_to_fd',
-    'fd_to_td',
-    'correct_for_conditioning',
-    'shift_signal_cyclic',
-    'shift_signal',
-    'zero_pad',
+    "FT_CONVENTION_DEFAULT",
+    "td_to_fd",
+    "fd_to_td",
+    "correct_for_conditioning",
+    "shift_signal_cyclic",
+    "shift_signal",
+    "zero_pad",
 )
 
 
@@ -29,7 +27,7 @@ Files handling Fourier transform functions interplay with gwsignal.
 try:
     from lalsimulation.gwsignal.core.utils import FT_CONVENTION_DEFAULT
 except ImportError:
-    FT_CONVENTION_DEFAULT: str = 'wrap'
+    FT_CONVENTION_DEFAULT: str = "wrap"
 
 
 try:
@@ -38,7 +36,7 @@ except ImportError:
 
     def td_to_fd(
         signal: TimeSeries,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
+        convention: Literal["wrap", "unwrap"] = FT_CONVENTION_DEFAULT,
     ) -> FrequencySeries:
         """
         Transform given :code:`signal` into Fourier domain. Note that the
@@ -85,7 +83,7 @@ except ImportError:
                 << 1 / signal.dx.unit,
                 unit=signal.unit * signal.dx.unit,
                 name=(
-                    'Fourier transform of ' + signal.name
+                    "Fourier transform of " + signal.name
                     if signal.name is not None
                     else None
                 ),
@@ -99,7 +97,7 @@ except ImportError:
                 << 1 / signal.dx.unit,
                 unit=signal.unit * signal.dx.unit,
                 name=(
-                    'Fourier transform of ' + signal.name
+                    "Fourier transform of " + signal.name
                     if signal.name is not None
                     else None
                 ),
@@ -107,11 +105,11 @@ except ImportError:
                 epoch=signal.epoch.gps,
             )
 
-        if convention == 'unwrap':
+        if convention == "unwrap":
             # -- Account for non-zero starting time via phase factor
             return out * np.exp(-2.0j * np.pi * out.frequencies * signal.t0)
             # -- Note: for TimeSeries t0=epoch
-        elif convention == 'wrap':
+        elif convention == "wrap":
             return out
         else:
             raise ValueError(f"Invalid convention '{convention}'.")
@@ -123,7 +121,7 @@ except ImportError:
 
     def fd_to_td(
         signal: FrequencySeries,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
+        convention: Literal["wrap", "unwrap"] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries:
         """
         Transform given :code:`signal` into time domain. Note that the
@@ -159,7 +157,7 @@ except ImportError:
         """
         start_time = signal.epoch.gps * u.s  # Convert Time to Quantity
 
-        if convention == 'unwrap':
+        if convention == "unwrap":
             # -- Avoid wrap-around of signal by rolling in frequency
             # -- domain. Is doneby shifting signal to starting time t0=0
             # -- here and then shifting IFT signal back to t0=start_time
@@ -167,7 +165,7 @@ except ImportError:
             # -- might be off by a single sample in time when performing
             # -- repeated FFTs, IFFTs and then compare signals)
             _signal = signal * np.exp(2.0j * np.pi * signal.frequencies * start_time)
-        elif convention == 'wrap':
+        elif convention == "wrap":
             _signal = signal
         else:
             raise ValueError(f"Invalid convention '{convention}'.")
@@ -184,7 +182,7 @@ except ImportError:
                 t0=start_time,  # t0=epoch for TimeSeries
                 dt=dt,
                 name=(
-                    'Inverse Fourier transform of ' + _signal.name
+                    "Inverse Fourier transform of " + _signal.name
                     if _signal.name is not None
                     else None
                 ),
@@ -193,9 +191,9 @@ except ImportError:
         elif _signal.f0 < 0.0:
             if np.fft.ifftshift(_signal.frequencies)[0] != 0.0:
                 raise ValueError(
-                    '`signal` does not have correct format for ifft. Please check '
-                    'https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html#numpy.fft.ifft'
-                    'for the requirements regarding frequency range.'
+                    "`signal` does not have correct format for ifft. Please check "
+                    "https://numpy.org/doc/stable/reference/generated/numpy.fft.ifft.html#numpy.fft.ifft"
+                    "for the requirements regarding frequency range."
                 )
 
             dt = 1 / (_signal.size * _signal.df)
@@ -208,7 +206,7 @@ except ImportError:
                 t0=start_time,  # t0=epoch for TimeSeries
                 dt=dt,
                 name=(
-                    'Inverse Fourier transform of ' + _signal.name
+                    "Inverse Fourier transform of " + _signal.name
                     if _signal.name is not None
                     else None
                 ),
@@ -216,8 +214,8 @@ except ImportError:
             )
         else:
             raise ValueError(
-                'Signal starts at positive frequency. Need either f0=0 (for irfft)'
-                ' or negative f0 (for ifft).'
+                "Signal starts at positive frequency. Need either f0=0 (for irfft)"
+                " or negative f0 (for ifft)."
             )
 
         return out
@@ -257,7 +255,7 @@ except ImportError:
     def shift_signal_cyclic(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
+        convention: Literal["wrap", "unwrap"] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries | FrequencySeries:
         """
         Roll `signal` by `amount` to the right (i.e. take part of this
@@ -283,10 +281,10 @@ except ImportError:
             # -- round-off errors (index_shift*dt is more accurate)
             return _signal
         elif isinstance(signal, FrequencySeries):
-            if convention == 'unwrap':
+            if convention == "unwrap":
                 _signal = signal.copy()
                 _signal.epoch = _signal.epoch.gps * u.s + time_shift
-            elif convention == 'wrap':
+            elif convention == "wrap":
                 _signal = signal * np.exp(
                     2.0j * np.pi * time_shift * signal.frequencies
                 )
@@ -299,7 +297,7 @@ except ImportError:
             return _signal
         else:
             raise TypeError(
-                '`signal` must be a GWpy `FrequencySeries` or ' '`TimeSeries`.'
+                "`signal` must be a GWpy `FrequencySeries` or `TimeSeries`."
             )
 
 
@@ -310,7 +308,7 @@ except ImportError:
     def shift_signal(
         signal: TimeSeries | FrequencySeries,
         time_shift: u.Quantity,
-        convention: Literal['wrap', 'unwrap'] = FT_CONVENTION_DEFAULT,
+        convention: Literal["wrap", "unwrap"] = FT_CONVENTION_DEFAULT,
     ) -> TimeSeries | FrequencySeries:
         """
         Shift `signal` by `time_shift` in time.
@@ -325,14 +323,14 @@ except ImportError:
             _signal.t0 = _signal.t0 + index_shift * _signal.dt  # NOT the same as +=
             return _signal
         elif isinstance(signal, FrequencySeries):
-            if convention == 'unwrap':
+            if convention == "unwrap":
                 _signal = signal * np.exp(
                     -2.0j * np.pi * time_shift * signal.frequencies
                 )
                 _signal.epoch = (
                     _signal.epoch.gps * u.s + time_shift
                 )  # NOT the same as +=
-            elif convention == 'wrap':
+            elif convention == "wrap":
                 _signal = signal.copy()
                 _signal.epoch = _signal.epoch.gps * u.s + time_shift
             else:
@@ -341,7 +339,7 @@ except ImportError:
             return _signal
         else:
             raise TypeError(
-                '`signal` must be a GWpy `FrequencySeries` or ' '`TimeSeries`.'
+                "`signal` must be a GWpy `FrequencySeries` or `TimeSeries`."
             )
 
 
@@ -380,8 +378,8 @@ except ImportError:
             # -- Conversion only fails if df is already Quantity and has
             # -- non-matching unit, so we can assume that df.unit works
             raise ValueError(
-                f'Need consistent units for `df` ({df.unit}) and '
-                f'`signals.frequencies` ({frequ_unit}).'
+                f"Need consistent units for `df` ({df.unit}) and "
+                f"`signals.frequencies` ({frequ_unit})."
             ) from e
 
         # -- Compute what would be current df of FT

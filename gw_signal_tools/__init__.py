@@ -2,7 +2,7 @@
 try:
     from ._version import version as __version__
 except ModuleNotFoundError:  # development mode
-    __version__ = ''
+    __version__ = ""
 
 
 __doc__ = """
@@ -13,16 +13,16 @@ Repository with files surrounding computations with waveforms from lal.
 from os.path import dirname as _path_dirname, join as _path_join
 
 PACKAGE_PATH: str = _path_dirname(__file__)
-PLOT_STYLE_SHEET: str = _path_join(PACKAGE_PATH, 'plot_stylesheet.sty')
+PLOT_STYLE_SHEET: str = _path_join(PACKAGE_PATH, "plot_stylesheet.sty")
 
 # -- Set preferred unit system here (can be changed)
-from .units import *  # noqa: F401
+from .units import *
 
 # -- Initialize Logging
-from .logging import *  # noqa: F401
+from .logging import *
 
 # -- Initialize Caching
-from .caching import *  # noqa: F401
+from .caching import *
 
 # -- Dictionary to get nicer display of parameters
-from .plotting import *  # noqa: F401
+from .plotting import *

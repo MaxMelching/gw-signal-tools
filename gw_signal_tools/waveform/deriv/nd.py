@@ -238,10 +238,12 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         _base_step = self.step.base_step
         _par_val = self.param_center_val.value
 
-        violation = lambda step: (
-            _par_val - step <= lower_bound,
-            _par_val + step >= upper_bound,
-        )
+        def violation(step):
+            return (
+                _par_val - step <= lower_bound,
+                _par_val + step >= upper_bound,
+            )
+
         lower_violation, upper_violation = violation(_base_step)
 
         # -- Check if base_step needs change

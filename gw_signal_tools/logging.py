@@ -1,5 +1,6 @@
 # -- Standard Lib Imports
 import logging as _log
+from sys import stderr as _stderr
 
 
 __doc__ = """Module in which the gw-signal-tools logger is defined."""
@@ -17,7 +18,6 @@ formatter = _log.Formatter(
     datefmt='%Y-%m-%d  %H:%M:%S',
 )
 
-from sys import stderr as _stderr
 
 ch = _log.StreamHandler(stream=_stderr)  # More explicit
 ch.setLevel(_log.INFO)

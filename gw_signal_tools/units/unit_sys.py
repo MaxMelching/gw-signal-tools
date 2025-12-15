@@ -69,7 +69,7 @@ mol = _si.mol
 
 # -- Handle strain unit. Is a little complicated, e.g. because custom
 # -- adding would cause problems when GWPy and this package are loaded
-import gwpy.detector.units  # noqa: F401 - Adds strain to astropy units
+import gwpy.detector.units  # noqa: F401, E402 - Adds strain to astropy units
 
 u.get_current_unit_registry()._registry.pop('strain', None)
 # -- Potential problem is that strain was equivalent to astropy unit
@@ -92,7 +92,7 @@ __all__ += [n for n, v in _ns.items() if isinstance(v, u.UnitBase)]
 
 # -- This generates a docstring for this module that describes all of
 # -- the standard units defined here. Also copied from astropy.units.si.
-from astropy import __version__ as _astropy_version
+from astropy import __version__ as _astropy_version  # noqa: E402 - Top-level import
 
 if _astropy_version >= '7.2.0':
     from astropy.units.docgen import generate_unit_summary as _generate_unit_summary

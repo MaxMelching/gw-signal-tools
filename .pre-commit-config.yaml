@@ -24,21 +24,17 @@ repos:
         files: \.gitattributes$
         stages: [pre-commit]
 
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.13
     hooks:
-      - id: black
-        language_version: python3
+      - id: ruff-check
+        args: [--exit-non-zero-on-fix, --fix, --show-fixes]
+        stages: [pre-commit]
+      - id: ruff-format
+        args: []
         stages: [pre-commit]
 
-  # - repo: https://github.com/astral-sh/ruff-pre-commit
-  #   rev: v0.11.13
-  #   hooks:
-  #     - id: ruff-check
-  #       args: [--exit-non-zero-on-fix, --fix, --show-fixes]
-  #       stages: [pre-commit]
-
-  #     # run by CI only, to get code quality report
-  #     - id: ruff-check
-  #       args: [--exit-zero, --output-file, code-quality-ruff.json, --output-format, gitlab]
-  #       stages: [manual]
+      # # run by CI only, to get code quality report
+      # - id: ruff-check
+      #   args: [--exit-zero, --output-file, code-quality-ruff.json, --output-format, gitlab]
+      #   stages: [manual]

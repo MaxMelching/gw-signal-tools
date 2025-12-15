@@ -19,7 +19,7 @@ from gw_signal_tools.waveform import (
     WaveformDerivativeBase,
 )
 from gw_signal_tools.types import HashableDict
-from gw_signal_tools import enable_caching_locally, disable_caching_locally
+from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
 
 
 # %% -- Initializing commonly used variables for Fisher tests -----------------
@@ -28,74 +28,74 @@ f_max = 1024.0 * u.Hz
 
 wf_params = HashableDict(
     {
-        'total_mass': 100.0 * u.solMass,
-        'mass_ratio': 0.42 * u.dimensionless_unscaled,
-        'deltaT': 1.0 / 2048.0 * u.s,
-        'f22_start': f_min,
-        'f_max': f_max,
-        'deltaF': 2**-5 * u.Hz,
-        'f22_ref': 20.0 * u.Hz,
-        'phi_ref': 0.0 * u.rad,
-        'distance': 1.0 * u.Mpc,
-        'inclination': 0.0 * u.rad,
-        'eccentricity': 0.0 * u.dimensionless_unscaled,
-        'longAscNodes': 0.0 * u.rad,
-        'meanPerAno': 0.0 * u.rad,
-        'condition': 0,
+        "total_mass": 100.0 * u.solMass,
+        "mass_ratio": 0.42 * u.dimensionless_unscaled,
+        "deltaT": 1.0 / 2048.0 * u.s,
+        "f22_start": f_min,
+        "f_max": f_max,
+        "deltaF": 2**-5 * u.Hz,
+        "f22_ref": 20.0 * u.Hz,
+        "phi_ref": 0.0 * u.rad,
+        "distance": 1.0 * u.Mpc,
+        "inclination": 0.0 * u.rad,
+        "eccentricity": 0.0 * u.dimensionless_unscaled,
+        "longAscNodes": 0.0 * u.rad,
+        "meanPerAno": 0.0 * u.rad,
+        "condition": 0,
     }
 )
 
-test_params = ['total_mass', 'mass_ratio']
+test_params = ["total_mass", "mass_ratio"]
 
 
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_generator = get_wf_generator('IMRPhenomXPHM')
+    wf_generator = get_wf_generator("IMRPhenomXPHM")
 
 # -- Make sure mass1 and mass2 are not in default_dict
-import lalsimulation.gwsignal.core.parameter_conventions as pc
+import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
-pc.default_dict.pop('mass1', None)
-pc.default_dict.pop('mass2', None)
+pc.default_dict.pop("mass1", None)
+pc.default_dict.pop("mass2", None)
 
 
 # %% -- Testing WaveformDerivative --------------------------------------------
 def test_default_routine():
-    full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator)
+    full_deriv = WaveformDerivative(wf_params, "total_mass", wf_generator)
     assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
 
 
 def test_all_routines():
     full_deriv = WaveformDerivative(
         wf_params,
-        'total_mass',
+        "total_mass",
         wf_generator,
-        deriv_routine='gw_signal_tools',
+        deriv_routine="gw_signal_tools",
         pass_inn_prod_kwargs_to_deriv=True,
     )
     assert isinstance(full_deriv, WaveformDerivativeGWSignaltools)
 
     full_deriv = WaveformDerivative(
-        wf_params, 'total_mass', wf_generator, deriv_routine='numdifftools'
+        wf_params, "total_mass", wf_generator, deriv_routine="numdifftools"
     )
     assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
 
     full_deriv = WaveformDerivative(
-        wf_params, 'total_mass', wf_generator, deriv_routine='amplitude_phase'
+        wf_params, "total_mass", wf_generator, deriv_routine="amplitude_phase"
     )
     assert isinstance(full_deriv, WaveformDerivativeAmplitudePhase)
 
-    with pytest.raises(ValueError, match='Invalid deriv_routine'):
+    with pytest.raises(ValueError, match="Invalid deriv_routine"):
         full_deriv = WaveformDerivative(
-            wf_params, 'total_mass', wf_generator, deriv_routine=''
+            wf_params, "total_mass", wf_generator, deriv_routine=""
         )
 
 
 def test_class_passing():
     full_deriv = WaveformDerivative(
         wf_params,
-        'total_mass',
+        "total_mass",
         wf_generator,
         deriv_routine=WaveformDerivativeNumdifftools,
     )
@@ -116,28 +116,28 @@ def test_str_mapping():
     class CustomDeriv(WaveformDerivativeBase):
         pass
 
-    WaveformDerivative.deriv_routine_class_map['custom_routine'] = CustomDeriv
+    WaveformDerivative.deriv_routine_class_map["custom_routine"] = CustomDeriv
     full_deriv = WaveformDerivative(
-        wf_params, 'total_mass', wf_generator, deriv_routine='custom_routine'
+        wf_params, "total_mass", wf_generator, deriv_routine="custom_routine"
     )
 
     assert isinstance(full_deriv, CustomDeriv)
 
-    WaveformDerivative.deriv_routine_class_map.pop('custom_routine')
+    WaveformDerivative.deriv_routine_class_map.pop("custom_routine")
 
-    with pytest.raises(ValueError, match='Invalid deriv_routine'):
+    with pytest.raises(ValueError, match="Invalid deriv_routine"):
         full_deriv = WaveformDerivative(
-            wf_params, 'total_mass', wf_generator, deriv_routine='custom_routine'
+            wf_params, "total_mass", wf_generator, deriv_routine="custom_routine"
         )
 
 
 # %% -- Characterizing gwsignaltools derivative -------------------------------
-@pytest.mark.parametrize('param', test_params)
-@pytest.mark.parametrize('q_val', [0.42, 0.05])
-@pytest.mark.parametrize('break_conv', [True, False])
+@pytest.mark.parametrize("param", test_params)
+@pytest.mark.parametrize("q_val", [0.42, 0.05])
+@pytest.mark.parametrize("break_conv", [True, False])
 def test_step_size(param, q_val, break_conv):
     full_deriv = WaveformDerivativeGWSignaltools(
-        wf_params | {'mass_ratio': q_val * u.dimensionless_unscaled},
+        wf_params | {"mass_ratio": q_val * u.dimensionless_unscaled},
         param,
         wf_generator,
         break_upon_convergence=break_conv,
@@ -145,10 +145,10 @@ def test_step_size(param, q_val, break_conv):
     deriv, deriv_info = full_deriv.deriv, full_deriv.deriv_info
 
     deriv_fixed_step_size = WaveformDerivativeGWSignaltools(
-        wf_params | {'mass_ratio': q_val * u.dimensionless_unscaled},
+        wf_params | {"mass_ratio": q_val * u.dimensionless_unscaled},
         param,
         wf_generator,
-        step_sizes=deriv_info['final_step_size'],
+        step_sizes=deriv_info["final_step_size"],
     ).deriv
 
     # -- These must be equal (not just close)
@@ -158,7 +158,7 @@ def test_step_size(param, q_val, break_conv):
         deriv.crop(end=256 * u.Hz, copy=False)
         deriv_fixed_step_size.crop(end=256 * u.Hz, copy=False)
 
-        if param != 'total_mass':
+        if param != "total_mass":
             assert_allclose_series(deriv, deriv_fixed_step_size, atol=2e-24, rtol=2e-3)
         else:
             # One peak for q=0.42 where deviation is larger than otherwise.
@@ -205,7 +205,7 @@ def test_step_size(param, q_val, break_conv):
     # plt.show()
 
 
-@pytest.mark.parametrize('param', test_params)
+@pytest.mark.parametrize("param", test_params)
 def test_custom_convergence(param):
     deriv_1 = WaveformDerivativeGWSignaltools(wf_params, param, wf_generator).deriv
 
@@ -221,22 +221,22 @@ def test_custom_convergence(param):
 
 
 @pytest.mark.parametrize(
-    'param, param_val, invalid_step, expected_formula',
+    "param, param_val, invalid_step, expected_formula",
     [
-        ['total_mass', 10 * u.Msun, 15.0, 'forward'],
-        ['mass_ratio', 0.1 * u.dimensionless_unscaled, 0.2, 'forward'],
-        ['mass_ratio', 0.8 * u.dimensionless_unscaled, 0.2, 'backward'],
+        ["total_mass", 10 * u.Msun, 15.0, "forward"],
+        ["mass_ratio", 0.1 * u.dimensionless_unscaled, 0.2, "forward"],
+        ["mass_ratio", 0.8 * u.dimensionless_unscaled, 0.2, "backward"],
         [
-            'mass_ratio',
+            "mass_ratio",
             0.9 * u.dimensionless_unscaled,
             1.0,
-            'five_point',
+            "five_point",
         ],  # Not backward because lower bound also violated
         [
-            'mass_ratio',
+            "mass_ratio",
             1.1 * u.dimensionless_unscaled,
             0.2 * u.dimensionless_unscaled,
-            'forward',
+            "forward",
         ],
         # -- Following tests do not work, sym_mass_ratio is not in wf_params
         # ['sym_mass_ratio', 0.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
@@ -250,7 +250,7 @@ def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
         wf_generator,
         step_sizes=[invalid_step, 1e-2],
         max_refine_numb=1,
-        deriv_formula='five_point',
+        deriv_formula="five_point",
     )
     # -- Idea: provoke error for complete coverage, then use same step
     # -- size as below
@@ -266,10 +266,10 @@ def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
     # -- adjustment in previous call
 
     assert_allclose_series(deriv_1.deriv, deriv_2.deriv, atol=0.0, rtol=0.0)
-    assert deriv_1.deriv_info['deriv_formula'] == deriv_2.deriv_info['deriv_formula']
+    assert deriv_1.deriv_info["deriv_formula"] == deriv_2.deriv_info["deriv_formula"]
 
 
-@pytest.mark.parametrize('param', test_params)
+@pytest.mark.parametrize("param", test_params)
 def test_convergence_plot(param):
     deriv = WaveformDerivativeGWSignaltools(wf_params, param, wf_generator)
     deriv()
@@ -279,8 +279,8 @@ def test_convergence_plot(param):
 
 
 # %% -- Derivative consistency checks -----------------------------------------
-@pytest.mark.parametrize('param_to_vary', test_params)
-@pytest.mark.parametrize('crit', ['diff_norm', 'mismatch'])
+@pytest.mark.parametrize("param_to_vary", test_params)
+@pytest.mark.parametrize("crit", ["diff_norm", "mismatch"])
 def test_wf_deriv_numdifftools(param_to_vary, crit):
     deriv = WaveformDerivativeGWSignaltools(
         wf_params, param_to_vary, wf_generator, convergence_check=crit
@@ -322,5 +322,5 @@ class ErrorRaising(unittest.TestCase):
     def test_wrong_conv_check(self):
         with self.assertRaises(ValueError):
             WaveformDerivativeGWSignaltools(
-                wf_params, 'total_mass', wf_generator, convergence_check=''
+                wf_params, "total_mass", wf_generator, convergence_check=""
             )

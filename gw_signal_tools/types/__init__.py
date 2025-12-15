@@ -1,8 +1,8 @@
 # -- Make all important functions/classes from module available here
-from .detector import *  # noqa: F401
-from .gwsignal_types import *  # noqa: F401
-from .hash_dict import *  # noqa: F401
-from .matrix_with_units import *  # noqa: F401
+from .detector import *
+from .gwsignal_types import *
+from .hash_dict import *
+from .matrix_with_units import *
 
 
 __doc__ = """

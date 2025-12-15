@@ -173,3 +173,23 @@ verbose = true
 target-version = ['py311']
 
 skip-string-normalization = true
+
+
+[tool.ruff]
+# For tests without file changes, run ruff check <file> (with --diff it shows only what would be fixed, not all issues),
+# ruff format --check <file> (similarly, a --diff option is available).
+# -> I prefer with no option for check and with --diff for format.
+# To apply fixes, run ruff check --fix <file>, ruff format <file>.
+# To check for specific complaints, use e.g. ruff check --select F401 <file>.
+# To ignore specific complaints, use e.g. ruff check --ignore F401 <file>.
+
+# verbose = true -> not working
+
+# select = []
+# lint.ignore = ['E402']
+
+[tool.ruff.format]
+quote-style = "preserve"
+
+[tool.ruff.lint.per-file-ignores]
+'__init__.py' = ['E402', 'F401', 'F403']  # ignore "module level import not at top of file", "imported but unused", "star imports" in __init__.py files

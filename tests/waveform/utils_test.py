@@ -49,14 +49,14 @@ wf_params = HashableDict(
 )
 
 # -- Make sure mass1 and mass2 are not in default_dict
-import lalsimulation.gwsignal.core.parameter_conventions as pc
+import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402
 
 pc.default_dict.pop('mass1', None)
 pc.default_dict.pop('mass2', None)
 
 gen = gwsignal_get_waveform_generator('IMRPhenomXPHM')
 
-from gw_signal_tools.waveform.utils import _CORRECT_H_UNIT_TIME, _CORRECT_H_UNIT_FREQU
+from gw_signal_tools.waveform.utils import _CORRECT_H_UNIT_TIME, _CORRECT_H_UNIT_FREQU  # noqa: E402
 
 with enable_caching_locally():
     # with disable_caching_locally():
@@ -1002,7 +1002,6 @@ def test_fill_x_range_synthetic_irregular(fill_val):
         lambda x, y: adjust_x_range(x, fill_range=y, fill_val=fill_val, copy=True),
         lambda x, y: fill_x_range(x, fill_val, fill_bounds=y, copy=True),
     ]:
-
         exact_fill_range = [2, 4]
         exact_fill_signal = fill_func(mock_signal, exact_fill_range)
         assert exact_fill_signal[0] == fill_val

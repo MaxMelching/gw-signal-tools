@@ -167,9 +167,9 @@ def adjust_x_range(
         If :code:`x_range`, :code:`fill_range` do not contain exactly
         two elements.
     """
-    assert isinstance(
-        signal, Series
-    ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    assert isinstance(signal, Series), (
+        '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    )
 
     _copied = False
 
@@ -372,9 +372,9 @@ def fill_x_range(
         If members of :code:`fill_bounds` have xunits that are
         incompatible with the :code:`signal.xunit`.
     """
-    assert isinstance(
-        signal, Series
-    ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    assert isinstance(signal, Series), (
+        '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    )
 
     if copy:
         signal = signal.copy()
@@ -477,9 +477,9 @@ def signal_at_dx(
     where speed matters and metadata is not needed (for example in the
     inner product from :code:`~gw_signal_tools.waveform.inner_product`).
     """
-    assert isinstance(
-        signal, Series
-    ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    assert isinstance(signal, Series), (
+        '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    )
 
     # -- Initially this was an indepedent function, but now it can be
     # -- redefined in terms of the more general function
@@ -555,9 +555,9 @@ def signal_at_xindex(
     gw_signal_tools.waveform.fill_x_range :
         Filling routine used.
     """
-    assert isinstance(
-        signal, Series
-    ), '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    assert isinstance(signal, Series), (
+        '`signal` has to be a GWpy ``Series`` or a subclass thereof.'
+    )
 
     target_xindex = _q_convert(
         target_xindex,

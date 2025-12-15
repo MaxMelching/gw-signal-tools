@@ -311,13 +311,13 @@ class MatrixWithUnits:
     @value.setter
     def value(self, value: ArrayLike) -> None:
         try:
-            assert np.shape(value) == np.shape(
-                self.value
-            ), 'New and old `value` must have equal shape'
+            assert np.shape(value) == np.shape(self.value), (
+                'New and old `value` must have equal shape'
+            )
 
-            assert (
-                np.ndim(value) <= self._max_ndim
-            ), f'Values cannot have more than {self._max_ndim} dimensions.'
+            assert np.ndim(value) <= self._max_ndim, (
+                f'Values cannot have more than {self._max_ndim} dimensions.'
+            )
         except AttributeError:
             pass  # New class instance is created, nothing to check
 
@@ -348,9 +348,9 @@ class MatrixWithUnits:
                     '(if both are not a scalar unit).'
                 )
 
-                assert (
-                    np.ndim(unit) <= self._max_ndim
-                ), f'Units cannot have more than {self._max_ndim} dimensions.'
+                assert np.ndim(unit) <= self._max_ndim, (
+                    f'Units cannot have more than {self._max_ndim} dimensions.'
+                )
         except AttributeError:
             pass  # New class instance is created
 
@@ -359,9 +359,9 @@ class MatrixWithUnits:
             # in __init__). That is why we ignore index error below,
             # mypy does not recognize that unit is array here.
             for i, val in np.ndenumerate(unit):
-                assert isinstance(
-                    val, self._allowed_unit_types
-                ), f'Need valid unit types for all members of `unit` (not {type(val)}).'
+                assert isinstance(val, self._allowed_unit_types), (
+                    f'Need valid unit types for all members of `unit` (not {type(val)}).'
+                )
 
                 unit[i] = u.Unit(val)  # type: ignore[index]
 
@@ -522,7 +522,7 @@ class MatrixWithUnits:
             # Note that 1/self cannot be used here since this function
             # is the one implementing this very operation
             return other * self.__class__(1 / self.value, 1 / self.unit)
-        except:
+        except Exception:
             return NotImplemented
 
     def __pow__(self, other: Any) -> Self:
@@ -569,9 +569,9 @@ class MatrixWithUnits:
                     i, j = index
                     unit_test = other.unit[0, j]
 
-                    assert np.all(
-                        np.equal(other.unit[:, j], unit_test)
-                    ), 'Need consistent units for matrix multiplication.'
+                    assert np.all(np.equal(other.unit[:, j], unit_test)), (
+                        'Need consistent units for matrix multiplication.'
+                    )
                     # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
                     # NOTE: do NOT replace with == here, does not what we want
 
@@ -582,9 +582,9 @@ class MatrixWithUnits:
                     i, j = index
                     unit_test = self.unit[i, 0]
 
-                    assert np.all(
-                        np.equal(self.unit[i, :], unit_test)
-                    ), 'Need consistent units for matrix multiplication.'
+                    assert np.all(np.equal(self.unit[i, :], unit_test)), (
+                        'Need consistent units for matrix multiplication.'
+                    )
                     # TODO: mention more explicitly which units are incompatible? And also indices for which it occurs
                     # NOTE: do NOT replace with == here, does not what we want
 
@@ -607,7 +607,7 @@ class MatrixWithUnits:
         else:
             try:
                 _other = self.__class__(other)
-            except:
+            except Exception:
                 # No conversion possible, cannot do matrix multiplication
                 return NotImplemented
 
@@ -617,7 +617,7 @@ class MatrixWithUnits:
         if not isinstance(other, MatrixWithUnits):
             try:
                 other = self.__class__(other)
-            except:
+            except Exception:
                 # No conversion possible, cannot do matrix multiplication
                 return NotImplemented
 
@@ -656,9 +656,9 @@ class MatrixWithUnits:
         try:
             unit_size = self.unit.size
 
-            assert (
-                value_size == unit_size
-            ), 'Instance is invalid, `value` and `unit` have incompatible sizes.'
+            assert value_size == unit_size, (
+                'Instance is invalid, `value` and `unit` have incompatible sizes.'
+            )
 
             return value_size
         except AttributeError as e:
@@ -677,9 +677,9 @@ class MatrixWithUnits:
         try:
             unit_shape = self.unit.shape
 
-            assert (
-                value_shape == unit_shape
-            ), 'Instance is invalid, `value` and `unit` have incompatible shapes.'
+            assert value_shape == unit_shape, (
+                'Instance is invalid, `value` and `unit` have incompatible shapes.'
+            )
 
             return value_shape
         except AttributeError as e:
@@ -713,9 +713,9 @@ class MatrixWithUnits:
         try:
             unit_ndim = self.unit.ndim
 
-            assert (
-                value_ndim == unit_ndim
-            ), 'Instance is invalid, `value` and `unit` have incompatible ndim.'
+            assert value_ndim == unit_ndim, (
+                'Instance is invalid, `value` and `unit` have incompatible ndim.'
+            )
 
             return value_ndim
         except AttributeError as e:
@@ -755,9 +755,9 @@ class MatrixWithUnits:
 
     @staticmethod
     def inv(matrix: MatrixT) -> MatrixT:
-        assert np.all(
-            np.equal(matrix.unit, matrix.T.unit)
-        ), 'Need symmetric unit for inversion.'
+        assert np.all(np.equal(matrix.unit, matrix.T.unit)), (
+            'Need symmetric unit for inversion.'
+        )
 
         return matrix.__class__(np.linalg.inv(matrix.value), matrix.unit**-1)
 

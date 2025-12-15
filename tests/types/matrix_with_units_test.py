@@ -164,8 +164,8 @@ def test_eq():
     # -- Test where not necessarily all units are unequal, but some
     matrix = MatrixWithUnits(example_values, example_units)
 
-    assert np.all(matrix_in_s1 == matrix) == False
-    assert np.any(matrix_in_s1 != matrix) == True  # Test not equal operator
+    assert not np.all(matrix_in_s1 == matrix)
+    assert np.any(matrix_in_s1 != matrix)  # Test not equal operator
 
     matrix_dim_less = MatrixWithUnits(example_values)
     assert np.all(matrix_dim_less == example_values)
@@ -173,7 +173,7 @@ def test_eq():
     matrix_single_val = MatrixWithUnits(42, u.dimensionless_unscaled)
     assert np.all(matrix_single_val == 42)
 
-    assert (MatrixWithUnits(example_values, example_units) == {'key': 1}) == False
+    assert not (MatrixWithUnits(example_values, example_units) == {'key': 1})
 
 
 def test_float():
@@ -414,9 +414,8 @@ def test_power():
 
 
 def test_matmul():
-    matrix = MatrixWithUnits(example_values, example_units)
     example_units_2 = np.array([[u.s, u.m], [u.s, u.m]], dtype=object)
-    matrix2 = MatrixWithUnits(example_values, example_units_2)
+    matrix = MatrixWithUnits(example_values, example_units_2)
 
     matrix_in_s = MatrixWithUnits(example_values, u.s)
 
@@ -445,7 +444,7 @@ def test_matmul():
 
     # -- Now tests for matrices that do not have single unit
     assert_allequal_MatrixWithUnits(
-        matrix_in_s @ matrix2,
+        matrix_in_s @ matrix,
         # MatrixWithUnits(example_values @ example_values, example_units_2 * example_units_s)
         MatrixWithUnits(
             example_values @ example_values,
@@ -454,7 +453,7 @@ def test_matmul():
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix2.T @ matrix_in_s,
+        matrix.T @ matrix_in_s,
         MatrixWithUnits(
             example_values.T @ example_values,
             np.array([[u.s**2, u.s**2], [u.m * u.s, u.m * u.s]], dtype=object),
@@ -483,7 +482,7 @@ def test_matmul():
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix2.T @ matrix_col,  # Matrix and column
+        matrix.T @ matrix_col,  # Matrix and column
         MatrixWithUnits(
             np.array([[42 * 42 + 18 * 18], [24 * 42 + 96 * 18]]),
             np.array([[u.s**2], [u.s * u.m]], dtype=object),
@@ -496,7 +495,7 @@ def test_matmul():
     )
 
     assert_allequal_MatrixWithUnits(
-        matrix_row @ matrix2,  # Row and matrix
+        matrix_row @ matrix,  # Row and matrix
         MatrixWithUnits(
             np.array([42 * 42 + 24 * 18, 42 * 24 + 24 * 96]),
             np.array([u.s**2, u.s * u.m], dtype=object),
@@ -636,7 +635,7 @@ def test_dtype(values):
 
     assert matrix.value.dtype == values.dtype
     assert matrix.dtype == u.Quantity
-    assert type(matrix.reshape(-1)[0]) == u.Quantity
+    assert type(matrix.reshape(-1)[0]) is u.Quantity
 
 
 def test_reading_from_array():

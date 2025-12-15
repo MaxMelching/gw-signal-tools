@@ -777,9 +777,9 @@ class FisherMatrix:
             if optimize_fisher is not None:
                 opt_fisher = opt_fisher.project_fisher(optimize_fisher)
 
-                optimization_info[
-                    'general'
-                ] += ' Fisher Matrix projection was carried out as well.'
+                optimization_info['general'] += (
+                    ' Fisher Matrix projection was carried out as well.'
+                )
 
                 optimization_info['fisher_opt_params'] = optimize_fisher
 
@@ -1047,8 +1047,8 @@ class FisherMatrix:
                 theta_overline_tr = true_params.copy()
                 for i in range(opt_fisher.nparams):
                     param = opt_fisher.params_to_vary[i]
-                    theta_overline_tr[param] = true_params[param] + (
-                        opt_bias[i].reshape(-1)[0]
+                    theta_overline_tr[param] = (
+                        true_params[param] + (opt_bias[i].reshape(-1)[0])
                     )
                     right_wf = right_wf + derivs[i] * (
                         theta_overline_tr[param] - bf_params[param]

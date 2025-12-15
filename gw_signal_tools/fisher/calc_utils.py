@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 import warnings
-from typing import Optional, Any, Literal, Callable
+from typing import Optional, Any, Callable
 
 # -- Third Party Imports
 import numpy as np
@@ -8,14 +8,10 @@ from gwpy.types import Series
 import astropy.units as u
 
 # -- Local Package Imports
-from ..logging import logger
 from ..waveform import (
     inner_product,
     norm,
     _INNER_PROD_ARGS,
-    WaveformDerivativeGWSignaltools,
-    WaveformDerivativeNumdifftools,
-    WaveformDerivativeAmplitudePhase,
     WaveformDerivative,
 )
 from ..types import MatrixWithUnits, FDWFGen
@@ -27,7 +23,7 @@ Module that contains functions to calculate numerical derivatives of
 gravitational waveforms and also a wrapper to calculate a Fisher matrix.
 """
 
-__all__ = ('num_diff', 'fisher_matrix')
+__all__ = ("num_diff", "fisher_matrix")
 
 
 def num_diff(  # TODO: move this to deriv file?
@@ -65,7 +61,7 @@ def num_diff(  # TODO: move this to deriv file?
         if not allclose_quantity(
             h.value, signal.dx.value, atol=0.0, rtol=1e-3
         ):  # pragma: no cover
-            warnings.warn('Given `h` does not coincide with `signal.dx`.')
+            warnings.warn("Given `h` does not coincide with `signal.dx`.")
     else:
         # -- Make sure signal is array, we utilize numpy operations
         signal = np.asarray(signal)
@@ -199,7 +195,7 @@ def fisher_matrix(
             _inner_prod_kwargs[key] = value
         else:
             _deriv_kw_args[key] = value
-    _inner_prod_kwargs['return_opt_info'] = False
+    _inner_prod_kwargs["return_opt_info"] = False
     # -- Ensures float output of inner_product
 
     if isinstance(params_to_vary, str):
@@ -230,10 +226,10 @@ def fisher_matrix(
         )
 
         deriv, info = full_deriv.deriv, full_deriv.deriv_info
-        info['deriv'] = deriv
+        info["deriv"] = deriv
         # fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
-        if deriv_routine == 'gw_signal_tools':
-            fisher_matrix[i, i] = info['norm_squared']
+        if deriv_routine == "gw_signal_tools":
+            fisher_matrix[i, i] = info["norm_squared"]
         else:
             fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2  # type: ignore[operator]
 
@@ -243,14 +239,13 @@ def fisher_matrix(
     # -- Populate remaining entries of Fisher matrix
     for i, param_i in enumerate(params_to_vary):
         for j, param_j in enumerate(params_to_vary):
-
             if i == j:
                 # -- Was already set in previous loop
                 continue
             else:
                 fisher_matrix[i, j] = fisher_matrix[j, i] = inner_product(
-                    deriv_info[param_i]['deriv'],
-                    deriv_info[param_j]['deriv'],
+                    deriv_info[param_i]["deriv"],
+                    deriv_info[param_j]["deriv"],
                     **_inner_prod_kwargs,
                 )
 

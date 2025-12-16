@@ -189,7 +189,7 @@ skip-string-normalization = true
 # lint.ignore = ['E402']
 
 [tool.ruff.format]
-quote-style = 'preserve'
+quote-style = 'single'
 
 [tool.ruff.lint.per-file-ignores]
 '__init__.py' = ['E402', 'F401', 'F403']  # ignore "module level import not at top of file", "imported but unused", "star imports" in __init__.py files

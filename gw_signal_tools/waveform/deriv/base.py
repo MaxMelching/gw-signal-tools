@@ -1,7 +1,7 @@
 # -- Standard Lib Imports
 # from functools import cached_property  # TODO: use for some stuff?
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Optional
 
 # -- Third Party Imports
 import numpy as np
@@ -42,15 +42,40 @@ class WaveformDerivativeBase:
         self._wf_generator = wf_generator
         self._param_bound_storage = _param_bounds.copy()
 
-    def __call__(self) -> Series:
+    def __call__(
+        self, x: Optional[float | u.Quantity] = None
+    ) -> Series:  # pragma: no cover - meant to be overridden
+        """
+        Get derivative with respect to `self.param_to_vary` at :code:`x`.
+
+        Parameters
+        ----------
+        x : float or ~astropy.units.Quantity, optional, default = None
+            Parameter value at which the derivative is calculated. By
+            default, the corresponding value from :code:`self.point`
+            is chosen.
+
+        Returns
+        -------
+        Derivative, put into whatever type :code:`self.wf_generator`
+        has. This should, in principle, be either a GWpy
+        :code:``FrequencySeries`` or a GWpy :code:``TimeSeries`` (in
+        accordance with standard LAL output types), but this function
+        only relies on GWPy :code:``Series`` properties being defined and
+        thus the output could also be of this type.
+
+        Notes
+        -----
+        Information gathered during calculation is stored in the
+        :code:`self.deriv_info` property.
+        """
         return NotImplemented
 
     @property
     def param_bounds(self) -> dict[str, tuple[float, float]]:
         return self._param_bound_storage
 
-    # TODO: do we need test_point? I guess yeah; for autodiff, it can just check if the point itself is valid I guess?
-    def test_point(self) -> None:
+    def test_point(self) -> None:  # pragma: no cover - meant to be overridden
         """
         Check if `self.point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step

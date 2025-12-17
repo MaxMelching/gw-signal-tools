@@ -975,7 +975,7 @@ class FisherMatrix:
                 aligned_params[param] = bf_params[param] + (
                     opt_bias[i].reshape(-1)[0] if use_alignment else 0
                 )
-        else:
+        else:  # pragma: no cover
             raise ValueError('Invalid value for `params_is_true_point`.')
 
         optimization_info['best_fitting_point'] = bf_params

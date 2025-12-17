@@ -87,7 +87,7 @@ class WaveformDerivative:
             try:
                 return deriv_routine(*args, **kw_args)
             except Exception as e:
-                raise ValueError(
+                raise RuntimeError(
                     'Either the `deriv_routine` you provided is not callable '
                     'or one of the arguments passed to it is invalid.'
                 ) from e

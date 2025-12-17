@@ -416,6 +416,10 @@ def inner_product(
             else:
                 # -- We have no idea what frequ_unit is, just set to some number
                 df = 0.0625 * frequ_unit
+                logger.info(
+                    f'Frequency unit `{frequ_unit}` is not recognized, setting '
+                    f'default value of `df = {df}`.'
+                )
     else:
         df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 

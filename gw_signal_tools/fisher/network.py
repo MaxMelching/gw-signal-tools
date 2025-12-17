@@ -1,10 +1,13 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Self
+from typing import Optional, Any, Self, TYPE_CHECKING
 import logging
 
 # -- Third Party Imports
 import astropy.units as u
+
+if TYPE_CHECKING:
+    from gwpy.frequencyseries import FrequencySeries
 
 # -- Local Package Imports
 from ..logging import logger
@@ -301,7 +304,35 @@ class FisherMatrixNetwork(FisherMatrix):
             # -- restore the logging level even if there is error.
             logger.setLevel(_logger_level)
 
-    def systematic_error(
+    def statistical_bias(
+        self,
+        noise: FrequencySeries,
+        params: Optional[str | list[str]] = None,
+        **inner_prod_kwargs,
+    ) -> MatrixWithUnits:
+        param_indices = self.get_param_indices(params)
+
+        # -- Update keywords from initial input to the instance
+        inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
+
+        self.fisher  # Makes sure it has been computed
+
+        vector = 0.0
+        for i in range(len(self.detectors)):
+            det_stat_bias = self.detector_fisher(i).statistical_bias(
+                noise=noise,
+                params=None,  # Get all for now, filter before return
+                **inner_prod_kwargs,
+            )
+            vector += self.detector_fisher(i).fisher @ det_stat_bias
+
+        return (self.fisher_inverse @ vector)[param_indices]
+
+    statistical_bias.__doc__ = _parent.statistical_bias.__doc__
+
+    # -- standard_deviation needs no update
+
+    def systematic_bias(
         self,
         reference_wf_generator: FDWFGen,
         params: str | list[str] | None = None,
@@ -321,7 +352,7 @@ class FisherMatrixNetwork(FisherMatrix):
         # -- -> the operations required for this (mainly matrix
         # --    multiplications) do not add significant overhead
         # --    compared to putting adjusted version of code from
-        # --    FisherMatrix.sys_error here (main cost is waveform
+        # --    FisherMatrix.sys_bias here (main cost is waveform
         # --    generation and thus optimization)
 
         fisher = 0.0
@@ -343,7 +374,7 @@ class FisherMatrixNetwork(FisherMatrix):
         try:
             for i, det in enumerate(self.detectors):
                 # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
-                _, info = self.detector_fisher(i).systematic_error(
+                _, info = self.detector_fisher(i).systematic_bias(
                     reference_wf_generator=reference_wf_generator,
                     params=None,  # Get all for now, filter before return
                     optimize=optimize,
@@ -374,6 +405,11 @@ class FisherMatrixNetwork(FisherMatrix):
 
                 vector += info['deriv_vector']
                 fisher += used_fisher
+        except Exception as e:
+            raise RuntimeError(
+                'Error during systematic bias calculation in detector '
+                f'`{self.detectors[i].name}`.'
+            ) from e
         finally:
             # -- This try statement is super important! Ensures that we
             # -- restore the logging level even if there is error.
@@ -411,7 +447,7 @@ class FisherMatrixNetwork(FisherMatrix):
             return fisher_bias, optimization_info
             # -- Automatically accounts for str case of return_diagnostics
 
-    systematic_error.__doc__ = _parent.systematic_error.__doc__
+    systematic_bias.__doc__ = _parent.systematic_bias.__doc__
 
     def snr(self, **inner_prod_kwargs):
         """

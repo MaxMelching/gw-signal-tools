@@ -1,10 +1,12 @@
 # -- Third Party Imports
 import astropy.units as u
+import numpy as np
+from gwpy.timeseries import TimeSeries
 import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
-from gw_signal_tools.waveform import get_wf_generator, norm
+from gw_signal_tools.waveform import get_wf_generator, norm, td_to_fd
 from gw_signal_tools.types import Detector, HashableDict
 from gw_signal_tools.PSDs import psd_no_noise
 from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
@@ -57,7 +59,10 @@ livingston = Detector('L1', psd_no_noise)
 
 
 fisher_tot_mass = FisherMatrixNetwork(
-    wf_params, 'total_mass', phenomx_generator, [hanford, livingston]
+    point=wf_params,
+    params_to_vary=['total_mass', 'time', 'phase'],
+    wf_generator=phenomx_generator,
+    detectors=[hanford, livingston],
 )
 
 
@@ -75,15 +80,15 @@ def test_single_det_consistency():
     assert fisher_v1.snr() == fisher_v2.snr()
 
     for opt in [False, True]:
-        sys_error_1 = fisher_v1.systematic_error(
+        sys_bias_1 = fisher_v1.systematic_bias(
             phenomd_generator, optimize=opt, return_opt_info=False
         )
 
-        sys_error_2 = fisher_v2.systematic_error(
+        sys_bias_2 = fisher_v2.systematic_bias(
             phenomd_generator, optimize=opt, return_diagnostics=False
         )
 
-        assert sys_error_1 == sys_error_2
+        assert sys_bias_1 == sys_bias_2
 
 
 # %% -- Feature tests ---------------------------------------------------------
@@ -121,7 +126,6 @@ def test_params(params):
     ],
 )
 def test_detector(det):
-    print(det)
     FisherMatrixNetwork(wf_params, 'total_mass', phenomx_generator, det)
 
 
@@ -150,10 +154,24 @@ def test_detector_fisher():
     )
 
 
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+def test_stat_bias(params):
+    noise = TimeSeries(np.random.normal(scale=0.1, size=1024), sample_rate=1024)
+    fisher_tot_mass.statistical_bias(noise=noise, params=params)
+
+    noise_fd = td_to_fd(noise)
+    fisher_tot_mass.statistical_bias(noise=noise_fd, params=params)
+
+
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+def test_std_dev(params):
+    fisher_tot_mass.standard_deviation(params)
+
+
 @pytest.mark.parametrize(
     'params', [None, 'total_mass', ['total_mass', 'time', 'phase']]
 )
-def test_sys_error(params):
+def test_sys_bias(params):
     fisher = FisherMatrixNetwork(
         wf_params,
         ['total_mass', 'mass_ratio', 'time', 'phase'],
@@ -162,33 +180,33 @@ def test_sys_error(params):
         direct_computation=False,  # To test this option too
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator, 'total_mass', optimize=False, return_diagnostics=True
     )
 
-    fisher.systematic_error(phenomd_generator, params, return_diagnostics='deriv_info')
+    fisher.systematic_bias(phenomd_generator, params, return_diagnostics='deriv_info')
 
-    fisher.systematic_error(phenomd_generator, optimize=True)
+    fisher.systematic_bias(phenomd_generator, optimize=True)
 
-    fisher.systematic_error(phenomd_generator, optimize=['time', 'phase'])
+    fisher.systematic_bias(phenomd_generator, optimize=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize_fisher=['time', 'phase'])
+    fisher.systematic_bias(phenomd_generator, optimize_fisher=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize='total_mass')
+    fisher.systematic_bias(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(
         return_info=False,  # Does not make sense to give, is overwritten. This is what we test here
         new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'],
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator,
         params='mass_ratio',
         optimize='time',
         optimize_fisher='total_mass',
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator, optimize=False, optimize_fisher='phase', return_opt_info=True
     )
 

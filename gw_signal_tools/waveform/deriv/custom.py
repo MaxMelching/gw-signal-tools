@@ -217,10 +217,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             # Class has just been initialized, no wf_generator yet
             pass
 
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
-
     @property
     def param_to_vary(self) -> str:
         """
@@ -240,10 +236,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         self._param_to_vary = param
 
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
-
     @property
     def wf_generator(self) -> FDWFGen:
         """
@@ -257,10 +249,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     def wf_generator(self, generator: FDWFGen) -> None:
         self._wf_generator = generator
         self.wf = generator(self.point)
-
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
 
     # @property
     # def step_size(self):
@@ -302,10 +290,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         self._convergence_check = convergence_check
 
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
-
     @property
     def convergence_threshold(self) -> float:
         return self._convergence_threshold
@@ -320,10 +304,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         self._convergence_threshold = convergence_threshold
 
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
-
     @property
     def max_refine_numb(self) -> int:
         return self._max_refine_numb
@@ -331,10 +311,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     @max_refine_numb.setter
     def max_refine_numb(self, num: int) -> None:
         self._max_refine_numb = int(num)
-
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
 
     # -- Internally used properties
     @property
@@ -375,12 +351,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
         """
-        if hasattr(self, '_deriv'):
-            # -- Derivative was already computed, just return. We make
-            # -- sure that all relevant settings remained the same in
-            # -- the corresponding setters, otherwise _deriv deleted
-            return self._deriv
-
         # -- Check if parameter has analytical derivative
         if self.param_to_vary == 'time':
             deriv = self.wf * (-1.0j * 2.0 * np.pi * self.wf.frequencies)
@@ -606,18 +576,40 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         self._convergence_vals += [crit_val]
 
-    # Idea: this is what we call and what actually returns the derivative
-    # TODO: maybe we can create fancy __call__ logic? Where params_at_point are passed?
-    # -> could make this optional argument in __init__ then? Nah, this
-    # is not possible.
     def __call__(
-        self, new_point: Optional[dict[str, u.Quantity]] = None
+        self, x: Optional[float | u.Quantity] = None
     ) -> FrequencySeries | TimeSeries:
-        if new_point is not None:
-            if isinstance(new_point, u.Quantity):
-                self.point[self.param_to_vary] = new_point
+        """
+        Get derivative with respect to `self.param_to_vary` at :code:`x`.
+        Note that this function also changes the value of
+        `self.param_to_vary` in `self.point`.
+
+        Parameters
+        ----------
+        x : float or ~astropy.units.Quantity, optional, default = None
+            Parameter value at which the derivative is calculated. By
+            default, the corresponding value from :code:`self.point`
+            is chosen.
+
+        Returns
+        -------
+        Derivative, put into whatever type :code:`self.wf_generator`
+        has. This should, in principle, be either a GWpy
+        :code:``FrequencySeries`` or a GWpy :code:``TimeSeries`` (in
+        accordance with standard LAL output types), but this function
+        only relies on GWPy :code:``Series`` properties being defined and
+        thus the output could also be of this type.
+
+        Notes
+        -----
+        Information gathered during calculation is stored in the
+        :code:`self.deriv_info` property.
+        """
+        if x is not None:
+            if isinstance(x, u.Quantity):
+                self.point[self.param_to_vary] = x
             else:
-                self.point[self.param_to_vary] = new_point * self.param_center_val.unit
+                self.point[self.param_to_vary] = x * self.param_center_val.unit
         return self.deriv
 
     # TODO: what other parameters are relevant in this regard?
@@ -701,10 +693,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         # TODO: shit, actually does not work
 
         self._deriv_formula = formula
-
-        if hasattr(self, '_deriv'):
-            # -- Derivative that was calculated is not valid anymore
-            del self._deriv
 
     def deriv_routine(self, *args, **kw_args):
         """Caller that allows access to currently set derivative formula."""

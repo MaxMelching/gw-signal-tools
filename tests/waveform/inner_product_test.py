@@ -487,25 +487,28 @@ def test_calc_modes(f_range, eval_frequs):
 
 
 @pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2 * f_min, None]])
-def test_no_interpolation(f_range):
-    for opt in [False, True]:
-        norm1 = norm(
-            hp_f_fine,
-            f_range=f_range,
-            signal_interpolation=True,
-            optimize_time_and_phase=opt,
-        )
-        norm2 = norm(
-            hp_f_fine,
-            f_range=f_range,
-            signal_interpolation=False,
-            optimize_time_and_phase=opt,
-        )
+@pytest.mark.parametrize('opt_time', [False, True])
+@pytest.mark.parametrize('opt_phase', [False, True])
+def test_no_interpolation(f_range, opt_time, opt_phase):
+    norm1 = norm(
+        hp_f_fine,
+        f_range=f_range,
+        signal_interpolation=True,
+        optimize_time=opt_time,
+        optimize_phase=opt_phase,
+    )
+    norm2 = norm(
+        hp_f_fine,
+        f_range=f_range,
+        signal_interpolation=False,
+        optimize_time=opt_time,
+        optimize_phase=opt_phase,
+    )
 
-        assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.0)
-        # -- No deviation at all in this case, since default df is same, so
-        # -- signal interpolation to new frequencies and restriction of
-        # -- current/given frequencies are perfectly equivalent.
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=0.0)
+    # -- No deviation at all in this case, since default df is same, so
+    # -- signal interpolation to new frequencies and restriction of
+    # -- current/given frequencies are perfectly equivalent.
 
 
 # TODO: now test for failures!

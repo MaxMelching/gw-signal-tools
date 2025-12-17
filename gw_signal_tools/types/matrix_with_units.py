@@ -310,13 +310,13 @@ class MatrixWithUnits:
 
     @value.setter
     def value(self, value: ArrayLike) -> None:
+        assert np.ndim(value) <= self._max_ndim, (
+            f'Values cannot have more than {self._max_ndim} dimensions.'
+        )
+
         try:
             assert np.shape(value) == np.shape(self.value), (
                 'New and old `value` must have equal shape'
-            )
-
-            assert np.ndim(value) <= self._max_ndim, (
-                f'Values cannot have more than {self._max_ndim} dimensions.'
             )
         except AttributeError:
             pass  # New class instance is created, nothing to check

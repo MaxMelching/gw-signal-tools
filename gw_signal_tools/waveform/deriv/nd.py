@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 # -- Third Party Imports
 import numdifftools as nd
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
+from ...logging import logger
 from ...types import WFGen
 
 
@@ -138,31 +139,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         # -- Initialize nd.Derivative attributes (among others, stores fun in self.fun)
         super().__init__(fun, *args, **kwds)
 
-    def __call__(self, x=None) -> Series:
-        """
-        Get derivative with respect to `self.param_to_vary` at :code:`x`.
-
-        Parameters
-        ----------
-        x : Any, optional, default = None
-            Parameter value at which the derivative is calculated. By
-            default, the corresponding value from :code:`self.point`
-            are chosen.
-
-        Returns
-        -------
-        Derivative, put into whatever type :code:`self.wf_generator`
-        has. This should, in principle, be either a GWpy
-        :code:``FrequencySeries`` or a GWpy :code:``TimeSeries`` (in
-        accordance with standard LAL output types), but this function
-        only relies on GWPy :code:``Series`` properties being defined and
-        thus the output could also be of this type.
-
-        Notes
-        -----
-        Information gathered during calculation is stored in the
-        :code:`self.deriv_info` property.
-        """
+    def __call__(self, x: Optional[float | u.Quantity] = None) -> Series:
         # -- Check if analytical derivative has already been calculated
         if hasattr(self, '_ana_deriv'):
             return self._ana_deriv
@@ -207,6 +184,8 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
 
         return out
 
+    __call__.__doc__ = WaveformDerivativeBase.__call__.__doc__
+
     @property
     def _default_base_step(self) -> float:
         """Largest step size used by default."""
@@ -236,6 +215,10 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             )
 
         _base_step = self.step.base_step
+        assert _base_step > 0.0, (
+            'Reached step size of zero, cannot proceed.'
+        )  # pragma: no cover
+
         _par_val = self.param_center_val.value
 
         def violation(step):
@@ -246,9 +229,22 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
 
         lower_violation, upper_violation = violation(_base_step)
 
+        if any((lower_violation, upper_violation)):
+            logger.info(
+                f"Parameter '{self.param_to_vary}' at value "
+                f'{self.param_center_val} is close to bounds; adjusting step '
+                'size/method. If this message appears repeatedly, consider '
+                'adjusting parameter bounds or initial values.'
+            )
+
+        # TODO: try to get step size based on distance of _par_val to violated bounds?
+
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
             self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+
+            if any(violation(self.step.base_step)):
+                self.test_point()  # Recursive call until step size is small enough
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
             self.step.base_step = min(_base_step / 2.0, self._default_base_step)

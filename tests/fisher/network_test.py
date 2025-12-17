@@ -210,6 +210,11 @@ def test_sys_bias(params):
         phenomd_generator, optimize=False, optimize_fisher='phase', return_opt_info=True
     )
 
+    with pytest.raises(RuntimeError) as e:
+        fisher.systematic_bias(None)
+
+    assert 'Error during systematic bias calculation in detector ' in str(e.value)
+
 
 @pytest.mark.parametrize(
     'inner_prod_kwargs',

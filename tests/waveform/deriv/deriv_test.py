@@ -4,6 +4,7 @@ import unittest
 # -- Third Party Imports
 import astropy.units as u
 import matplotlib.pyplot as plt
+import numpy as np
 from numpy.testing import assert_allclose
 import pytest
 
@@ -61,12 +62,11 @@ pc.default_dict.pop('mass2', None)
 
 
 # %% -- Testing WaveformDerivative --------------------------------------------
-def test_default_routine():
+def test_deriv_routines():
+    # -- Test default first, then all other options
     full_deriv = WaveformDerivative(wf_params, 'total_mass', wf_generator)
     assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
 
-
-def test_all_routines():
     full_deriv = WaveformDerivative(
         wf_params,
         'total_mass',
@@ -86,9 +86,17 @@ def test_all_routines():
     )
     assert isinstance(full_deriv, WaveformDerivativeAmplitudePhase)
 
+    # -- Test invalid inputs
     with pytest.raises(ValueError, match='Invalid deriv_routine'):
         full_deriv = WaveformDerivative(
             wf_params, 'total_mass', wf_generator, deriv_routine=''
+        )
+
+    with pytest.raises(
+        RuntimeError, match='`deriv_routine` you provided is not callable '
+    ):
+        full_deriv = WaveformDerivative(
+            wf_params, 'total_mass', wf_generator, deriv_routine=None
         )
 
 
@@ -276,6 +284,15 @@ def test_convergence_plot(param):
 
     deriv.convergence_plot()
     plt.close()
+
+
+def test_calling():
+    full_deriv = WaveformDerivativeGWSignaltools(wf_params, 'total_mass', wf_generator)
+    deriv = full_deriv()
+
+    deriv_2 = full_deriv(50 * u.Msun)
+
+    assert not np.all(deriv == deriv_2)
 
 
 # %% -- Derivative consistency checks -----------------------------------------

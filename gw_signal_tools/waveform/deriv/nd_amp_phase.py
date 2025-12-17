@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import Callable, TYPE_CHECKING
+from typing import Callable, TYPE_CHECKING, Optional
 
 # -- Third Party Imports
 import numdifftools as nd
@@ -9,9 +9,11 @@ import numpy as np
 
 if TYPE_CHECKING:
     from gwpy.types import Series
+    from numpy.typing import NDArray
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
+from ...logging import logger
 from ...types import WFGen
 
 
@@ -138,16 +140,16 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             return self.wf_generator(point | {param_to_vary: x * param_unit})
 
         def abs_wrapper(x):
-            return np.abs(self.fun(x).value)
+            return self.abs_fun(self.fun(x).value)
 
         def phase_wrapper(x):
-            return np.unwrap(np.angle(self.fun(x).value))
+            return self.phase_fun(self.fun(x).value)
 
         self.fun = fun  # Needed manually because we do not init nd.Derivative on self
         self._abs_deriv = nd.Derivative(abs_wrapper, *args, **kwds)
         self._phase_deriv = nd.Derivative(phase_wrapper, *args, **kwds)
 
-    def __call__(self, x=None) -> Series:
+    def __call__(self, x: Optional[float | u.Quantity] = None) -> Series:
         # -- Check if analytical derivative has already been calculated
         if hasattr(self, '_ana_deriv'):
             return self._ana_deriv
@@ -182,12 +184,8 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         param_unit = self.param_center_val.unit
 
         wf = self.fun(x)
-        ampl = np.abs(wf).value
-        phase = np.unwrap(np.angle(wf)).value
-        # -- TODO: following would be more future proof I think... But
-        # -- involves more calls to function... So should we do it?
-        # ampl = self.abs_fun(x)
-        # phase = self.phase_fun(x)
+        ampl = self.abs_fun(wf).value
+        phase = self.phase_fun(wf).value
 
         deriv = (abs_deriv + 1.0j * ampl * phase_deriv) * np.exp(1j * phase)
 
@@ -196,6 +194,8 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         out = type(wf)(data=deriv, xindex=wf.frequencies, unit=wf.unit / param_unit)
 
         return out
+
+    __call__.__doc__ = WaveformDerivativeBase.__call__.__doc__
 
     @property
     def _default_base_step(self) -> float:
@@ -225,8 +225,15 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
                 'inverse_mass_ratio', default_bounds
             )
 
-        _base_step = self.abs_deriv.step.base_step  # Same for phase_deriv
-        # TODO: should we check both separately?
+        _base_step = self.abs_deriv.step.base_step
+        assert _base_step > 0.0, (
+            'Reached step size of zero, cannot proceed.'
+        )  # pragma: no cover
+        # -- Same for phase_deriv. No need for separate treatmtent since
+        # -- violations only happen for initial step size (since this
+        # -- function is called repeatedly until step size is small
+        # -- enough to not violate bounds anymore).
+
         _par_val = self.param_center_val.value
 
         def violation(step):
@@ -237,11 +244,22 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
         lower_violation, upper_violation = violation(_base_step)
 
+        if any((lower_violation, upper_violation)):
+            logger.info(
+                f"Parameter '{self.param_to_vary}' at value "
+                f'{self.param_center_val} is close to bounds; adjusting step '
+                'size/method. If this message appears repeatedly, consider '
+                'adjusting parameter bounds or initial values.'
+            )
+
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
             self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
                 _base_step / 2.0, self._default_base_step
             )
+
+            if any(violation(self.abs_deriv.step.base_step)):
+                self.test_point()  # Recursive call until step size is small enough
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
             self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
@@ -250,7 +268,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
             if violation(self.abs_deriv.step.base_step)[0]:
                 # -- Too close to lower bound still, change method
-                self.method = 'forward'
+                self.abs_deriv.method = self.phase_deriv.method = 'forward'
         elif not lower_violation and upper_violation:
             # -- Can only happen if method is not backward yet
             self.abs_deriv.step.base_step = self.phase_deriv.step.base_step = min(
@@ -259,7 +277,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
             if violation(self.abs_deriv.step.base_step)[1]:
                 # -- Too close to upper bound still, change method
-                self.method = 'backward'
+                self.abs_deriv.method = self.phase_deriv.method = 'backward'
 
     @property
     def abs_deriv(self) -> nd.Derivative:
@@ -271,13 +289,13 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         return self._abs_deriv
 
     @property
-    def abs_fun(self) -> Callable[[float], np.ndarray]:
+    def abs_fun(self) -> Callable[[NDArray], NDArray]:
         """
         Function that calculates the waveform amplitude.
 
         :type: `Callable[[float], ~numpy.ndarray]`
         """
-        return self.abs_deriv.fun
+        return np.abs
 
     @property
     def phase_deriv(self) -> nd.Derivative:
@@ -288,14 +306,18 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         """
         return self._phase_deriv
 
+    @staticmethod
+    def _phase_wrapper(x):  # -- Define here to avoid recreating function
+        return np.unwrap(np.angle(x))
+
     @property
-    def phase_fun(self) -> Callable[[float], np.ndarray]:
+    def phase_fun(self) -> Callable[[NDArray], NDArray]:
         """
         Function that calculates the waveform phase.
 
         :type: `Callable[[float], ~numpy.ndarray]`
         """
-        return self.phase_deriv.fun
+        return self._phase_wrapper
 
 
 if nd.__version__ <= '0.9.41':  # pragma: no cover

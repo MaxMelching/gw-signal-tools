@@ -176,6 +176,13 @@ def test_eq():
     assert not (MatrixWithUnits(example_values, example_units) == {'key': 1})
 
 
+def test_repr():
+    matrix = MatrixWithUnits(example_values, example_units)
+
+    repr(matrix)
+    str(matrix)
+
+
 def test_float():
     matrix = MatrixWithUnits(42, u.dimensionless_unscaled)
 
@@ -531,7 +538,16 @@ def test_matmul():
         MatrixWithUnits([[42 * 42 + 24 * 96], [18 * 42 + 96 * 96]], u.s**2, dtype=int),
     )
 
-    # -- Now test rmatmul. Only needs to be done for the non- MatrixWithUnits types
+    # -- Now test rmatmul. No need to retest all combinations since rmatmul
+    # -- with other MatrixWithUnits instance just invokes matmul. Thus just
+    # -- one check to satisfy coverage and some spot checks with other types.
+    assert_allequal_MatrixWithUnits(
+        matrix.__rmatmul__(matrix_in_s),
+        MatrixWithUnits(
+            example_values @ example_values,
+            np.array([[u.s**2, u.m * u.s], [u.s**2, u.m * u.s]], dtype=object),
+        ),
+    )
     assert_allequal_MatrixWithUnits(
         np.array([[42, 96]]) @ matrix_in_s,
         MatrixWithUnits([[42 * 42 + 96 * 18, 42 * 24 + 96 * 96]], u.s, dtype=int),
@@ -619,6 +635,16 @@ def test_ndim(units):
     matrix = MatrixWithUnits(example_values, units)
 
     assert matrix.ndim == 2
+
+    with pytest.raises(AssertionError) as e:
+        MatrixWithUnits([[[42]]])
+        if str(e) == 'Values cannot have more than 2 dimensions.':
+            raise ValueError('Wrong error message.')
+
+    with pytest.raises(AssertionError):
+        MatrixWithUnits(np.array(42).reshape((1, 1, 1)))
+        if str(e) != 'Values cannot have more than 2 dimensions.':
+            raise ValueError('Wrong error message.')
 
 
 @pytest.mark.parametrize(
@@ -827,6 +853,18 @@ class Errors(unittest.TestCase):
     def test_invalid_input(self):
         with self.assertRaises(ValueError):
             MatrixWithUnits(['string_value', 'another_string'])
+
+        with self.assertRaises(AssertionError) as e:
+            MatrixWithUnits([[[42]]])
+
+        if str(e.exception) != 'Values cannot have more than 2 dimensions.':
+            raise ValueError('Wrong error message.')
+
+        with self.assertRaises(AssertionError) as e:
+            MatrixWithUnits(np.array(42).reshape((1, 1, 1)))
+
+        if str(e.exception) != 'Values cannot have more than 2 dimensions.':
+            raise ValueError('Wrong error message.')
 
     def test_wrong_unit_setting(self):
         with self.assertRaises(AssertionError):

@@ -96,7 +96,7 @@ from astropy import __version__ as _astropy_version  # noqa: E402 - Top-level im
 
 if _astropy_version >= '7.2.0':
     from astropy.units.docgen import generate_unit_summary as _generate_unit_summary
-else:
+else:  # pragma: no cover - tests run with astropy >7.2.0
     from astropy.units.utils import generate_unit_summary as _generate_unit_summary
 
 __doc__ += '\n\n'

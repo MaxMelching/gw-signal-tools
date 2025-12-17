@@ -1,6 +1,7 @@
 # -- Third Party Imports
 import astropy.units as u
 import numpy as np
+import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.types import Detector
@@ -14,6 +15,9 @@ def test_name():
     assert np.all(np.equal(hanford.psd, psd_o3_h1))
     assert hanford.inner_prod_kwargs == {'psd': psd_o3_h1}
 
+    with pytest.raises(TypeError, match='`name` must be a string.'):
+        Detector(123, np.array([1, 2, 3]))
+
 
 def test_psd():
     livingston = Detector('L1', psd_o3_l1)
@@ -21,6 +25,9 @@ def test_psd():
     assert livingston.name == 'L1'
     assert np.all(np.equal(livingston.psd, psd_o3_l1))
     assert livingston.inner_prod_kwargs == {'psd': psd_o3_l1}
+
+    with pytest.raises(TypeError, match='`psd` must be a FrequencySeries.'):
+        Detector('H1', np.array([1, 2, 3]))
 
 
 def test_inner_prod_kwargs():
@@ -48,6 +55,8 @@ def test_equal():
     assert hanford != Detector('H1', psd_o3_l1)
     assert hanford != Detector('L1', psd_o3_h1)
     assert hanford != Detector('H1', psd_o3_h1, f_range=[10.0 * u.Hz, 1024.0 * u.Hz])
+
+    assert hanford != 'Not a Detector'
 
 
 def test_update():

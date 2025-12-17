@@ -13,6 +13,7 @@ from gwpy.types import Array
 import astropy.units as u
 
 if TYPE_CHECKING:
+    from gwpy.frequencyseries import FrequencySeries
     from numpy.typing import NDArray
 
 # -- Local Package Imports
@@ -89,9 +90,9 @@ class FisherMatrix:
         Whether to compute the Fisher matrix upon intialization of the
         class. Usually, this should be the preferred behaviour, but in
         certain cases one might want to save the computation time (e.g.
-        if a systematic error shall be computed, where the Fisher
-        matrix might be computed in some optimized point and not the one
-        given by :code:`point`).
+        if a systematic bias shall be computed, where the Fisher matrix
+        might be computed in some optimized point and not the one given
+        by :code:`point`).
     metadata :
         All other keyword arguments will be treated as input for
         metadata of the Fisher matrix. This metadata consists of
@@ -539,29 +540,78 @@ class FisherMatrix:
             self._is_projected = False
             return False
 
-    def statistical_error(
-        self, params: Optional[str | list[str]] = None
+    def statistical_bias(
+        self,
+        noise: FrequencySeries,
+        params: Optional[str | list[str]] = None,
+        **inner_prod_kwargs,
     ) -> MatrixWithUnits:
         r"""
-        Calculates the :math:`1-\sigma` statistical error
+        Calculates the statistical bias
 
-        .. math:: \Delta \theta^\mu = \sqrt{\Gamma^{-1}_{\mu \mu}}
+        .. math::
+            \Delta \theta^\mu = \Gamma^{-1}_{\mu \nu} \langle n,
+            \frac{\partial h}{\partial \theta^\nu} \rangle
 
         for the selected parameters.
 
         Parameters
         ----------
+        noise : ~gwpy.frequencyseries.FrequencySeries
+            The noise realization that induces the statistical bias.
         params : str | list[str], optional, default = None
-            Parameter(s) to calculate error for. In case it is None (the
-            default), the error for all parameters from :code:`self.
-            params_to_vary` is calculated. Can also be a string or list
-            of strings, but these have to match elements of :code:`self.
-            params_to_vary`.
+            Parameter(s) to calculate standard deviation for. In case it
+            is None (the default), the error for all parameters from
+            :code:`self.params_to_vary` is calculated. Can also be a
+            string or list of strings, but these have to match elements
+            of :code:`self.params_to_vary`.
 
         Returns
         -------
         ~gw_signal_tools.types.MatrixWithUnits
-            Vector of statistical errors. Indices match indices of
+            Vector of statistical biases. Indices match indices of
+            :code:`params_to_vary` variable that has been used to
+            initialize the class.
+        """
+        param_indices = self.get_param_indices(params)
+
+        # -- Update keywords from initial input to the instance
+        inner_prod_kwargs = self._inner_prod_kwargs | inner_prod_kwargs
+
+        self.fisher  # Makes sure it has been computed
+
+        derivs = [self.deriv_info[param]['deriv'] for param in self.params_to_vary]
+
+        vector = MatrixWithUnits(np.zeros((self.nparams, 1)))
+        for i, deriv in enumerate(derivs):
+            vector[i] = inner_product(noise, deriv, **inner_prod_kwargs)
+
+        return (self.fisher_inverse @ vector)[param_indices]
+
+    def standard_deviation(
+        self, params: Optional[str | list[str]] = None
+    ) -> MatrixWithUnits:
+        r"""
+        Calculates the standard deviation of the statistical bias
+
+        .. math:: \Delta \theta^\mu \Delta \theta^\mu = \sqrt{\Gamma^{-1}_{\mu \mu}}
+
+        for the selected parameters. This is equal to the standard
+        deviation of the parameters themselves.
+
+        Parameters
+        ----------
+        params : str | list[str], optional, default = None
+            Parameter(s) to calculate standard deviation for. In case it
+            is None (the default), the result for all parameters from
+            :code:`self.params_to_vary` is calculated. Can also be a
+            string or list of strings, but these have to match elements
+            of :code:`self.params_to_vary`.
+
+        Returns
+        -------
+        ~gw_signal_tools.types.MatrixWithUnits
+            Vector of standard deviations. Indices match indices of
             :code:`params_to_vary` variable that has been used to
             initialize the class.
 
@@ -571,10 +621,12 @@ class FisherMatrix:
         used during the Fisher matrix calculations.
         """
         param_indices = self.get_param_indices(params)
-        return MatrixWithUnits.sqrt(self.fisher_inverse.diagonal()[param_indices])
-        # TODO: make it return column vector, is more natural, right?
+        return MatrixWithUnits.sqrt(
+            self.covariance_matrix.diagonal()[param_indices]
+        ).to_col()
+        # Reshaping to column vector to be consistent with output of other bias functions
 
-    def systematic_error(
+    def systematic_bias(
         self,
         reference_wf_generator: FDWFGen,
         params: Optional[str | list[str]] = None,
@@ -585,7 +637,7 @@ class FisherMatrix:
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
-        Calculates the systematic error between two waveform models.
+        Calculates the systematic bias between two waveform models.
         The recovery model is taken to be :code:`self.wf_generator`,
         with :code:`self.reference_wf_generator` taking the role of the
         injected/reference waveform model.
@@ -594,17 +646,17 @@ class FisherMatrix:
         ----------
         reference_wf_generator : ~gw_signal_tools.types.FDWFGen
             Waveform generator for "reference model" that the systematic
-            error is computed with respect to. Must accept dictionary
+            bias is computed with respect to. Must accept dictionary
             input like `self.point`.
         params : str | list[str], optional, default = None
-            Parameter(s) to return error for. In case it is None (the
-            default), the error for all parameters from :code:`self.
+            Parameter(s) to return bias for. In case it is None (the
+            default), the bias for all parameters from :code:`self.
             params_to_vary` is calculated. Can also be a string or list
             of strings, but these have to match elements of :code:`self.
             params_to_vary`.
 
             Note that this argument does not determine the parameters
-            that enter in the error calculation (i.e. in the summation
+            that enter in the bias calculation (i.e. in the summation
             involved). These parameters are given by the ones given as
             :code:`params_to_vary` to the Fisher matrix instance that
             this method is called upon.
@@ -630,13 +682,13 @@ class FisherMatrix:
             project out of it. Must be in :code:`params_to_vary`
             attribute of the instance that this method is called upon.
 
-            Note that they will not appear in the returned error anymore
+            Note that they will not appear in the returned bias anymore
             because they do not appear in the Fisher matrix used for the
             calculation that determines the output.
         return_diagnostics : bool or str, optional, default = False
             Whether to return information on the calculations along with
-            result. False means only the systematic error is returned,
-            otherwise it is a tuple of systematic error along with some
+            result. False means only the systematic bias is returned,
+            otherwise it is a tuple of systematic bias along with some
             information. The latter is determined by the value of
             `return_diagnostics`: If ``True``, information about both
             derivative calculation and the obtained result is returned
@@ -650,7 +702,7 @@ class FisherMatrix:
             injected, parameters or not. Default is ``False``, which
             means the point is assumed to be the maximum-likelihood
             estimate obtained from :code:``self.wf_generator``. This
-            setting is not relevant for the systematic error calculation
+            setting is not relevant for the systematic bias calculation
             itself, only for the diagnostic tools returned in the
             optimization info.
         inner_prod_kwargs :
@@ -664,7 +716,7 @@ class FisherMatrix:
         Returns
         -------
         ~gw_signal_tools.types.MatrixWithUnits | tuple[~gw_signal_tools.types.MatrixWithUnits, dict[str, Any]]
-            Column vector containing the systematic errors and
+            Column vector containing the systematic biases and
             dictionary with information about the calculation.
 
             TODO: do details on dictionary keys
@@ -680,7 +732,7 @@ class FisherMatrix:
         where :math:`\delta h = h_2 - h`. Here, :math:`h` is the
         waveform model used to calculate the current Fisher matrix
         instance and :math:`h_2` is a second model, with respect to
-        which the systematic error
+        which the systematic bias
         :math:`\Delta \theta = \theta - \theta_2` is computed/estimated.
 
         Here :math:`\theta_2` are the parameters that correspond to the
@@ -818,7 +870,7 @@ class FisherMatrix:
         # -- turn to. It has the correct Fisher matrix, parameters,
         # -- waveform generators, etc.
 
-        # -- Calculation of systematic error ----------------------------------
+        # -- Calculation of systematic bias -----------------------------------
         opt_fisher.fisher
         # -- Makes sure has been computed (might not be the case e.g. if
         # -- optimize=False, direct_computation=False in self)

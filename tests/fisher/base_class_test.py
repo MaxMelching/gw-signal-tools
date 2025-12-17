@@ -1,14 +1,18 @@
 # -- Third Party Imports
-import numpy as np
 import astropy.units as u
+from gwpy.timeseries import TimeSeries
 import matplotlib.pyplot as plt
+import numpy as np
 import pytest
 
 # -- Local Package Imports
-from gw_signal_tools.waveform import get_wf_generator, norm
+from gw_signal_tools.waveform import get_wf_generator, norm, td_to_fd
 from gw_signal_tools.types import MatrixWithUnits, HashableDict
 from gw_signal_tools.fisher import FisherMatrix, fisher_matrix
-from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
+from gw_signal_tools.test_utils import (
+    assert_allclose_MatrixWithUnits,
+    assert_allequal_MatrixWithUnits,
+)
 from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
 
 from gw_signal_tools import PLOT_STYLE_SHEET
@@ -54,7 +58,9 @@ pc.default_dict.pop('mass1', None)
 pc.default_dict.pop('mass2', None)
 
 fisher_tot_mass = FisherMatrix(
-    point=wf_params, params_to_vary='total_mass', wf_generator=phenomx_generator
+    point=wf_params,
+    params_to_vary=['total_mass', 'time', 'phase'],
+    wf_generator=phenomx_generator,
 )
 
 
@@ -81,9 +87,15 @@ def test_inverse():
 
 def test_fisher_calc():
     fisher_tot_mass_2 = fisher_matrix(
-        wf_params, 'total_mass', phenomx_generator, deriv_routine='numdifftools'
+        point=wf_params,
+        params_to_vary=['total_mass', 'time', 'phase'],
+        wf_generator=phenomx_generator,
+        deriv_routine='numdifftools',
     )
-    assert fisher_tot_mass.fisher == fisher_tot_mass_2
+    assert_allequal_MatrixWithUnits(
+        fisher_tot_mass.fisher,
+        fisher_tot_mass_2,
+    )
 
 
 def test_criterion_consistency():
@@ -343,49 +355,58 @@ def test_project():
 
 
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
-def test_stat_error(params):
-    fisher_tot_mass.statistical_error(params)
+def test_stat_bias(params):
+    noise = TimeSeries(np.random.normal(scale=0.1, size=1024), sample_rate=1024)
+    fisher_tot_mass.statistical_bias(noise=noise, params=params)
+
+    noise_fd = td_to_fd(noise)
+    fisher_tot_mass.statistical_bias(noise=noise_fd, params=params)
+
+
+@pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
+def test_std_dev(params):
+    fisher_tot_mass.standard_deviation(params)
 
 
 @pytest.mark.parametrize(
     'params', [None, 'total_mass', ['total_mass', 'time', 'phase']]
 )
-def test_sys_error(params):
+def test_sys_bias(params):
     fisher = FisherMatrix(
         wf_params,
         ['total_mass', 'time', 'phase'],
         wf_generator=phenomx_generator,
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator, 'total_mass', optimize=False, return_diagnostics=True
     )
 
-    fisher.systematic_error(phenomd_generator, params, return_diagnostics='deriv_info')
+    fisher.systematic_bias(phenomd_generator, params, return_diagnostics='deriv_info')
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator, optimize=True, return_diagnostics=True, is_true_point=True
     )
 
-    fisher.systematic_error(phenomd_generator, optimize=['time', 'phase'])
+    fisher.systematic_bias(phenomd_generator, optimize=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize_fisher=['time', 'phase'])
+    fisher.systematic_bias(phenomd_generator, optimize_fisher=['time', 'phase'])
 
-    fisher.systematic_error(phenomd_generator, optimize='total_mass')
+    fisher.systematic_bias(phenomd_generator, optimize='total_mass')
 
     fisher = fisher.update_attrs(
         return_info=False,  # Does not make sense to give, is overwritten. This is what we test here
         new_params_to_vary=['total_mass', 'mass_ratio', 'time', 'phase'],
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator,
         params='mass_ratio',
         optimize='time',
         optimize_fisher='total_mass',
     )
 
-    fisher.systematic_error(
+    fisher.systematic_bias(
         phenomd_generator,
         optimize=False,
         optimize_fisher='phase',
@@ -394,7 +415,7 @@ def test_sys_error(params):
 
     fisher = fisher.update_attrs(deriv_routine='numdifftools')
 
-    fisher.systematic_error(phenomd_generator, optimize='phase')
+    fisher.systematic_bias(phenomd_generator, optimize='phase')
 
 
 def test_return_diagnostic():
@@ -406,7 +427,7 @@ def test_return_diagnostic():
 
     for bool1 in [True, False]:
         for bool2 in [True, False]:
-            fisher.systematic_error(
+            fisher.systematic_bias(
                 phenomd_generator,
                 return_diagnostics=bool1,
                 is_true_point=bool2,

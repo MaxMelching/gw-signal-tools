@@ -145,16 +145,13 @@ class FisherMatrix:
         self.params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
 
-        if len(self.metadata) > len(self.default_metadata) + 1:  # +1 for return_info
-            # -- Arguments for inner product may be given, extract
-            self._inner_prod_kwargs = {}
-            for key in _INNER_PROD_ARGS:
-                if key in metadata:
-                    # -- get with default None is potentially bad, some
-                    # -- arguments might have this value too
-                    self._inner_prod_kwargs[key] = self.metadata[key]
-        else:
-            self._inner_prod_kwargs = {}
+        # -- Arguments for inner product may be given, extract
+        self._inner_prod_kwargs = {}
+        for key in _INNER_PROD_ARGS:
+            if key in metadata:
+                # -- get with default None is potentially bad, some
+                # -- arguments might have this value too
+                self._inner_prod_kwargs[key] = self.metadata[key]
 
         if direct_computation:
             self._calc_fisher()

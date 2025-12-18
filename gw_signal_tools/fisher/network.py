@@ -121,12 +121,12 @@ class FisherMatrixNetwork(FisherMatrix):
         # -- detrimental because self._calc_fisher needs it, which is
         # -- potentially called in the following.
         _metadata = metadata.copy()
-        _metadata.pop(
-            'psd', None
-        )  # TODO: we should at least emit a warning if this is passed
-        # -- Make sure no psd keyword is present, this is always taken
-        # -- from detectors. Would not make sense to pass single PSD for
-        # -- a network of multiple detectors anyway.
+        if 'psd' in _metadata:
+            logger.info(
+                'PSD keyword passed to `FisherMatrixNetwork`. This is ignored, '
+                'since PSDs are taken from each detector in the network.'
+            )
+        _metadata.pop('psd', None)
 
         super().__init__(
             point=point,

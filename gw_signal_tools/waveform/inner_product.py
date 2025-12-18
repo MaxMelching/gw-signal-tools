@@ -1019,7 +1019,7 @@ param_bounds: dict[str, tuple[float, float]] = {
     'theta_jn': (0.0, np.pi),
     'sin_inclination': (0.0, 1.0),
     'sin_theta_jn': (0.0, 1.0),
-    'f_ref': (0.0, np.inf),
+    'f22_ref': (0.0, np.inf),
 }
 # -- Note: we do not add angles here because the waveform will not fail
 # -- to generate if we cross some boundary (periodicity).

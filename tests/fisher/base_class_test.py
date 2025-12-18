@@ -356,7 +356,9 @@ def test_project():
 
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
 def test_stat_bias(params):
-    noise = TimeSeries(np.random.normal(scale=0.1, size=1024), sample_rate=1024)
+    noise = TimeSeries(
+        np.random.normal(scale=0.1, size=1024), sample_rate=1024, unit=u.strain
+    )
     fisher_tot_mass.statistical_bias(noise=noise, params=params)
 
     noise_fd = td_to_fd(noise)

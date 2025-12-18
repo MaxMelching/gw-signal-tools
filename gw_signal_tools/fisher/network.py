@@ -306,10 +306,39 @@ class FisherMatrixNetwork(FisherMatrix):
 
     def statistical_bias(
         self,
-        noise: FrequencySeries,
+        noise: dict[str, FrequencySeries],  # TODO: we need noise for each detector!!!
         params: Optional[str | list[str]] = None,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits:
+        r"""
+        Calculates the statistical bias
+
+        .. math::
+            \Delta \theta^\mu = \Gamma^{-1}_{\mu \nu} \langle n,
+            \frac{\partial h}{\partial \theta^\nu} \rangle
+
+        for the selected parameters.
+
+        Parameters
+        ----------
+        noise : dict[str, ~gwpy.frequencyseries.FrequencySeries]
+            Dictionary with noise realizations from each detector that
+            induce the statistical bias. Keys are expected to be the
+            names of the detectors in `self.detectors`.
+        params : str | list[str], optional, default = None
+            Parameter(s) to calculate standard deviation for. In case it
+            is None (the default), the error for all parameters from
+            :code:`self.params_to_vary` is calculated. Can also be a
+            string or list of strings, but these have to match elements
+            of :code:`self.params_to_vary`.
+
+        Returns
+        -------
+        ~gw_signal_tools.types.MatrixWithUnits
+            Vector of statistical biases. Indices match indices of
+            :code:`params_to_vary` variable that has been used to
+            initialize the class.
+        """
         param_indices = self.get_param_indices(params)
 
         # -- Update keywords from initial input to the instance
@@ -318,17 +347,15 @@ class FisherMatrixNetwork(FisherMatrix):
         self.fisher  # Makes sure it has been computed
 
         vector = 0.0
-        for i in range(len(self.detectors)):
+        for i, det in enumerate(self.detectors):
             det_stat_bias = self.detector_fisher(i).statistical_bias(
-                noise=noise,
+                noise=noise[det.name],
                 params=None,  # Get all for now, filter before return
                 **inner_prod_kwargs,
             )
             vector += self.detector_fisher(i).fisher @ det_stat_bias
 
         return (self.fisher_inverse @ vector)[param_indices]
-
-    statistical_bias.__doc__ = _parent.statistical_bias.__doc__
 
     # -- standard_deviation needs no update
 

@@ -156,10 +156,17 @@ def test_detector_fisher():
 
 @pytest.mark.parametrize('params', [None, 'total_mass', ['total_mass']])
 def test_stat_bias(params):
-    noise = TimeSeries(np.random.normal(scale=0.1, size=1024), sample_rate=1024)
+    noise = dict(
+        H1=TimeSeries(
+            np.random.normal(scale=0.1, size=1024), sample_rate=1024, unit=u.strain
+        ),
+        L1=TimeSeries(
+            np.random.normal(scale=0.1, size=1024), sample_rate=1024, unit=u.strain
+        ),
+    )
     fisher_tot_mass.statistical_bias(noise=noise, params=params)
 
-    noise_fd = td_to_fd(noise)
+    noise_fd = dict((k, td_to_fd(v)) for k, v in noise.items())
     fisher_tot_mass.statistical_bias(noise=noise_fd, params=params)
 
 

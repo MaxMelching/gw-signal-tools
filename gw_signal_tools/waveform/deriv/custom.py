@@ -1,14 +1,19 @@
 # -- Standard Lib Imports
+from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
+
+from typing import Optional, Literal, NamedTuple, TYPE_CHECKING
 # from functools import cached_property  # TODO: use for some stuff?
-from typing import Optional, Literal, Any
 
 # -- Third Party Imports
 import numpy as np
 import astropy.units as u
-from gwpy.frequencyseries import FrequencySeries
-from gwpy.timeseries import TimeSeries
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+
+if TYPE_CHECKING:
+    from gwpy.frequencyseries import FrequencySeries
+    from gwpy.timeseries import TimeSeries
+    from numpy.typing import NDArray
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
@@ -148,7 +153,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         point: dict[str, u.Quantity],
         param_to_vary: str,
         wf_generator: FDWFGen,
-        step_sizes: Optional[list[float] | np.ndarray] = None,
+        step_sizes: Optional[list[float] | NDArray[np.float64]] = None,
         start_step_size: Optional[float] = 1e-2,
         convergence_check: Optional[Literal['diff_norm', 'mismatch']] = None,
         convergence_threshold: Optional[float] = None,
@@ -269,11 +274,11 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     #     # TODO: do we have to make sure it is list that we append here?
 
     @property
-    def step_sizes(self) -> list[float] | np.ndarray[float]:
+    def step_sizes(self) -> list[float] | NDArray[np.float64]:
         return self._step_sizes
 
     @step_sizes.setter
-    def step_sizes(self, step_sizes: list[float] | np.ndarray[float]):
+    def step_sizes(self, step_sizes: list[float] | NDArray[np.float64]):
         self._step_sizes = step_sizes
 
     @property
@@ -357,30 +362,30 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
             derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
-            self.deriv_info = {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.',
-            }
+            self.info = self.DerivInfo(
+                norm_squared=derivative_norm,
+                is_exact_deriv='This derivative is exact.',
+            )
             return deriv
         elif self.param_to_vary == 'phase':
             deriv = self.wf * 1.0j / u.rad
 
             derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
-            self.deriv_info = {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.',
-            }
+            self.info = self.DerivInfo(
+                norm_squared=derivative_norm,
+                is_exact_deriv='This derivative is exact.',
+            )
             return deriv
         elif self.param_to_vary == 'distance':
             deriv = (-1.0 / self.point['distance']) * self.wf
 
             derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
 
-            self.deriv_info = {
-                'norm_squared': derivative_norm,
-                'description': 'This derivative is exact.',
-            }
+            self.info = self.DerivInfo(
+                norm_squared=derivative_norm,
+                is_exact_deriv='This derivative is exact.',
+            )
             return deriv
 
         # TODO: automatically adjust deriv_formula here if needed
@@ -395,9 +400,9 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         for self.refine_numb in range(self.max_refine_numb):
             # -- Initialize value storage
-            self._derivative_vals = []
-            self._deriv_norms = []
-            self._convergence_vals = []
+            self._derivative_vals: list[FrequencySeries | TimeSeries] = []
+            self._deriv_norms: list[u.Quantity] = []
+            self._convergence_vals: list[u.Quantity] = []
             # TODO: then maybe we should reset the step sizes as well?
 
             self._iterate_through_step_sizes()
@@ -452,7 +457,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             # -> maybe make them properties and there we check this, set them
             #    otherwise?
 
-        self.deriv_info = {
+        self.info = {
             'norm_squared': self._deriv_norms[self.min_dev_index],
             'final_step_size': self.step_sizes[self.min_dev_index],
             'final_convergence_val': self._convergence_vals[self.min_dev_index],
@@ -603,7 +608,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         Notes
         -----
         Information gathered during calculation is stored in the
-        :code:`self.deriv_info` property.
+        :code:`self.info` property.
         """
         if x is not None:
             if isinstance(x, u.Quantity):
@@ -797,22 +802,32 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         return deriv_series
 
     # -- Information related properties
-    @property
-    def deriv_info(self) -> dict[str, Any]:
-        """
-        Information about the calculated derivative, given as a
-        dictionary. All keys from this dictionary are also accessible
-        as a class attribute.
-        """
-        return self._deriv_info
+    # DerivInfo = namedtuple(
+    #     typename='DerivInfo',
+    #     field_names=('is_exact_deriv', 'norm_squared',
+    #         'final_step_size', 'final_convergence_val',
+    #         'number_of_refinements', 'final_set_of_step_sizes',
+    #         'deriv_formula',),
+    #     defaults=(np.nan, False, np.nan, np.nan, np.nan, np.nan, None),
+    # )
 
-    @deriv_info.setter
-    def deriv_info(self, info: dict[str, Any]):
-        for key, val in info.items():
-            # -- Make each key from deriv_info available as attribute
-            setattr(self, key, val)
+    class DerivInfo(NamedTuple):
+        """Namedtuple for derivative information."""
 
-        self._deriv_info = info
+        deriv_formula: str | None = None
+        """Derivative formula that was used."""
+        final_convergence_val: float | None = None
+        """Final value of the convergence criterion."""
+        final_set_of_step_sizes: list[float] | NDArray[np.float64] | None = None
+        """Final set of step sizes that were used for the derivative."""
+        final_step_size: float | None = None
+        """Final step size used for the derivative."""
+        is_exact_deriv: bool | str = False
+        """Whether derivative is exact (analytical) or not."""
+        norm_squared: float = np.nan
+        """Squared norm of the derivative."""
+        number_of_refinements: int | None = None
+        """Number of step size refinements that were performed."""
 
     def convergence_plot(self) -> mpl.axes.Axes:
         """
@@ -849,11 +864,11 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         fig.suptitle(
             f'Parameter: {latexparams.get(self.param_to_vary, self.param_to_vary)}'
         )
-        if isinstance(deriv_val, TimeSeries):
-            ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
-        elif isinstance(deriv_val, FrequencySeries):
-            ax[1].set_xlabel(rf'$f$ [{deriv_val.xindex.unit:latex}]')
-        # -- else we do not know what xindex is, no label
+        # if isinstance(deriv_val, TimeSeries):
+        #     ax[1].set_xlabel(rf'$t$ [{deriv_val.xindex.unit:latex}]')
+        # elif isinstance(deriv_val, FrequencySeries):
+        #     ax[1].set_xlabel(rf'$f$ [{deriv_val.xindex.unit:latex}]')
+        # # -- else we do not know what xindex is, no label
 
         ax[0].set_ylabel('Derivative Re')
         ax[1].set_ylabel('Derivative Im')

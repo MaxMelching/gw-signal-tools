@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, TYPE_CHECKING
+from typing import Optional, Any, Literal, Self, TYPE_CHECKING, NamedTuple
 
 # from functools import cached_property
 # TODO: use for .fisher and .fisher_inverse?
@@ -224,7 +224,7 @@ class FisherMatrix:
         return self._nparams
 
     def _check_cond(self) -> None:
-        """Calculate condition number and throw warning if it is too large."""
+        """Calculate condition number and throw warning if it is too high."""
         if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
             # -- Conservative threshold choice for double precision,
             # -- as quoted e.g. in gwbench paper
@@ -236,14 +236,21 @@ class FisherMatrix:
 
     def _calc_fisher(self) -> None:
         """Calculate the Fisher matrix for this instance."""
-        self._fisher, self._deriv_info = fisher_matrix(
+        self._fisher, deriv_info = fisher_matrix(
             point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
             **(self.metadata | {'return_info': True}),
         )
 
-        # self._check_cond()
+        derivs, infos = {}, {}
+        for param, deriv_info_item in deriv_info.items():
+            derivs[param] = deriv_info_item['deriv']
+            infos[param] = deriv_info_item['info']
+        self._derivs = derivs
+        self._deriv_info = infos
+
+        self._check_cond()
         # TODO: make final decision if this is required. But I do not
         # think so, because we might not want to invert and then cond
         # does not really matter.
@@ -299,14 +306,17 @@ class FisherMatrix:
         elif name == '_deriv_info':
             # -- Analogous case as for _fisher
             return {}
+        elif name == '_derivs':
+            # -- Analogous case as for _fisher
+            return {}  # pragma: no cover - we do not set _derivs in FisherMatrixNetwork
 
         return self.fisher.__getattribute__(name)
 
     @property
-    def deriv_info(self) -> dict[str, dict[str, Any]]:
+    def deriv_info(self) -> dict[str, NamedTuple]:
         """
         Collection of information about derivatives that have been
-        calculated (just the `deriv_info` from each derivative class.)
+        calculated (just the `info` from each derivative class.)
 
         :type:`dict`
         """
@@ -316,6 +326,31 @@ class FisherMatrix:
             self._deriv_info = {}
 
         return self._deriv_info
+
+    # @deriv_info.setter
+    # def deriv_info(self, deriv_info: dict[str, dict[str, Any]]) -> None:
+    #     derivs, infos = {}, {}
+    #     for param, deriv_info_item in deriv_info.items():
+    #         # derivs[param], infos[param] = deriv_info_item
+    #         derivs[param] = deriv_info_item['deriv']
+    #         infos[param] = deriv_info_item['info']
+    #     self._derivs = derivs
+    #     self._deriv_info = infos
+
+    @property
+    def derivs(self) -> dict[str, FrequencySeries]:
+        """
+        Collection of derivatives that have been calculated for each
+        parameter.
+
+        :type:`dict`
+        """
+        try:
+            self._derivs
+        except AttributeError:  # pragma: no cover
+            self._derivs = {}
+
+        return self._derivs
 
     def get_param_indices(
         self, params: Optional[str | list[str]] = None
@@ -492,6 +527,7 @@ class FisherMatrix:
             out.params_to_vary.remove(param)
             # -- Also look at deriv_info, pop params there
             out._deriv_info.pop(param, None)
+            out._derivs.pop(param, None)
         # -- To update indices, we have to set params_to_vary again
         out.params_to_vary = out.params_to_vary
 
@@ -577,7 +613,7 @@ class FisherMatrix:
 
         self.fisher  # Makes sure it has been computed
 
-        derivs = [self.deriv_info[param]['deriv'] for param in self.params_to_vary]
+        derivs = [self.derivs[param] for param in self.params_to_vary]
 
         vector = MatrixWithUnits(np.zeros((self.nparams, 1)))
         for i, deriv in enumerate(derivs):
@@ -814,8 +850,8 @@ class FisherMatrix:
                 # -- application qualifies as application of 'factor').
                 opt_fisher.fisher  # Make sure derivatives are calculated
                 for param in opt_fisher.params_to_vary:
-                    deriv = opt_fisher.deriv_info[param]['deriv']
-                    opt_fisher.deriv_info[param]['deriv'] = apply_time_phase_shift(
+                    deriv = opt_fisher.derivs[param]
+                    opt_fisher.derivs[param] = apply_time_phase_shift(
                         deriv, time_shift, phase_shift
                     )
             else:
@@ -873,7 +909,7 @@ class FisherMatrix:
         # -- optimize=False, direct_computation=False in self)
 
         derivs = [
-            opt_fisher.deriv_info[param]['deriv']
+            opt_fisher.derivs[param]
             for param in opt_fisher.params_to_vary
             # -- Potential time and phase shifts from optimization are
             # -- already incorporated here
@@ -1323,6 +1359,7 @@ class FisherMatrix:
         # -- then has arrays in there, we have to make a deepcopy
         from copy import deepcopy
 
+        new_matrix._derivs = deepcopy(self._derivs)
         new_matrix._deriv_info = deepcopy(self.deriv_info)
 
         return new_matrix

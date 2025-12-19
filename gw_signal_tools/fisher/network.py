@@ -116,9 +116,9 @@ class FisherMatrixNetwork(FisherMatrix):
         for i, det in enumerate(self.detectors):
             self._detector_indices[det.name] = i
 
-        # -- Now we can proceed with standard Fisher setup
+        # -- Now we can proceed with standard Fisher setup.
         # -- Note that handling of detectors prior to this call is
-        # -- detrimental because self._calc_fisher needs it, which is
+        # -- crucial because self._calc_fisher needs it, which is
         # -- potentially called in the following.
         _metadata = metadata.copy()
         if 'psd' in _metadata:
@@ -126,7 +126,7 @@ class FisherMatrixNetwork(FisherMatrix):
                 'PSD keyword passed to `FisherMatrixNetwork`. This is ignored, '
                 'since PSDs are taken from each detector in the network.'
             )
-        _metadata.pop('psd', None)
+            _metadata.pop('psd')
 
         super().__init__(
             point=point,
@@ -299,6 +299,14 @@ class FisherMatrixNetwork(FisherMatrix):
                 self._fisher += det_fisher.fisher
 
                 self._deriv_info[det.name] = det_fisher.deriv_info
+                # self._derivs[det.name] = det_fisher._derivs  # TODO: we do not need this, right? Would just waste memory
+
+            self._check_cond()
+        except Exception as e:
+            raise RuntimeError(
+                'Error during Fisher matrix calculation in detector '
+                f'`{self.detectors[i].name}`.'
+            ) from e
         finally:
             # -- This try statement is super important! Ensures that we
             # -- restore the logging level even if there is error.
@@ -306,7 +314,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
     def statistical_bias(
         self,
-        noise: dict[str, FrequencySeries],  # TODO: we need noise for each detector!!!
+        noise: dict[str, FrequencySeries],
         params: Optional[str | list[str]] = None,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits:
@@ -400,7 +408,6 @@ class FisherMatrixNetwork(FisherMatrix):
 
         try:
             for i, det in enumerate(self.detectors):
-                # self.detector_fisher(i).fisher  # Now already done in each FisherMatrix
                 _, info = self.detector_fisher(i).systematic_bias(
                     reference_wf_generator=reference_wf_generator,
                     params=None,  # Get all for now, filter before return
@@ -515,6 +522,7 @@ class FisherMatrixNetwork(FisherMatrix):
 
         new_network._fisher = self.fisher.copy()
         new_network._fisher_inverse = self.fisher_inverse.copy()
+        # new_network._derivs = self._derivs.copy()  # TODO: we do not need this, right?
         new_network._deriv_info = self.deriv_info.copy()
         new_network._is_projected = self.is_projected
 

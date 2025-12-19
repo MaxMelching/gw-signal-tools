@@ -1,9 +1,10 @@
 # -- Standard Lib Imports
 import warnings
-from typing import Optional, Any, Callable
+from typing import Optional, Callable, NamedTuple
 
 # -- Third Party Imports
 import numpy as np
+from gwpy.frequencyseries import FrequencySeries
 from gwpy.types import Series
 import astropy.units as u
 
@@ -98,9 +99,13 @@ def fisher_matrix(
     return_info: bool = False,
     pass_inn_prod_kwargs_to_deriv: bool = False,
     **deriv_and_inner_prod_kwargs,
-) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, dict[str, Any]]]:
+) -> (
+    MatrixWithUnits
+    | tuple[MatrixWithUnits, dict[str, dict[str, FrequencySeries | NamedTuple]]]
+):
     r"""
-    Compute Fisher matrix at a fixed point.
+    Compute Fisher matrix at a fixed point. This function is mainly
+    intended for internal use by ``~gw_signal_tools.fisher.FisherMatrix``.
 
     Parameters
     ----------
@@ -166,11 +171,17 @@ def fisher_matrix(
 
     Returns
     -------
-    ~gw_signal_tools.matrix_with_units.MatrixWithUnits
+    ~gw_signal_tools.matrix_with_units.MatrixWithUnits or tuple[~gw_signal_tools.matrix_with_units.MatrixWithUnits, dict[str, dict[str, ~gwpy.frequencyseries.FrequencySeries | NamedTuple]]]
         A ``MatrixWithUnits`` instance. Entries are Fisher values, where
         index :math:`(i, j)` corresponds to the inner product of
         derivatives with respect to the parameters
         :code:`params_to_vary[i]`, :code:`params_to_vary[j]`.
+
+        If `return_info` is True, a tuple is returned. The first entry
+        is the Fisher matrix as described above, while the second entry
+        is a dictionary that contains, for each parameter in
+        :code:`params_to_vary`, a dictionary with the waveform derivative
+        and the :code:`info` property collected during its calculation.
 
     Notes
     -----
@@ -225,16 +236,13 @@ def fisher_matrix(
             ),
         )
 
-        deriv, info = full_deriv.deriv, full_deriv.deriv_info
-        info['deriv'] = deriv
-        # fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2
+        deriv, info = full_deriv.deriv, full_deriv.info  # type: ignore[attr-defined]
         if deriv_routine == 'gw_signal_tools':
-            fisher_matrix[i, i] = info['norm_squared']
+            fisher_matrix[i, i] = info.norm_squared
         else:
             fisher_matrix[i, i] = norm(deriv, **_inner_prod_kwargs) ** 2  # type: ignore[operator]
 
-        deriv_info[param] = info
-        # TODO: maybe convert to namedtuple?
+        deriv_info[param] = dict(deriv=deriv, info=info)
 
     # -- Populate remaining entries of Fisher matrix
     for i, param_i in enumerate(params_to_vary):

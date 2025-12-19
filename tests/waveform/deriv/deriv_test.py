@@ -111,16 +111,6 @@ def test_class_passing():
 
 
 def test_str_mapping():
-    # WaveformDerivative.deriv_routine_class_map['custom_routine'] = WaveformDerivativeNumdifftools
-    # full_deriv = WaveformDerivative(
-    #     wf_params,
-    #     'total_mass',
-    #     wf_generator,
-    #     deriv_routine='custom_routine'
-    # )
-
-    # assert isinstance(full_deriv, WaveformDerivativeNumdifftools)
-
     class CustomDeriv(WaveformDerivativeBase):
         pass
 
@@ -139,6 +129,29 @@ def test_str_mapping():
         )
 
 
+@pytest.mark.parametrize(
+    'deriv_routine', ['numdifftools', 'gw_signal_tools', 'amplitude_phase']
+)
+def test_info_setting(deriv_routine):
+    # -- Test default first, then all other options
+    full_deriv = WaveformDerivative(
+        wf_params, 'total_mass', wf_generator, deriv_routine=deriv_routine
+    )
+    _, info = full_deriv.deriv, full_deriv.info
+
+    info.is_exact_deriv
+    full_deriv.is_exact_deriv
+
+    with pytest.raises(
+        AttributeError,
+        match=f"'{full_deriv.__class__.__name__}' object has no attribute",
+    ):
+        full_deriv.non_existent_attribute
+
+    with pytest.raises(TypeError, match='`info` must be a dict or namedtuple.'):
+        full_deriv.info = 'Not a dict or namedtuple'
+
+
 # %% -- Characterizing gwsignaltools derivative -------------------------------
 @pytest.mark.parametrize('param', test_params)
 @pytest.mark.parametrize('q_val', [0.42, 0.05])
@@ -150,13 +163,13 @@ def test_step_size(param, q_val, break_conv):
         wf_generator,
         break_upon_convergence=break_conv,
     )
-    deriv, deriv_info = full_deriv.deriv, full_deriv.deriv_info
+    deriv, info = full_deriv.deriv, full_deriv.info
 
     deriv_fixed_step_size = WaveformDerivativeGWSignaltools(
         wf_params | {'mass_ratio': q_val * u.dimensionless_unscaled},
         param,
         wf_generator,
-        step_sizes=deriv_info['final_step_size'],
+        step_sizes=info.final_step_size,
     ).deriv
 
     # -- These must be equal (not just close)
@@ -189,16 +202,16 @@ def test_step_size(param, q_val, break_conv):
     #     return_info=True,
     #     break_upon_convergence=False
     # )
-    # deriv, deriv_info = full_deriv.deriv, full_deriv.deriv_info
+    # deriv, info = full_deriv.deriv, full_deriv.info
 
     # deriv2 = WaveformDerivativeGWSignaltools(
     #     wf_params,# | {'mass_ratio': 0.05*u.dimensionless_unscaled},
     #     'total_mass',
     #     wf_generator,
-    #     step_sizes=deriv_info['final_step_size']
+    #     step_sizes=info.final_step_size
     # ).deriv
 
-    # print(deriv_info['final_step_size'])
+    # print(info.final_step_size)
     # plt.close()
     # plt.plot(deriv.real)
     # plt.plot(deriv.imag)
@@ -246,9 +259,6 @@ def test_custom_convergence(param):
             0.2 * u.dimensionless_unscaled,
             'forward',
         ],
-        # -- Following tests do not work, sym_mass_ratio is not in wf_params
-        # ['sym_mass_ratio', 0.1*u.dimensionless_unscaled, 0.2*u.dimensionless_unscaled, 'forward'],
-        # ['sym_mass_ratio', 0.2*u.dimensionless_unscaled, 0.1*u.dimensionless_unscaled, 'backward'],
     ],
 )
 def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
@@ -274,7 +284,7 @@ def test_invalid_step_size(param, param_val, invalid_step, expected_formula):
     # -- adjustment in previous call
 
     assert_allclose_series(deriv_1.deriv, deriv_2.deriv, atol=0.0, rtol=0.0)
-    assert deriv_1.deriv_info['deriv_formula'] == deriv_2.deriv_info['deriv_formula']
+    assert deriv_1.info.deriv_formula == deriv_2.info.deriv_formula
 
 
 @pytest.mark.parametrize('param', test_params)

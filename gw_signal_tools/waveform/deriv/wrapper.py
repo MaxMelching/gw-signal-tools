@@ -1,4 +1,5 @@
 # -- Local Package Imports
+from .base import WaveformDerivativeBase
 from .custom import WaveformDerivativeGWSignaltools  # noqa: F401
 from .nd import WaveformDerivativeNumdifftools  # noqa: F401
 from .nd_amp_phase import WaveformDerivativeAmplitudePhase  # noqa: F401
@@ -69,7 +70,7 @@ class WaveformDerivative:
     # -- Idea: one can easily add entries here for custom derivative routines.
     # -- Instances created after creation will have those entries.
 
-    def __new__(cls, *args, **kw_args):
+    def __new__(cls, *args, **kw_args) -> WaveformDerivativeBase:
         deriv_routine = kw_args.pop('deriv_routine', 'numdifftools')
 
         if isinstance(deriv_routine, str):

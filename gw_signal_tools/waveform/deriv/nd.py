@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, NamedTuple, Any
 
 # -- Third Party Imports
 import numdifftools as nd
@@ -9,6 +9,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from gwpy.types import Series
+    from numpy.typing import NDArray
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
@@ -21,9 +22,9 @@ __doc__ = """Module for ``WaveformDerivativeNumdifftools`` class."""
 __all__ = ('WaveformDerivativeNumdifftools',)
 
 
-class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
+class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
     r"""
-    Wrapper around :code:`numdifftools.Derivative` class specifically
+    Wrapper around :code:`~numdifftools.Derivative` class specifically
     for waveform callers from the LAL waveforms interface `gwsignal`.
 
     Parameters
@@ -71,7 +72,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         generates a suitable function from a few arguments.
     args, kwds :
         All other positional and keyword arguments are passed on as such
-        to the :code:`numdifftools.Derivative` class.
+        to the :code:`~numdifftools.Derivative` class.
 
     Notes
     -----
@@ -80,7 +81,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
     the required operations will not work.
 
     Custom attributes defined by us are :code:`.deriv` and
-    :code:`.deriv_info`, which have analogous names to the ones defined
+    :code:`.info`, which have analogous names to the ones defined
     in :code:`~gw_signal_tools.waveform.deriv.
     WaveformDerivativeGWSignaltools`.
 
@@ -100,8 +101,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
         **kwds,
     ) -> None:
         # -- Initialize WaveformDerivativeBase attributes
-        WaveformDerivativeBase.__init__(
-            self,
+        super().__init__(
             point,
             param_to_vary,
             wf_generator,
@@ -112,14 +112,14 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             wf = wf_generator(point)
             deriv = wf * (-1.0j * 2.0 * np.pi * wf.frequencies)
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             self._ana_deriv = deriv
             return None
         elif param_to_vary == 'phase':
             wf = wf_generator(point)
             deriv = wf * 1.0j / u.rad
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             self._ana_deriv = deriv
             return None
 
@@ -137,7 +137,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             return self.wf_generator(point | {param_to_vary: x * param_unit})
 
         # -- Initialize nd.Derivative attributes (among others, stores fun in self.fun)
-        super().__init__(fun, *args, **kwds)
+        self._nd_deriv = nd.Derivative(fun, *args, **kwds)
 
     def __call__(self, x: Optional[float | u.Quantity] = None) -> Series:
         # -- Check if analytical derivative has already been calculated
@@ -160,27 +160,30 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
             wf = self.wf_generator(self.point | {'distance': dist_val})
             deriv = (-1.0 / dist_val) * wf
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             return deriv
 
         # -- Test for valid point, potentially adjusting method
         self.test_point()
 
-        self.full_output = True
-        deriv, info = super().__call__(x)
-        self.deriv_info = info._asdict()
+        self.nd_deriv.full_output = True
+        deriv, info = self.nd_deriv.__call__(x)
+        self.info = self.DerivInfo(info)
 
         param_unit = self.param_center_val.unit
 
-        wf = self.fun(x)
-        # Idea: use type that wf_generator returns to have flexibility
-        # with respect to whether TimeSeries/FrequencySeries is passed
+        wf = self.nd_deriv.fun(x)
+        # -- Idea: use type that wf_generator returns to have flexibility
+        # -- with respect to whether TimeSeries/FrequencySeries is passed
         out = type(wf)(data=deriv, xindex=wf.xindex, unit=wf.unit / param_unit)
 
-        self.error_estimate = type(wf)(
-            data=info.error_estimate, xindex=wf.xindex, unit=wf.unit / param_unit
+        self.info = self.info._replace(
+            error_estimate=type(wf)(
+                data=info.error_estimate, xindex=wf.xindex, unit=wf.unit / param_unit
+            )
         )
-        self.deriv_info['error_estimate'] = self.error_estimate
+
+        print(self.info)
 
         return out
 
@@ -214,7 +217,7 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
                 'inverse_mass_ratio', default_bounds
             )
 
-        _base_step = self.step.base_step
+        _base_step = self.nd_deriv.step.base_step
         assert _base_step > 0.0, (
             'Reached step size of zero, cannot proceed.'
         )  # pragma: no cover
@@ -241,24 +244,61 @@ class WaveformDerivativeNumdifftools(nd.Derivative, WaveformDerivativeBase):
 
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+            self.nd_deriv.step.base_step = min(
+                _base_step / 2.0, self._default_base_step
+            )
 
-            if any(violation(self.step.base_step)):
+            if any(violation(self.nd_deriv.step.base_step)):
                 self.test_point()  # Recursive call until step size is small enough
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+            self.nd_deriv.step.base_step = min(
+                _base_step / 2.0, self._default_base_step
+            )
 
-            if violation(self.step.base_step)[0]:
+            if violation(self.nd_deriv.step.base_step)[0]:
                 # -- Too close to lower bound still, change method
-                self.method = 'forward'
+                self.nd_deriv.method = 'forward'
         elif not lower_violation and upper_violation:
             # -- Can only happen if method is not backward yet
-            self.step.base_step = min(_base_step / 2.0, self._default_base_step)
+            self.nd_deriv.step.base_step = min(
+                _base_step / 2.0, self._default_base_step
+            )
 
-            if violation(self.step.base_step)[1]:
+            if violation(self.nd_deriv.step.base_step)[1]:
                 # -- Too close to upper bound still, change method
-                self.method = 'backward'
+                self.nd_deriv.method = 'backward'
+
+    class DerivInfo(NamedTuple):
+        """Namedtuple for derivative information."""
+
+        error_estimate: Optional[NDArray | Series] = None
+        """Estimated error in the derivative."""
+        f_value: Optional[NDArray | u.Quantity] = None
+        """Function value at the evaluation point."""
+        final_step: Optional[NDArray] = None
+        """Final step size used for the derivative."""
+        index: Optional[NDArray] = None
+        """Index of the best derivative estimate (used internally by numdifftools)."""
+        is_exact_deriv: bool = False
+        """Whether derivative is exact (analytical) or not."""
+
+    @property
+    def nd_deriv(self) -> nd.Derivative:
+        """
+        Wrapper that calculates derivative of waveform.
+
+        :type: `~numdifftools.core.Derivative`
+        """
+        return self._nd_deriv
+
+    def __getattr__(self, name: str) -> Any:
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            if hasattr(self.nd_deriv, name):
+                return getattr(self.nd_deriv, name)
+            raise  # Re-raise the AttributeError
 
 
 if nd.__version__ <= '0.9.41':  # pragma: no cover

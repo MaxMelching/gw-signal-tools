@@ -1,7 +1,7 @@
 # -- Standard Lib Imports
 # from functools import cached_property  # TODO: use for some stuff?
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import Any, TYPE_CHECKING, Optional
+from typing import Any, TYPE_CHECKING, Optional, NamedTuple
 
 # -- Third Party Imports
 import numpy as np
@@ -67,7 +67,7 @@ class WaveformDerivativeBase:
         Notes
         -----
         Information gathered during calculation is stored in the
-        :code:`self.deriv_info` property.
+        :code:`self.info` property.
         """
         return NotImplemented
 
@@ -149,19 +149,49 @@ class WaveformDerivativeBase:
         """
         return self._point
 
+    class DerivInfo(NamedTuple):
+        """Namedtuple for derivative information with default values."""
+
+        is_exact_deriv: bool = False
+        """Indicates whether the derivative is analytical."""
+
     @property
-    def deriv_info(self) -> dict[str, Any]:
-        """
+    def info(self) -> NamedTuple:
+        f"""
         Information about the calculated derivative, given as a
-        dictionary. All keys from this dictionary are also accessible
-        as a class attribute.
+        namedtuple. All fields from this namedtuple are also accessible
+        as a class attribute. Available keys are those from the
+        class's ``DerivInfo`` namedtuple, i.e. {self.DerivInfo._fields}.
         """
-        return self._deriv_info
+        return self._info
 
-    @deriv_info.setter
-    def deriv_info(self, info: dict[str, Any]):
-        for key, val in info.items():
-            # -- Make each key from deriv_info available as attribute
-            setattr(self, key, val)
+    @info.setter
+    def info(self, info: dict[str, Any] | NamedTuple) -> None:
+        if isinstance(info, dict):
+            info = self.__class__.DerivInfo(**info)
+        elif not isinstance(info, self.DerivInfo):
+            raise TypeError(
+                f'`info` must be a dict or an instance of {self.DerivInfo.__name__}.'
+            )
 
-        self._deriv_info = info
+        self._info = info
+
+    def __getattr__(self, name: str) -> Any:
+        # -- Allow access to info fields as instance attributes.
+        # -- This is more memory efficient than setting them individually.
+        # -- Note that this function is only called if the attribute
+        # -- wasn't found normally.
+
+        # -- Avoid infinite recursion when accessing _info
+        if name == '_info':
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+        # -- Check if info exists and has this field
+        if hasattr(self, '_info') and hasattr(self.info, name):
+            return getattr(self.info, name)
+
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )

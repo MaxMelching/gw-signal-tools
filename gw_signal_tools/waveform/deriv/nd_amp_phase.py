@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
-from typing import Callable, TYPE_CHECKING, Optional
+from typing import Callable, TYPE_CHECKING, Optional, NamedTuple
 
 # -- Third Party Imports
 import numdifftools as nd
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 # -- Local Package Imports
 from .base import WaveformDerivativeBase
+from .nd import WaveformDerivativeNumdifftools
 from ...logging import logger
 from ...types import WFGen
 
@@ -26,7 +27,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
     r"""
     Similar in spirit to the `~gw_signal_tools.waveform.deriv.deriv_nd.WaveformDerivativeNumdifftools`
     class, in the sense that it is a wrapper around
-    :code:`numdifftools.Derivative` class specifically for waveform
+    :code:`~numdifftools.Derivative` class specifically for waveform
     callers from the LAL waveforms interface `gwsignal`.
 
     However, it does the actual calculation in a different way that is
@@ -77,7 +78,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         generates a suitable function from a few arguments.
     args, kwds :
         All other positional and keyword arguments are passed on as such
-        to the :code:`numdifftools.Derivative` class.
+        to the :code:`~numdifftools.Derivative` class.
 
     Notes
     -----
@@ -117,14 +118,14 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             wf = wf_generator(point)
             deriv = wf * (-1.0j * 2.0 * np.pi * wf.frequencies)
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True)
             self._ana_deriv = deriv
             return None
         elif param_to_vary == 'phase':
             wf = wf_generator(point)
             deriv = wf * 1.0j / u.rad
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True)
             self._ana_deriv = deriv
             return None
 
@@ -167,7 +168,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             wf = self.wf_generator(self.point | {'distance': dist_val})
             deriv = (-1.0 / dist_val) * wf
 
-            self.deriv_info = {'description': 'This derivative is exact.'}
+            self.info = self.DerivInfo(is_exact_deriv=True)
             return deriv
 
         # -- Test for valid point, potentially adjusting method
@@ -179,15 +180,40 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         self.phase_deriv.full_output = True
         phase_deriv, phase_info = self.phase_deriv(x)
 
-        self.deriv_info = {'abs': abs_info._asdict(), 'phase': phase_info._asdict()}
-
         param_unit = self.param_center_val.unit
 
         wf = self.fun(x)
-        ampl = self.abs_fun(wf).value
-        phase = self.phase_fun(wf).value
+
+        ampl = self.abs_fun(wf)
+        if isinstance(ampl, u.Quantity):
+            ampl = ampl.value
+
+        phase = self.phase_fun(wf)
+        if isinstance(phase, u.Quantity):
+            phase = phase.value
 
         deriv = (abs_deriv + 1.0j * ampl * phase_deriv) * np.exp(1j * phase)
+
+        self.info = self.DerivInfo(
+            abs=WaveformDerivativeNumdifftools.DerivInfo(
+                abs_info._replace(
+                    error_estimate=type(wf)(
+                        data=abs_info.error_estimate,
+                        xindex=wf.xindex,
+                        unit=wf.unit / param_unit,
+                    )
+                )
+            ),
+            phase=WaveformDerivativeNumdifftools.DerivInfo(
+                phase_info._replace(
+                    error_estimate=type(wf)(
+                        data=phase_info.error_estimate,
+                        xindex=wf.xindex,
+                        unit=wf.unit / param_unit,
+                    )
+                )
+            ),
+        )
 
         # -- Use type that wf_generator returns to have flexibility
         # -- with whether TimeSeries/FrequencySeries is passed
@@ -279,6 +305,16 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
                 # -- Too close to upper bound still, change method
                 self.abs_deriv.method = self.phase_deriv.method = 'backward'
 
+    class DerivInfo(NamedTuple):
+        """Namedtuple for amplitude-phase derivative information."""
+
+        abs: Optional[WaveformDerivativeNumdifftools.DerivInfo] = None
+        """Information about the amplitude derivative."""
+        is_exact_deriv: bool = False
+        """Whether derivative is exact (analytical) or not."""
+        phase: Optional[WaveformDerivativeNumdifftools.DerivInfo] = None
+        """Information about the phase derivative."""
+
     @property
     def abs_deriv(self) -> nd.Derivative:
         """
@@ -289,11 +325,11 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         return self._abs_deriv
 
     @property
-    def abs_fun(self) -> Callable[[NDArray], NDArray]:
+    def abs_fun(self) -> Callable[[NDArray | u.Quantity], NDArray | u.Quantity]:
         """
         Function that calculates the waveform amplitude.
 
-        :type: `Callable[[float], ~numpy.ndarray]`
+        :type: `Callable[[NDArray | u.Quantity], NDArray | u.Quantity]`
         """
         return np.abs
 
@@ -311,11 +347,11 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
         return np.unwrap(np.angle(x))
 
     @property
-    def phase_fun(self) -> Callable[[NDArray], NDArray]:
+    def phase_fun(self) -> Callable[[NDArray | u.Quantity], NDArray | u.Quantity]:
         """
         Function that calculates the waveform phase.
 
-        :type: `Callable[[float], ~numpy.ndarray]`
+        :type: `Callable[[NDArray | u.Quantity], NDArray | u.Quantity]`
         """
         return self._phase_wrapper
 

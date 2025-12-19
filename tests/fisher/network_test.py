@@ -69,8 +69,8 @@ fisher_tot_mass = FisherMatrixNetwork(
 # %% -- Simple consistency tests ----------------------------------------------
 def test_single_det_consistency():
     fisher_v1 = FisherMatrixNetwork(
-        wf_params, 'total_mass', phenomx_generator, [hanford]
-    )
+        wf_params, 'total_mass', phenomx_generator, [hanford], psd=psd_no_noise
+    )  # Passing psd to make sure we catch that in __init__
 
     fisher_v2 = FisherMatrix(
         wf_params | {'det': 'H1'}, 'total_mass', phenomx_generator, psd=psd_no_noise
@@ -101,9 +101,9 @@ def test_single_det_consistency():
         pytest.param(
             ['chirp_mass'],
             marks=pytest.mark.xfail(
-                raises=KeyError,  # Error depends on routine
+                raises=RuntimeError,  # Error depends on routine
                 strict=True,
-                reason='Invalid parameter',
+                reason='Error during Fisher matrix calculation',
             ),
         ),
     ],
@@ -217,10 +217,10 @@ def test_sys_bias(params):
         phenomd_generator, optimize=False, optimize_fisher='phase', return_opt_info=True
     )
 
-    with pytest.raises(RuntimeError) as e:
+    with pytest.raises(
+        RuntimeError, match='Error during systematic bias calculation in detector '
+    ):
         fisher.systematic_bias(None)
-
-    assert 'Error during systematic bias calculation in detector ' in str(e.value)
 
 
 @pytest.mark.parametrize(

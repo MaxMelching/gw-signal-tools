@@ -183,8 +183,6 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
             )
         )
 
-        print(self.info)
-
         return out
 
     __call__.__doc__ = WaveformDerivativeBase.__call__.__doc__

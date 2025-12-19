@@ -270,7 +270,7 @@ class MatrixWithUnits:
                         _unit[index] = u.dimensionless_unscaled
                     else:
                         raise ValueError(
-                            f'If a ``{self.__class__.__name__}`` shall be '
+                            f'If a ``{type(self).__name__}`` shall be '
                             'initialized from a list/array, each element must '
                             'either be a ``float`` or an astropy ``Quantity``.'
                         )
@@ -411,7 +411,7 @@ class MatrixWithUnits:
 
     def __hash__(self) -> int:
         raise TypeError(
-            f'`{self.__class__.__name__}` instances cannot be hashed because '
+            f'`{type(self).__name__}` instances cannot be hashed because '
             'they are based on numpy arrays, which are in turn unhashable.'
         )
 
@@ -547,7 +547,7 @@ class MatrixWithUnits:
             # Need at least 1D output
             if len(new_shape) == 1:
                 raise ValueError(
-                    f'For the provided shapes, only ``{self.__class__.__name__}``'
+                    f'For the provided shapes, only ``{type(self).__name__}``'
                     'instances initialized with a scalar unit are permitted. '
                     'If the intention was to perform matrix multiplication '
                     'with a row/column vector, please reshape the instance '

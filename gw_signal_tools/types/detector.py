@@ -102,7 +102,7 @@ class Detector:
 
     def __repr__(self) -> str:
         # -- Basically copying what GWpy Array does
-        prefix = f'<{self.__class__.__name__}('
+        prefix = f'<{type(self).__name__}('
         indent = ' ' * len(prefix)
         attr_str = ''
         for attr in ['name', 'psd']:

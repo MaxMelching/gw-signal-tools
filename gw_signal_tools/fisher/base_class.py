@@ -399,7 +399,7 @@ class FisherMatrix:
         instance has, but selected updates.
 
         Note that this creates a new instance of
-        ``{self.__class__.__name__}`` since updating properties would
+        ``{type(self).__name__}`` since updating properties would
         require new calculation anyway.
 
         Parameters
@@ -432,12 +432,12 @@ class FisherMatrix:
 
             Convenient options are the methods
             :code:`~gw_signal_tools.waveform.get_wf_generator` or
-            :code:`{self.__class__.__name__}.get_wf_generator`, which
+            :code:`{type(self).__name__}.get_wf_generator`, which
             generate a suitable function from a few arguments.
 
         Returns
         -------
-        ~gw_signal_tools.fisher_matrix.{self.__class__.__name__}
+        ~gw_signal_tools.fisher_matrix.{type(self).__name__}
             New Fisher matrix, calculated with updated metadata.
         """
         if new_point is None:

@@ -802,15 +802,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         return deriv_series
 
     # -- Information related properties
-    # DerivInfo = namedtuple(
-    #     typename='DerivInfo',
-    #     field_names=('is_exact_deriv', 'norm_squared',
-    #         'final_step_size', 'final_convergence_val',
-    #         'number_of_refinements', 'final_set_of_step_sizes',
-    #         'deriv_formula',),
-    #     defaults=(np.nan, False, np.nan, np.nan, np.nan, np.nan, None),
-    # )
-
     class DerivInfo(NamedTuple):
         """Namedtuple for derivative information."""
 

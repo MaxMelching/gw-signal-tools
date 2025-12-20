@@ -1,6 +1,10 @@
 # -- Standard Lib Imports
+from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
 import warnings
-from typing import Optional, Callable, NamedTuple
+from typing import Optional, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections import namedtuple
 
 # -- Third Party Imports
 import numpy as np
@@ -101,7 +105,7 @@ def fisher_matrix(
     **deriv_and_inner_prod_kwargs,
 ) -> (
     MatrixWithUnits
-    | tuple[MatrixWithUnits, dict[str, dict[str, FrequencySeries | NamedTuple]]]
+    | tuple[MatrixWithUnits, dict[str, dict[str, FrequencySeries | namedtuple]]]
 ):
     r"""
     Compute Fisher matrix at a fixed point. This function is mainly
@@ -171,7 +175,7 @@ def fisher_matrix(
 
     Returns
     -------
-    ~gw_signal_tools.matrix_with_units.MatrixWithUnits or tuple[~gw_signal_tools.matrix_with_units.MatrixWithUnits, dict[str, dict[str, ~gwpy.frequencyseries.FrequencySeries | NamedTuple]]]
+    ~gw_signal_tools.matrix_with_units.MatrixWithUnits or tuple[~gw_signal_tools.matrix_with_units.MatrixWithUnits, dict[str, dict[str, ~gwpy.frequencyseries.FrequencySeries | namedtuple]]]
         A ``MatrixWithUnits`` instance. Entries are Fisher values, where
         index :math:`(i, j)` corresponds to the inner product of
         derivatives with respect to the parameters

@@ -148,7 +148,9 @@ def test_info_setting(deriv_routine):
     ):
         full_deriv.non_existent_attribute
 
-    with pytest.raises(TypeError, match='`info` must be a dict or namedtuple.'):
+    with pytest.raises(
+        TypeError, match='`info` must be a dict or an instance of DerivInfo.'
+    ):
         full_deriv.info = 'Not a dict or namedtuple'
 
 

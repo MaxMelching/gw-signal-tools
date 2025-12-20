@@ -196,22 +196,22 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
         self.info = self.DerivInfo(
             abs=WaveformDerivativeNumdifftools.DerivInfo(
-                abs_info._replace(
+                **abs_info._replace(
                     error_estimate=type(wf)(
                         data=abs_info.error_estimate,
                         xindex=wf.xindex,
                         unit=wf.unit / param_unit,
                     )
-                )
+                )._asdict()
             ),
             phase=WaveformDerivativeNumdifftools.DerivInfo(
-                phase_info._replace(
+                **phase_info._replace(
                     error_estimate=type(wf)(
                         data=phase_info.error_estimate,
                         xindex=wf.xindex,
                         unit=wf.unit / param_unit,
                     )
-                )
+                )._asdict()
             ),
         )
 

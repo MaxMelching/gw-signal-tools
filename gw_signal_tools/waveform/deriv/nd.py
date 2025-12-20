@@ -168,7 +168,7 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
 
         self.nd_deriv.full_output = True
         deriv, info = self.nd_deriv.__call__(x)
-        self.info = self.DerivInfo(info)
+        self.info = self.DerivInfo(**info._asdict())
 
         param_unit = self.param_center_val.unit
 

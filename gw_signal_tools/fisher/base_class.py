@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, TYPE_CHECKING, NamedTuple
+from typing import Optional, Any, Literal, Self, TYPE_CHECKING
 
 # from functools import cached_property
 # TODO: use for .fisher and .fisher_inverse?
@@ -13,6 +13,7 @@ from gwpy.types import Array
 import astropy.units as u
 
 if TYPE_CHECKING:
+    from collections import namedtuple
     from gwpy.frequencyseries import FrequencySeries
     from numpy.typing import NDArray
 
@@ -313,7 +314,7 @@ class FisherMatrix:
         return self.fisher.__getattribute__(name)
 
     @property
-    def deriv_info(self) -> dict[str, NamedTuple]:
+    def deriv_info(self) -> dict[str, namedtuple]:
         """
         Collection of information about derivatives that have been
         calculated (just the `info` from each derivative class.)

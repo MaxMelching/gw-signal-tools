@@ -351,13 +351,13 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     def wf(self, wf: FrequencySeries | TimeSeries) -> None:
         self._wf = wf
 
-    @property
-    def deriv(self) -> FrequencySeries | TimeSeries:
-        """
-        The derivative at the selected point.
+    def __call__(
+        self, x: Optional[float | u.Quantity] = None
+    ) -> FrequencySeries | TimeSeries:
+        if x is not None:
+            x = x.to_value(self.param_center_val.unit)
+            self.point[self.param_to_vary] = x * self.param_center_val.unit
 
-        :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
-        """
         # -- Check if parameter has analytical derivative
         if self.param_to_vary in self._ana_derivs:
             deriv = self._ana_derivs[self.param_to_vary](self.point, self.wf_generator)
@@ -447,6 +447,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         self._deriv = self._derivative_vals[self.min_dev_index]
         return self._deriv
+
+    __call__.__doc__ = WaveformDerivativeBase.__call__.__doc__
 
     def _check_converged(self):
         """
@@ -559,42 +561,6 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             crit_val = np.inf
 
         self._convergence_vals += [crit_val]
-
-    def __call__(
-        self, x: Optional[float | u.Quantity] = None
-    ) -> FrequencySeries | TimeSeries:
-        """
-        Get derivative with respect to `self.param_to_vary` at :code:`x`.
-        Note that this function also changes the value of
-        `self.param_to_vary` in `self.point`.
-
-        Parameters
-        ----------
-        x : float or ~astropy.units.Quantity, optional, default = None
-            Parameter value at which the derivative is calculated. By
-            default, the corresponding value from :code:`self.point`
-            is chosen.
-
-        Returns
-        -------
-        Derivative, put into whatever type :code:`self.wf_generator`
-        has. This should, in principle, be either a GWpy
-        :code:``FrequencySeries`` or a GWpy :code:``TimeSeries`` (in
-        accordance with standard LAL output types), but this function
-        only relies on GWPy :code:``Series`` properties being defined and
-        thus the output could also be of this type.
-
-        Notes
-        -----
-        Information gathered during calculation is stored in the
-        :code:`self.info` property.
-        """
-        if x is None:
-            x = self.param_center_val.value
-        elif isinstance(x, u.Quantity):
-            x = x.to_value(self.param_center_val.unit)
-        # TODO: implement it such that deriv is alias for call with no argument, consistent with other classes
-        return self.deriv
 
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?

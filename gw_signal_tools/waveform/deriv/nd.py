@@ -140,31 +140,26 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
         self._nd_deriv = nd.Derivative(fun, *args, **kwds)
 
     def __call__(self, x: Optional[float | u.Quantity] = None) -> Series:
-        # -- Check if analytical derivative has already been calculated
-        if hasattr(self, '_ana_deriv'):
-            return self._ana_deriv
-
         # -- Check selected arguments
         if x is None:
             x = self.param_center_val.value
         elif isinstance(x, u.Quantity):
             x = x.to_value(self.param_center_val.unit)
 
-        # TODO: refine analytical deriv scheme. time and phase could change with x
-        # and this would change the waveform, potentially (because they could be in point!)
+        # -- Test for valid point, potentially adjusting method
+        self.test_point(
+            self.point | {self.param_to_vary: x * self.param_center_val.unit}
+        )
 
-        # -- Check if parameter has analytical derivative (cannot be in
-        # -- previous check because dependent on point)
-        if self.param_to_vary == 'distance':
-            dist_val = x * self.param_center_val.unit
-            wf = self.wf_generator(self.point | {'distance': dist_val})
-            deriv = (-1.0 / dist_val) * wf
-
+        # -- Check if analytical derivative exists
+        if self.param_to_vary in self._ana_derivs:
+            eval_point = self.point | {
+                self.param_to_vary: x * self.param_center_val.unit
+            }
+            deriv = self._ana_derivs[self.param_to_vary](eval_point, self.wf_generator)
+            wf = self.wf_generator(eval_point)
             self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             return deriv
-
-        # -- Test for valid point, potentially adjusting method
-        self.test_point()
 
         self.nd_deriv.full_output = True
         deriv, info = self.nd_deriv.__call__(x)
@@ -199,9 +194,9 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
         # else:
         #     return 1e-2*_par_val
 
-    def test_point(self) -> None:
+    def test_point(self, point: dict[str, u.Quantity]) -> None:
         """
-        Check if `self.point` contains potentially tricky values, e.g.
+        Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
         sizes etc may be performed.
         """
@@ -220,7 +215,7 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
             'Reached step size of zero, cannot proceed.'
         )  # pragma: no cover
 
-        _par_val = self.param_center_val.value
+        _par_val = point[self.param_to_vary].value
 
         def violation(step):
             return (
@@ -247,7 +242,7 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
             )
 
             if any(violation(self.nd_deriv.step.base_step)):
-                self.test_point()  # Recursive call until step size is small enough
+                self.test_point(point)  # Recursive call until step size is small enough
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
             self.nd_deriv.step.base_step = min(

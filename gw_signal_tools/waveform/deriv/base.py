@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from gwpy.types import Series
 
 # -- Local Package Imports
+from .ana_derivs import ana_deriv_map
 from ..inner_product import param_bounds as _param_bounds
 from ...types import WFGen
 
@@ -42,6 +43,7 @@ class WaveformDerivativeBase:
         self._param_to_vary = param_to_vary
         self._wf_generator = wf_generator
         self._param_bound_storage = _param_bounds.copy()
+        self._ana_derivs = ana_deriv_map.copy()
 
     def __call__(
         self, x: Optional[float | u.Quantity] = None
@@ -70,15 +72,21 @@ class WaveformDerivativeBase:
         Information gathered during calculation is stored in the
         :code:`self.info` property.
         """
+        if self.param_to_vary in self._ana_derivs:
+            # -- This is super useful to check to improve speed.
+            # -- For a more refined implementation, see e.g. nd.py.
+            return self._ana_derivs[self.param_to_vary](self.point, self.wf_generator)
         return NotImplemented
 
     @property
     def param_bounds(self) -> dict[str, tuple[float, float]]:
         return self._param_bound_storage
 
-    def test_point(self) -> None:  # pragma: no cover - meant to be overridden
+    def test_point(
+        self, point: dict[str, u.Quantity]
+    ) -> None:  # pragma: no cover - meant to be overridden
         """
-        Check if `self.point` contains potentially tricky values, e.g.
+        Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
         sizes etc may be performed.
         """
@@ -93,7 +101,7 @@ class WaveformDerivativeBase:
             )
 
         _base_step = self.step.base_step
-        _par_val = self.param_center_val.value
+        _par_val = point[self.param_to_vary].value
 
         def violation(step):
             return (

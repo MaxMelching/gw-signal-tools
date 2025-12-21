@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
 # -- Local Package Imports
+from .ana_derivs import ana_deriv_map
 from .base import WaveformDerivativeBase
 from ...logging import logger
 from ..inner_product import norm, inner_product, param_bounds as _param_bounds
@@ -168,6 +169,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         self.param_to_vary = param_to_vary
         self.wf_generator = wf_generator
         self._param_bound_storage = _param_bounds.copy()
+        self._ana_derivs = ana_deriv_map.copy()
         # super().__init__(
         #     point=point,
         #     param_to_vary=param_to_vary,
@@ -357,43 +359,19 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         :type: `~gwpy.frequencyseries.FrequencySeries` | `~gwpy.timeseries.TimeSeries`
         """
         # -- Check if parameter has analytical derivative
-        if self.param_to_vary == 'time':
-            deriv = self.wf * (-1.0j * 2.0 * np.pi * self.wf.frequencies)
-
+        if self.param_to_vary in self._ana_derivs:
+            self._deriv = deriv = self._ana_derivs[self.param_to_vary](
+                self.point, self.wf_generator
+            )
             derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
-
             self.info = self.DerivInfo(
-                norm_squared=derivative_norm,
-                is_exact_deriv=True,
+                is_exact_deriv=True, norm_squared=derivative_norm
             )
             return deriv
-        elif self.param_to_vary == 'phase':
-            deriv = self.wf * 1.0j / u.rad
-
-            derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
-
-            self.info = self.DerivInfo(
-                norm_squared=derivative_norm,
-                is_exact_deriv=True,
-            )
-            return deriv
-        elif self.param_to_vary == 'distance':
-            deriv = (-1.0 / self.point['distance']) * self.wf
-
-            derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
-
-            self.info = self.DerivInfo(
-                norm_squared=derivative_norm,
-                is_exact_deriv=True,
-            )
-            return deriv
-
-        # TODO: automatically adjust deriv_formula here if needed
-        # -> of course with logger.info output
 
         # -- Test for valid point
         self._current_step_size = 0.0
-        self.test_point()
+        self.test_point(self.point)
 
         self.is_converged = False
         self.refine_numb = 0
@@ -522,7 +500,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         # for i, step_size in enumerate(self.step_sizes[-1]):
         for i, step_size in enumerate(self.step_sizes):
             self._current_step_size = step_size
-            self.test_point()
+            self.test_point(self.point)
 
             try:
                 deriv_param = self.deriv_routine(step_size)
@@ -620,9 +598,9 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?
 
-    def test_point(self) -> None:
+    def test_point(self, point: dict[str, u.Quantity]) -> None:
         """
-        Check if `self.point` contains potentially tricky values, e.g.
+        Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
         sizes etc may be performed.
 
@@ -645,8 +623,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
                 'inverse_mass_ratio', default_bounds
             )
 
-        lower_violation = self._lower_point_checker(step_size, lower_bound)
-        upper_violation = self._upper_point_checker(step_size, upper_bound)
+        lower_violation = self._lower_point_checker(point, step_size, lower_bound)
+        upper_violation = self._upper_point_checker(point, step_size, upper_bound)
 
         if lower_violation and upper_violation:
             # -- Step size simply too large, no need to change
@@ -657,22 +635,26 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         elif not lower_violation and upper_violation:
             self.deriv_formula = 'backward'
 
-    def _lower_point_checker(self, step_size: float, boundary: float) -> bool:
+    def _lower_point_checker(
+        self, point: dict[str, u.Quantity], step_size: float, boundary: float
+    ) -> bool:
         # TODO: maybe use value of step size here?
         if self.deriv_formula == 'five_point':
-            return (self.param_center_val - 2.0 * step_size <= boundary) or (
-                self.param_center_val - step_size <= boundary
+            return (point[self.param_to_vary] - 2.0 * step_size <= boundary) or (
+                point[self.param_to_vary] - step_size <= boundary
             )
         else:
-            return self.param_center_val - step_size <= boundary
+            return point[self.param_to_vary] - step_size <= boundary
 
-    def _upper_point_checker(self, step_size: float, boundary: float) -> bool:
+    def _upper_point_checker(
+        self, point: dict[str, u.Quantity], step_size: float, boundary: float
+    ) -> bool:
         if self.deriv_formula == 'five_point':
-            return (self.param_center_val + 2.0 * step_size >= boundary) or (
-                self.param_center_val + step_size >= boundary
+            return (point[self.param_to_vary] + 2.0 * step_size >= boundary) or (
+                point[self.param_to_vary] + step_size >= boundary
             )
         else:
-            return self.param_center_val + step_size >= boundary
+            return point[self.param_to_vary] + step_size >= boundary
 
     @property
     def deriv_formula(self) -> str:

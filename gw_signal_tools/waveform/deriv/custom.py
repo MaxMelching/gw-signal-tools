@@ -364,7 +364,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
             self.info = self.DerivInfo(
                 norm_squared=derivative_norm,
-                is_exact_deriv='This derivative is exact.',
+                is_exact_deriv=True,
             )
             return deriv
         elif self.param_to_vary == 'phase':
@@ -374,7 +374,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
             self.info = self.DerivInfo(
                 norm_squared=derivative_norm,
-                is_exact_deriv='This derivative is exact.',
+                is_exact_deriv=True,
             )
             return deriv
         elif self.param_to_vary == 'distance':
@@ -384,7 +384,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
             self.info = self.DerivInfo(
                 norm_squared=derivative_norm,
-                is_exact_deriv='This derivative is exact.',
+                is_exact_deriv=True,
             )
             return deriv
 

@@ -107,22 +107,6 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
             wf_generator,
         )
 
-        # -- Check if parameter has analytical derivative
-        if param_to_vary == 'time':
-            wf = wf_generator(point)
-            deriv = wf * (-1.0j * 2.0 * np.pi * wf.frequencies)
-
-            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
-            self._ana_deriv = deriv
-            return None
-        elif param_to_vary == 'phase':
-            wf = wf_generator(point)
-            deriv = wf * 1.0j / u.rad
-
-            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
-            self._ana_deriv = deriv
-            return None
-
         # -- Prepare nd.Derivative initialization
         param_unit = self.param_center_val.unit
 
@@ -141,22 +125,36 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
 
     def __call__(self, x: Optional[float | u.Quantity] = None) -> Series:
         # -- Check selected arguments
-        if x is None:
-            x = self.param_center_val.value
-        elif isinstance(x, u.Quantity):
-            x = x.to_value(self.param_center_val.unit)
+        try:
+            if x is None:
+                x = self.param_center_val.value
+            elif isinstance(x, u.Quantity):
+                x = x.to_value(self.param_center_val.unit)
 
-        # -- Test for valid point, potentially adjusting method
-        self.test_point(
-            self.point | {self.param_to_vary: x * self.param_center_val.unit}
-        )
+            # -- Test for valid point, potentially adjusting method
+            self.test_point(
+                self.point | {self.param_to_vary: x * self.param_center_val.unit}
+            )
+        except KeyError as e:
+            if (
+                str(e).strip("'") == self.param_to_vary
+            ) and self.param_to_vary in self._ana_derivs:
+                # -- Explanation: param_to_vary not in point, but has
+                # -- analytical derivative, which might not require
+                # -- the value in point (e.g., time, phase)
+                x = None
+                pass
+            else:
+                raise
 
         # -- Check if analytical derivative exists
         if self.param_to_vary in self._ana_derivs:
-            eval_point = self.point | {
-                self.param_to_vary: x * self.param_center_val.unit
-            }
-            deriv = self._ana_derivs[self.param_to_vary](eval_point, self.wf_generator)
+            eval_point = (
+                self.point | {self.param_to_vary: x * self.param_center_val.unit}
+                if x is not None
+                else self.point
+            )
+            deriv = self._ana_derivs[self.param_to_vary](self, eval_point)
             wf = self.wf_generator(eval_point)
             self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             return deriv

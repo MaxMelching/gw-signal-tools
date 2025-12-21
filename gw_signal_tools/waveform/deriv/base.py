@@ -72,10 +72,6 @@ class WaveformDerivativeBase:
         Information gathered during calculation is stored in the
         :code:`self.info` property.
         """
-        if self.param_to_vary in self._ana_derivs:
-            # -- This is super useful to check to improve speed.
-            # -- For a more refined implementation, see e.g. nd.py.
-            return self._ana_derivs[self.param_to_vary](self.point, self.wf_generator)
         return NotImplemented
 
     @property

@@ -360,9 +360,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         """
         # -- Check if parameter has analytical derivative
         if self.param_to_vary in self._ana_derivs:
-            self._deriv = deriv = self._ana_derivs[self.param_to_vary](
-                self.point, self.wf_generator
-            )
+            deriv = self._ana_derivs[self.param_to_vary](self, self.point)
             derivative_norm = norm(deriv, **self.inner_prod_kwargs) ** 2
             self.info = self.DerivInfo(
                 is_exact_deriv=True, norm_squared=derivative_norm
@@ -588,11 +586,23 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         Information gathered during calculation is stored in the
         :code:`self.info` property.
         """
-        if x is not None:
-            if isinstance(x, u.Quantity):
-                self.point[self.param_to_vary] = x
+        try:
+            if x is None:
+                x = self.param_center_val.value
+            elif isinstance(x, u.Quantity):
+                x = x.to_value(self.param_center_val.unit)
+        except KeyError as e:
+            if (
+                str(e).strip("'") == self.param_to_vary
+            ) and self.param_to_vary in self._ana_derivs:
+                # -- Explanation: param_to_vary not in point, but has
+                # -- analytical derivative, which might not require
+                # -- the value in point (e.g., time, phase)
+                x = None
+                pass
             else:
-                self.point[self.param_to_vary] = x * self.param_center_val.unit
+                raise
+        # TODO: implement it such that deriv is alias for call with no argument, consistent with other classes
         return self.deriv
 
     # TODO: what other parameters are relevant in this regard?

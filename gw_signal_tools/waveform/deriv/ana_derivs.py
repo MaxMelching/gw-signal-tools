@@ -8,7 +8,6 @@ import numpy as np
 
 if TYPE_CHECKING:
     from gwpy.types import Series
-    from .base import WaveformDerivativeBase
 
 # -- Local Package Imports
 from ...types import WFGen
@@ -20,31 +19,31 @@ __all__ = ('distance_deriv', 'time_deriv', 'phase_deriv', 'ana_deriv_map')
 
 
 def distance_deriv(
-    deriv_class: WaveformDerivativeBase,
     eval_point: dict[str, u.Quantity],
+    wf_generator: WFGen,
 ) -> Series:
     """Analytical derivative of waveform with respect to distance."""
-    wf = deriv_class.wf_generator(eval_point)
+    wf = wf_generator(eval_point)
     deriv = wf * (-1.0 / eval_point['distance'])
     return deriv
 
 
 def time_deriv(
-    deriv_class: WaveformDerivativeBase,
     eval_point: dict[str, u.Quantity],
+    wf_generator: WFGen,
 ) -> Series:
     """Analytical derivative of waveform with respect to time."""
-    wf = deriv_class.wf_generator(eval_point)
+    wf = wf_generator(eval_point)
     deriv = wf * (-1.0j * 2.0 * np.pi * wf.frequencies)
     return deriv
 
 
 def phase_deriv(
-    deriv_class: WaveformDerivativeBase,
     eval_point: dict[str, u.Quantity],
+    wf_generator: WFGen,
 ) -> Series:
     """Analytical derivative of waveform with respect to phase."""
-    wf = deriv_class.wf_generator(eval_point)
+    wf = wf_generator(eval_point)
     deriv = wf * (-1.0j / u.rad)
     return deriv
 

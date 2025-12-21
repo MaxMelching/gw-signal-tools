@@ -368,6 +368,9 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
             return deriv
 
         # -- Test for valid point
+        # -- -> we do not do that for analytical derivatives, error for
+        # --    invalid point will come from calling (or it might not;
+        # --    but in that case, we should also not raise errors here).
         self._current_step_size = 0.0
         self.test_point(self.point)
 
@@ -596,7 +599,9 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
     # TODO: what other parameters are relevant in this regard?
     # Maybe spins?
 
-    def test_point(self, point: dict[str, u.Quantity]) -> None:
+    def test_point(
+        self, point: dict[str, u.Quantity], step: Optional[float] = None
+    ) -> None:
         """
         Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
@@ -604,10 +609,11 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
         Parameters
         ----------
-        step_size : float
-            Current step size that produced an 'Input domain error'.
+        step : float
+            Current step size to be checked.
         """
-        step_size = self.abs_or_rel_step_size(self._current_step_size)
+        if step is None:
+            step = self.abs_or_rel_step_size(self._current_step_size)
         # -- This is important, determines step size that is actually
         # -- used by the routine (also adds proper unit)
 
@@ -621,8 +627,8 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
                 'inverse_mass_ratio', default_bounds
             )
 
-        lower_violation = self._lower_point_checker(point, step_size, lower_bound)
-        upper_violation = self._upper_point_checker(point, step_size, upper_bound)
+        lower_violation = self._lower_point_checker(point, step, lower_bound)
+        upper_violation = self._upper_point_checker(point, step, upper_bound)
 
         if lower_violation and upper_violation:
             # -- Step size simply too large, no need to change

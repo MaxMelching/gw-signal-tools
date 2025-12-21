@@ -133,11 +133,6 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
         elif isinstance(x, u.Quantity):
             x = x.to_value(self.param_center_val.unit)
 
-        # -- Test for valid point, potentially adjusting method
-        self.test_point(
-            self.point | {self.param_to_vary: x * self.param_center_val.unit}
-        )
-
         # -- Check if analytical derivative exists
         if self.param_to_vary in self._ana_derivs:
             eval_point = self.point | {
@@ -147,6 +142,14 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
             wf = self.wf_generator(eval_point)
             self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
             return deriv
+
+        # -- Test for valid point, potentially adjusting method
+        # -- -> we do not do that for analytical derivatives, error for
+        # --    invalid point will come from calling (or it might not;
+        # --    but in that case, we should also not raise errors here).
+        self.test_point(
+            self.point | {self.param_to_vary: x * self.param_center_val.unit}
+        )
 
         self.nd_deriv.full_output = True
         deriv, info = self.nd_deriv.__call__(x)
@@ -181,7 +184,9 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
         # else:
         #     return 1e-2*_par_val
 
-    def test_point(self, point: dict[str, u.Quantity]) -> None:
+    def test_point(
+        self, point: dict[str, u.Quantity], step: Optional[float] = None
+    ) -> None:
         """
         Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
@@ -197,10 +202,8 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
                 'inverse_mass_ratio', default_bounds
             )
 
-        _base_step = self.nd_deriv.step.base_step
-        assert _base_step > 0.0, (
-            'Reached step size of zero, cannot proceed.'
-        )  # pragma: no cover
+        if step is None:
+            step = self.nd_deriv.step.base_step
 
         _par_val = point[self.param_to_vary].value
 
@@ -210,7 +213,7 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
                 _par_val + step >= upper_bound,
             )
 
-        lower_violation, upper_violation = violation(_base_step)
+        lower_violation, upper_violation = violation(step)
 
         if any((lower_violation, upper_violation)):
             logger.info(
@@ -224,26 +227,20 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
 
         # -- Check if base_step needs change
         if lower_violation and upper_violation:
-            self.nd_deriv.step.base_step = min(
-                _base_step / 2.0, self._default_base_step
-            )
+            self.nd_deriv.step.base_step = min(step / 2.0, self._default_base_step)
 
             if any(violation(self.nd_deriv.step.base_step)):
                 self.test_point(point)  # Recursive call until step size is small enough
         elif lower_violation and not upper_violation:
             # -- Can only happen if method is not forward yet
-            self.nd_deriv.step.base_step = min(
-                _base_step / 2.0, self._default_base_step
-            )
+            self.nd_deriv.step.base_step = min(step / 2.0, self._default_base_step)
 
             if violation(self.nd_deriv.step.base_step)[0]:
                 # -- Too close to lower bound still, change method
                 self.nd_deriv.method = 'forward'
         elif not lower_violation and upper_violation:
             # -- Can only happen if method is not backward yet
-            self.nd_deriv.step.base_step = min(
-                _base_step / 2.0, self._default_base_step
-            )
+            self.nd_deriv.step.base_step = min(step / 2.0, self._default_base_step)
 
             if violation(self.nd_deriv.step.base_step)[1]:
                 # -- Too close to upper bound still, change method

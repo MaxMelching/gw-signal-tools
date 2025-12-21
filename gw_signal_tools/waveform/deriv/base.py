@@ -79,7 +79,7 @@ class WaveformDerivativeBase:
         return self._param_bound_storage
 
     def test_point(
-        self, point: dict[str, u.Quantity]
+        self, point: dict[str, u.Quantity], step: Optional[float] = None
     ) -> None:  # pragma: no cover - meant to be overridden
         """
         Check if `point` contains potentially tricky values, e.g.
@@ -96,7 +96,8 @@ class WaveformDerivativeBase:
                 'inverse_mass_ratio', default_bounds
             )
 
-        _base_step = self.step.base_step
+        if step is None:
+            step = self.step.base_step
         _par_val = point[self.param_to_vary].value
 
         def violation(step):
@@ -105,7 +106,7 @@ class WaveformDerivativeBase:
                 _par_val + step >= upper_bound,
             )
 
-        lower_violation, upper_violation = violation(_base_step)
+        lower_violation, upper_violation = violation(step)
 
         # -- Potentially more code that you want to have here
 

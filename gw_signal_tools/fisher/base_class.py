@@ -141,9 +141,9 @@ class FisherMatrix:
         **metadata,
     ) -> None:
         """Initialize a ``FisherMatrix``."""
-        self.point = point
-        self.wf_generator = wf_generator
-        self.params_to_vary = params_to_vary
+        self._point = point
+        self._wf_generator = wf_generator
+        self._params_to_vary = params_to_vary
         self.metadata = self.default_metadata | metadata
 
         # -- Arguments for inner product may be given, extract
@@ -157,15 +157,29 @@ class FisherMatrix:
         if direct_computation:
             self._calc_fisher()
 
-    # @property
-    # def point(self) -> dict[str, u.Quantity]:
-    #     return self._point
+    @property
+    def point(self) -> dict[str, u.Quantity]:
+        """
+        Point in parameter space at which the Fisher matrix is calculated.
 
-    # @point.setter
-    # def point(self, wf_params: dict[str, u.Quantity]) -> None:
-    #     # Do some parameter checks?
+        :type: `dict[str, ~astropy.units.Quantity]`
+        """
+        return self._point
 
-    #     self._point = wf_params
+    @point.setter
+    def point(self, wf_params: dict[str, u.Quantity]) -> None:
+        raise AttributeError(
+            '`point` attribute is read-only once set. Please use the `update_attrs` method to change it.'
+        )
+
+    @property
+    def _point(self) -> dict[str, u.Quantity]:
+        return self.__point
+
+    @_point.setter
+    def _point(self, wf_params: dict[str, u.Quantity]) -> None:
+        # TODO: do some parameter checks?
+        self.__point = wf_params
 
     @property
     def wf_generator(self) -> FDWFGen:
@@ -173,7 +187,17 @@ class FisherMatrix:
 
     @wf_generator.setter
     def wf_generator(self, wf_gen: FDWFGen) -> None:
-        self._wf_generator = wf_gen
+        raise AttributeError(
+            '`wf_generator` attribute is read-only once set. Please use the `update_attrs` method to change it.'
+        )
+
+    @property
+    def _wf_generator(self) -> FDWFGen:
+        return self.__wf_generator
+
+    @_wf_generator.setter
+    def _wf_generator(self, wf_gen: FDWFGen) -> None:
+        self.__wf_generator = wf_gen
 
     @property
     def params_to_vary(self) -> list[str]:
@@ -186,6 +210,21 @@ class FisherMatrix:
 
     @params_to_vary.setter
     def params_to_vary(self, params: str | list[str]) -> None:
+        raise AttributeError(
+            '`params_to_vary` attribute is read-only once set. Please use the `update_attrs` method to change it.'
+        )
+
+    @property
+    def _params_to_vary(self) -> list[str]:
+        return self.__params_to_vary
+
+    @_params_to_vary.setter
+    def _params_to_vary(self, params: str | list[str]) -> None:
+        # if hasattr(self, '_params_to_vary'):
+        #     raise AttributeError(
+        #         '`params_to_vary` attribute is read-only once set. Please use the `update_attrs` method to change it.'
+        #     )
+
         if isinstance(params, str):
             _params = [params]
         else:
@@ -203,7 +242,7 @@ class FisherMatrix:
         # )
         # TODO: make sure this is at point in __init__ where all self stuff is defined
 
-        self._params_to_vary = _params
+        self.__params_to_vary = _params
         self._nparams = len(_params)
         self._param_indices = {
             param: i for i, param in enumerate(_params)
@@ -524,7 +563,7 @@ class FisherMatrix:
             out._deriv_info.pop(param, None)
             out._derivs.pop(param, None)
         # -- To update indices, we have to set params_to_vary again
-        out.params_to_vary = out.params_to_vary
+        out._params_to_vary = out.params_to_vary
 
         # -- Perform projection
         fisher_val = self.value
@@ -834,7 +873,7 @@ class FisherMatrix:
                 # -- allowed as parameters!
 
                 opt_fisher = self.copy()  # Preferred over update_attrs, copies fisher
-                opt_fisher.point = opt_wf_params  # Add time, phase shifts
+                opt_fisher._point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
                 # -- to the derivatives. Works because

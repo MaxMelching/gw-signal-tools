@@ -143,8 +143,8 @@ class FisherMatrix:
         """Initialize a ``FisherMatrix``."""
         self._point = point
         self._wf_generator = wf_generator
-        self._params_to_vary = params_to_vary
-        self.metadata = self.default_metadata | metadata
+        self._params_to_vary_handler(params_to_vary)
+        self._metadata = self.default_metadata | metadata
 
         # -- Arguments for inner product may be given, extract
         self._inner_prod_kwargs = {}
@@ -166,38 +166,9 @@ class FisherMatrix:
         """
         return self._point
 
-    @point.setter
-    def point(self, wf_params: dict[str, u.Quantity]) -> None:
-        raise AttributeError(
-            '`point` attribute is read-only once set. Please use the `update_attrs` method to change it.'
-        )
-
-    @property
-    def _point(self) -> dict[str, u.Quantity]:
-        return self.__point
-
-    @_point.setter
-    def _point(self, wf_params: dict[str, u.Quantity]) -> None:
-        # TODO: do some parameter checks?
-        self.__point = wf_params
-
     @property
     def wf_generator(self) -> FDWFGen:
         return self._wf_generator
-
-    @wf_generator.setter
-    def wf_generator(self, wf_gen: FDWFGen) -> None:
-        raise AttributeError(
-            '`wf_generator` attribute is read-only once set. Please use the `update_attrs` method to change it.'
-        )
-
-    @property
-    def _wf_generator(self) -> FDWFGen:
-        return self.__wf_generator
-
-    @_wf_generator.setter
-    def _wf_generator(self, wf_gen: FDWFGen) -> None:
-        self.__wf_generator = wf_gen
 
     @property
     def params_to_vary(self) -> list[str]:
@@ -208,23 +179,7 @@ class FisherMatrix:
         """
         return self._params_to_vary
 
-    @params_to_vary.setter
-    def params_to_vary(self, params: str | list[str]) -> None:
-        raise AttributeError(
-            '`params_to_vary` attribute is read-only once set. Please use the `update_attrs` method to change it.'
-        )
-
-    @property
-    def _params_to_vary(self) -> list[str]:
-        return self.__params_to_vary
-
-    @_params_to_vary.setter
-    def _params_to_vary(self, params: str | list[str]) -> None:
-        # if hasattr(self, '_params_to_vary'):
-        #     raise AttributeError(
-        #         '`params_to_vary` attribute is read-only once set. Please use the `update_attrs` method to change it.'
-        #     )
-
+    def _params_to_vary_handler(self, params: str | list[str]) -> None:
         if isinstance(params, str):
             _params = [params]
         else:
@@ -242,7 +197,7 @@ class FisherMatrix:
         # )
         # TODO: make sure this is at point in __init__ where all self stuff is defined
 
-        self.__params_to_vary = _params
+        self._params_to_vary = _params
         self._nparams = len(_params)
         self._param_indices = {
             param: i for i, param in enumerate(_params)
@@ -256,6 +211,16 @@ class FisherMatrix:
         :type: `int`
         """
         return self._nparams
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """
+        Metadata associated with this Fisher matrix. Contains all
+        settings relevant for derivative calculation.
+
+        :type: `dict[str, Any]`
+        """
+        return self._metadata
 
     def _check_cond(self) -> None:
         """Calculate condition number and throw warning if it is too high."""
@@ -563,7 +528,7 @@ class FisherMatrix:
             out._deriv_info.pop(param, None)
             out._derivs.pop(param, None)
         # -- To update indices, we have to set params_to_vary again
-        out._params_to_vary = out.params_to_vary
+        out._params_to_vary_handler(out.params_to_vary)
 
         # -- Perform projection
         fisher_val = self.value

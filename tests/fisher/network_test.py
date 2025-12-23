@@ -6,7 +6,12 @@ import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.fisher import FisherMatrixNetwork, FisherMatrix
-from gw_signal_tools.waveform import get_wf_generator, norm, td_to_fd
+from gw_signal_tools.waveform import (
+    get_wf_generator,
+    norm,
+    td_to_fd,
+    time_phase_wrapper,
+)
 from gw_signal_tools.types import Detector, HashableDict
 from gw_signal_tools.PSDs import psd_no_noise
 from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
@@ -27,9 +32,8 @@ wf_params = HashableDict(
         'phi_ref': 0.0 * u.rad,
         'distance': 1.0 * u.Mpc,
         'inclination': 0.0 * u.rad,
-        'eccentricity': 0.0 * u.dimensionless_unscaled,
-        'longAscNodes': 0.0 * u.rad,
-        'meanPerAno': 0.0 * u.rad,
+        'time': 0.0 * u.s,
+        'phase': 0.0 * u.rad,
         # -- det is left out in purpose, shows that it is set automatically
         'ra': 0.2 * u.rad,
         'dec': 0.2 * u.rad,
@@ -43,9 +47,11 @@ wf_params = HashableDict(
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    phenomx_generator = get_wf_generator('IMRPhenomXPHM')
-    phenomx_cross_generator = get_wf_generator('IMRPhenomXPHM', mode='cross')
-    phenomd_generator = get_wf_generator('IMRPhenomD')
+    phenomx_generator = time_phase_wrapper(get_wf_generator('IMRPhenomXPHM'))
+    phenomx_cross_generator = time_phase_wrapper(
+        get_wf_generator('IMRPhenomXPHM', mode='cross')
+    )
+    phenomd_generator = time_phase_wrapper(get_wf_generator('IMRPhenomD'))
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402

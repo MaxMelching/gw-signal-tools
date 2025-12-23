@@ -2,23 +2,16 @@
 import unittest
 
 # -- Third Party Imports
-import matplotlib.pyplot as plt
 import astropy.units as u
 from gwpy.testing.utils import assert_quantity_equal
 import pytest
 
 # -- Local Package Imports
-from gw_signal_tools.waveform import get_wf_generator
+from gw_signal_tools.waveform import get_wf_generator, time_phase_wrapper
 from gw_signal_tools.fisher import distance, linearized_distance
 from gw_signal_tools.test_utils import assert_allclose_quantity, assert_allclose_series
 from gw_signal_tools.types import HashableDict
-from gw_signal_tools import (
-    PLOT_STYLE_SHEET,
-    enable_caching_locally,
-    disable_caching_locally,  # noqa: F401
-)
-
-plt.style.use(PLOT_STYLE_SHEET)
+from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
 
 
 # %% -- Initializing commonly used variables ----------------------------------
@@ -36,9 +29,8 @@ wf_params = HashableDict(
         'phi_ref': 0.0 * u.rad,
         'distance': 1.0 * u.Mpc,
         'inclination': 0.0 * u.rad,
-        'eccentricity': 0.0 * u.dimensionless_unscaled,
-        'longAscNodes': 0.0 * u.rad,
-        'meanPerAno': 0.0 * u.rad,
+        'time': 0.0 * u.s,
+        'phase': 0.0 * u.rad,
         'condition': 0,
     }
 )
@@ -47,7 +39,7 @@ wf_params = HashableDict(
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_gen = get_wf_generator('IMRPhenomXPHM')
+    wf_gen = time_phase_wrapper(get_wf_generator('IMRPhenomXPHM'))
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402

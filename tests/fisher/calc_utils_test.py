@@ -7,7 +7,7 @@ import pytest
 
 # -- Local Package Imports
 from gw_signal_tools.test_utils import assert_allclose_MatrixWithUnits
-from gw_signal_tools.waveform import get_wf_generator
+from gw_signal_tools.waveform import get_wf_generator, time_phase_wrapper
 from gw_signal_tools.fisher import num_diff, fisher_matrix
 from gw_signal_tools.types import HashableDict
 from gw_signal_tools import enable_caching_locally, disable_caching_locally  # noqa: F401
@@ -70,9 +70,8 @@ wf_params = HashableDict(
         'phi_ref': 0.0 * u.rad,
         'distance': 1.0 * u.Mpc,
         'inclination': 0.0 * u.rad,
-        'eccentricity': 0.0 * u.dimensionless_unscaled,
-        'longAscNodes': 0.0 * u.rad,
-        'meanPerAno': 0.0 * u.rad,
+        'time': 0.0 * u.s,
+        'phase': 0.0 * u.rad,
         'condition': 0,
     }
 )
@@ -83,7 +82,7 @@ test_params = ['total_mass', 'mass_ratio']
 with enable_caching_locally():
     # with disable_caching_locally():
     # -- Avoid globally changing caching, messes up test_caching
-    wf_generator = get_wf_generator('IMRPhenomXPHM')
+    wf_generator = time_phase_wrapper(get_wf_generator('IMRPhenomXPHM'))
 
 # -- Make sure mass1 and mass2 are not in default_dict
 import lalsimulation.gwsignal.core.parameter_conventions as pc  # noqa: E402

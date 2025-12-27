@@ -821,17 +821,20 @@ def time_phase_wrapper(wf_gen: FDWFGen) -> FDWFGen:
     """
 
     def new_wf_gen(params):
-        if ('time' in params) or ('phase' in params):
-            time = params.pop('time', 0.0 * u.s)
-            phase = params.pop('phase', 0.0 * u.rad)
-            wf = wf_gen(params)
-            params |= {'time': time, 'phase': phase}
-            # -- By doing this, we to avoid making a copy of params
+        # -- General goal: avoid storing waveform after generation and
+        # -- then pass on, this slows down significantly!
+        # -- This is why we copy params instead of popping time+phase,
+        # -- generating WF, and adding them again, much faster.
+        if 'time' in params or 'phase' in params:
+            _params = params.copy()
+            time = _params.pop('time', 0.0)
+            phase = _params.pop('phase', 0.0)
 
-            return apply_time_phase_shift(wf, time, phase)
+            if time == 0.0 and phase == 0.0:
+                return wf_gen(_params)
+            else:
+                return apply_time_phase_shift(wf_gen(_params), time, phase)
         else:
-            # -- Without this else case, we would add parameters time,
-            # -- phase to a dictionary that did not have them initially!
             return wf_gen(params)
 
     return new_wf_gen

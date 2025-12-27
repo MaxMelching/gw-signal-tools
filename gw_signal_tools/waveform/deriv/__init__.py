@@ -1,4 +1,5 @@
 # -- Make all important functions/classes from module available here
+from .ana_derivs import *
 from .base import *
 from .custom import *
 from .nd import *

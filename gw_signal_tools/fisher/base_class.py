@@ -173,13 +173,7 @@ class FisherMatrix:
 
     @wf_generator.setter
     def wf_generator(self, wf_gen: FDWFGen) -> None:
-        self._wf_generator = time_phase_wrapper(wf_gen)
-        # -- Note: at one point, I was concerned this would potentially
-        # -- mess with things like optimize_overlap, where we do not
-        # -- check if some non-zero time/phase shift is in wf_params and
-        # -- just set these quantities. However, this is not an issue
-        # -- since this function calculates RELATIVE shifts. So some
-        # -- shift applied to both waveforms does not change outcome.
+        self._wf_generator = wf_gen
 
     @property
     def params_to_vary(self) -> list[str]:

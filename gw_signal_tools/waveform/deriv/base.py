@@ -8,10 +8,10 @@ import numpy as np
 import astropy.units as u
 
 if TYPE_CHECKING:
-    from collections import namedtuple
     from gwpy.types import Series
 
 # -- Local Package Imports
+from .ana_derivs import ana_deriv_map
 from ..inner_product import param_bounds as _param_bounds
 from ...types import WFGen
 
@@ -42,6 +42,7 @@ class WaveformDerivativeBase:
         self._param_to_vary = param_to_vary
         self._wf_generator = wf_generator
         self._param_bound_storage = _param_bounds.copy()
+        self._ana_derivs = ana_deriv_map.copy()
 
     def __call__(
         self, x: Optional[float | u.Quantity] = None
@@ -76,9 +77,11 @@ class WaveformDerivativeBase:
     def param_bounds(self) -> dict[str, tuple[float, float]]:
         return self._param_bound_storage
 
-    def test_point(self) -> None:  # pragma: no cover - meant to be overridden
+    def test_point(
+        self, point: dict[str, u.Quantity], step: Optional[float] = None
+    ) -> None:  # pragma: no cover - meant to be overridden
         """
-        Check if `self.point` contains potentially tricky values, e.g.
+        Check if `point` contains potentially tricky values, e.g.
         mass ratios close to 1. If yes, a subsequent adjustment of step
         sizes etc may be performed.
         """
@@ -92,8 +95,9 @@ class WaveformDerivativeBase:
                 'inverse_mass_ratio', default_bounds
             )
 
-        _base_step = self.step.base_step
-        _par_val = self.param_center_val.value
+        if step is None:
+            step = self.step.base_step
+        _par_val = point[self.param_to_vary].value
 
         def violation(step):
             return (
@@ -101,7 +105,7 @@ class WaveformDerivativeBase:
                 _par_val + step >= upper_bound,
             )
 
-        lower_violation, upper_violation = violation(_base_step)
+        lower_violation, upper_violation = violation(step)
 
         # -- Potentially more code that you want to have here
 
@@ -151,13 +155,10 @@ class WaveformDerivativeBase:
         return self._point
 
     class DerivInfo(NamedTuple):
-        """Namedtuple for derivative information with default values."""
-
-        is_exact_deriv: bool = False
-        """Indicates whether the derivative is analytical."""
+        """Base marker for derivative info. Subclasses (should) define their own."""
 
     @property
-    def info(self) -> namedtuple:
+    def info(self) -> DerivInfo:
         f"""
         Information about the calculated derivative, given as a
         namedtuple. All fields from this namedtuple are also accessible
@@ -167,7 +168,7 @@ class WaveformDerivativeBase:
         return self._info
 
     @info.setter
-    def info(self, info: dict[str, Any] | namedtuple) -> None:
+    def info(self, info: DerivInfo | dict[str, Any] | tuple) -> None:
         if isinstance(info, dict):
             info = self.__class__.DerivInfo(**info)
         elif not isinstance(info, self.DerivInfo):

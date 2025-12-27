@@ -8,7 +8,6 @@ import numpy as np
 import astropy.units as u
 
 if TYPE_CHECKING:
-    from collections import namedtuple
     from gwpy.types import Series
 
 # -- Local Package Imports
@@ -156,13 +155,10 @@ class WaveformDerivativeBase:
         return self._point
 
     class DerivInfo(NamedTuple):
-        """Namedtuple for derivative information with default values."""
-
-        is_exact_deriv: bool = False
-        """Indicates whether the derivative is analytical."""
+        """Base marker for derivative info. Subclasses (should) define their own."""
 
     @property
-    def info(self) -> namedtuple:
+    def info(self) -> DerivInfo:
         f"""
         Information about the calculated derivative, given as a
         namedtuple. All fields from this namedtuple are also accessible
@@ -172,7 +168,7 @@ class WaveformDerivativeBase:
         return self._info
 
     @info.setter
-    def info(self, info: dict[str, Any] | namedtuple) -> None:
+    def info(self, info: DerivInfo | dict[str, Any] | tuple) -> None:
         if isinstance(info, dict):
             info = self.__class__.DerivInfo(**info)
         elif not isinstance(info, self.DerivInfo):

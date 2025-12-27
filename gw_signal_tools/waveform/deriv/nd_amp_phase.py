@@ -151,7 +151,16 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
             }
             deriv = self._ana_derivs[self.param_to_vary](eval_point, self.wf_generator)
             wf = self.wf_generator(eval_point)
-            self.info = self.DerivInfo(is_exact_deriv=True, f_value=wf)
+            self.info = self.DerivInfo(
+                abs=WaveformDerivativeNumdifftools.DerivInfo(
+                    is_exact_deriv=True,
+                ),
+                f_value=wf,
+                is_exact_deriv=True,
+                phase=WaveformDerivativeNumdifftools.DerivInfo(
+                    is_exact_deriv=True,
+                ),
+            )
             return deriv
 
         # -- Test for valid point, potentially adjusting method
@@ -192,7 +201,8 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
                         xindex=wf.xindex,
                         unit=wf.unit / param_unit,
                     )
-                )._asdict()
+                )._asdict(),
+                is_exact_deriv=False,
             ),
             phase=WaveformDerivativeNumdifftools.DerivInfo(
                 **phase_info._replace(
@@ -200,8 +210,9 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
                         data=phase_info.error_estimate,
                         xindex=wf.xindex,
                         unit=wf.unit / param_unit,
-                    )
-                )._asdict()
+                    ),
+                )._asdict(),
+                is_exact_deriv=False,
             ),
         )
 
@@ -296,7 +307,12 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
                 self.abs_deriv.method = self.phase_deriv.method = 'backward'
 
     class DerivInfo(NamedTuple):
-        """Namedtuple for amplitude-phase derivative information."""
+        """
+        Derivative information for ``WaveformDerivativeAmplitudePhase``.
+        Consists of fields for the :code:`~gw_signal_tools.waveform.deriv.
+        nd.WaveformDerivativeNumdifftools.DerivInfo` info for both
+        amplitude and phase derivative plus some additional ones.
+        """
 
         abs: Optional[WaveformDerivativeNumdifftools.DerivInfo] = None
         """Information about the amplitude derivative."""

@@ -247,7 +247,11 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
                 self.nd_deriv.method = 'backward'
 
     class DerivInfo(NamedTuple):
-        """Namedtuple for derivative information."""
+        """
+        Derivative information for ``WaveformDerivativeNumdifftools``.
+        Consists of fields from the :code:`~numdifftools.core.Derivative`
+        info plus some additional ones.
+        """
 
         error_estimate: Optional[NDArray | Series] = None
         """Estimated error in the derivative."""

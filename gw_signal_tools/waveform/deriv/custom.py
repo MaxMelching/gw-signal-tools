@@ -755,7 +755,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
 
     # -- Information related properties
     class DerivInfo(NamedTuple):
-        """Namedtuple for derivative information."""
+        """Derivative information for ``WaveformDerivativeGWSignaltools``."""
 
         deriv_formula: str | None = None
         """Derivative formula that was used."""
@@ -765,7 +765,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         """Final set of step sizes that were used for the derivative."""
         final_step_size: float | None = None
         """Final step size used for the derivative."""
-        is_exact_deriv: bool | str = False
+        is_exact_deriv: bool = False
         """Whether derivative is exact (analytical) or not."""
         norm_squared: float = np.nan
         """Squared norm of the derivative."""

@@ -44,7 +44,7 @@ def phase_deriv(
 ) -> Series:
     """Analytical derivative of waveform with respect to phase."""
     wf = wf_generator(eval_point)
-    deriv = wf * (-1.0j / u.rad)
+    deriv = wf * (1.0j / u.rad)
     return deriv
 
 

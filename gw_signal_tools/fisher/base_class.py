@@ -168,6 +168,12 @@ class FisherMatrix:
 
     @property
     def wf_generator(self) -> FDWFGen:
+        """
+        Function that generates the waveform/strain from which elements
+        of the Fisher matrix are calculated.
+
+        :type: `~gw_signal_tools.types.FDWFGen`
+        """
         return self._wf_generator
 
     @property
@@ -180,6 +186,7 @@ class FisherMatrix:
         return self._params_to_vary
 
     def _params_to_vary_handler(self, params: str | list[str]) -> None:
+        """Helper function that sets properties given `params_to_vary` input."""
         if isinstance(params, str):
             _params = [params]
         else:
@@ -234,7 +241,7 @@ class FisherMatrix:
             )
 
     def _calc_fisher(self) -> None:
-        """Calculate the Fisher matrix for this instance."""
+        """Helper function that calculates the Fisher matrix for this instance."""
         self._fisher, deriv_info = fisher_matrix(
             point=self.point,
             params_to_vary=self.params_to_vary,

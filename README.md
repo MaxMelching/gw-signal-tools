@@ -13,6 +13,8 @@ Repository with files surrounding computations with waveforms from lal.
 Since there is no lal-version for Python 3.12 yet, Python 3.11 is required
 to install this package.
 
+TODO: it is available now!!
+
 After that, clone the repo to some destination and then navigate
 there and run
 

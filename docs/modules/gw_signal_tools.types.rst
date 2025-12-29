@@ -9,14 +9,6 @@ gw\_signal\_tools.types package
 Submodules
 ----------
 
-gw\_signal\_tools.types.matrix_with_units module
-------------------------------------------------
-
-.. automodule:: gw_signal_tools.types.matrix_with_units
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 gw\_signal\_tools.types.detector
 --------------------------------
 
@@ -25,10 +17,26 @@ gw\_signal\_tools.types.detector
    :undoc-members:
    :show-inheritance:
 
+gw\_signal\_tools.types.gwsignal_types
+--------------------------------------
+
+.. automodule:: gw_signal_tools.types.gwsignal_types
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 gw\_signal\_tools.types.hash_dict module
 ----------------------------------------
 
 .. automodule:: gw_signal_tools.types.hash_dict
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gw\_signal\_tools.types.matrix_with_units module
+------------------------------------------------
+
+.. automodule:: gw_signal_tools.types.matrix_with_units
    :members:
    :undoc-members:
    :show-inheritance:

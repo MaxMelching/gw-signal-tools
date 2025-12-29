@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Welcome to the gw-signal-tools documentation!
-===========================================
+=============================================
 
 gw-signal-tools
 ---------------
@@ -26,13 +26,16 @@ gw-signal-tools
 .. nbgallery::
    :titlesonly:
 
+   tutorials/inner_product_tutorial.ipynb
    tutorials/inner_product_tests.ipynb
+   tutorials/derivative_tutorial.ipynb
    tutorials/derivative_tests.ipynb
+   tutorials/fisher_tutorial.ipynb
    tutorials/fisher_tests.ipynb
    tutorials/units.ipynb
    tutorials/caching.ipynb
    tutorials/performance_tests.ipynb
-   tutorials/waveform_conversion_tests.ipynb
+   tutorials/ft_doc.ipynb
 
 .. toctree::
    :maxdepth: 2

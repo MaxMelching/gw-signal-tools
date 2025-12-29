@@ -39,3 +39,6 @@ and systematic error
     \langle \frac{\partial h}{\partial \theta^\nu}, \delta h \rangle
 
 where :math:`\delta h = h_\mathrm{ref} - h_\mathrm{approx}`.
+
+
+TODO: improve this!!

@@ -1,5 +1,5 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal, Final
+from typing import Optional, Literal, Final, cast
 from inspect import signature
 
 # -- Third Party Imports
@@ -47,10 +47,9 @@ def _determine_x_range(
 ) -> tuple[u.Quantity, u.Quantity]:
     """Inner product helper to determine the range of x-values."""
     x_unit = s[0].xunit
-    x_lower, x_upper = (
-        max([_s.xindex[0] for _s in s]),
-        min([_s.xindex[-1] for _s in s]),
-    )
+
+    x_lower: u.Quantity = max([_s.xindex[0] for _s in s])
+    x_upper: u.Quantity = min([_s.xindex[-1] for _s in s])
 
     # -- If bounds are given, check that they fit the input data
     if x_range is not None:
@@ -401,27 +400,28 @@ def inner_product(
                 optimize_phase=optimize_phase,
                 min_dt_prec=min_dt_prec,
                 return_opt_info=return_opt_info,
-            )
+            )  # type: ignore[call-overload]
+            # -- Explanation of ignore: mypy does not understand the overloads
 
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
         try:
-            df = _q_convert(
+            _df = _q_convert(
                 max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies'
             )
         except AttributeError:
             # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
             if frequ_unit._is_equivalent(u.Hz):
-                df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+                _df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
             else:
                 # -- We have no idea what frequ_unit is, just set to some number
-                df = 0.0625 * frequ_unit
+                _df = 0.0625 * frequ_unit
                 logger.info(
                     f'Frequency unit `{frequ_unit}` is not recognized, setting '
-                    f'default value of `df = {df}`.'
+                    f'default value of `df = {_df}`.'
                 )
     else:
-        df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
+        _df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- Get signals to same frequencies, i.e. make df
     # -- equal (if necessary) and then restrict range
@@ -429,8 +429,8 @@ def inner_product(
         target_range = (
             np.arange(
                 f_lower.to_value(frequ_unit),
-                f_upper.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
-                step=df.to_value(frequ_unit),
+                f_upper.to_value(frequ_unit) + 0.5 * _df.to_value(frequ_unit),
+                step=_df.to_value(frequ_unit),
             )
             << frequ_unit
         )
@@ -467,13 +467,13 @@ def inner_product(
         target_range = (
             np.arange(
                 eval_range[0].to_value(frequ_unit),
-                eval_range[1].to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
-                step=df.to_value(frequ_unit),
+                eval_range[1].to_value(frequ_unit) + 0.5 * _df.to_value(frequ_unit),
+                step=_df.to_value(frequ_unit),
             )
             << frequ_unit
         )
         non_zero_range = (f_lower, f_upper)
-        # non_zero_range = (f_lower - 0.5*df, f_upper + 0.5*df)  # Ensure all signals are non-zero on same range
+        # non_zero_range = (f_lower - 0.5*_df, f_upper + 0.5*_df)  # Ensure all signals are non-zero on same range
         # -- Filling is done UP TO THIS frequency, but we want it included
         # TODO: do we need this?
 
@@ -751,7 +751,8 @@ def optimized_inner_product(
     # -- Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
 
-    match_series = np.roll(match_series, shift=number_to_roll)
+    match_series = cast(u.Quantity, np.roll(match_series, shift=number_to_roll))
+    # match_series = TimeSeries(np.roll(match_series, shift=number_to_roll))
     match_series.shift(-match_series.times[number_to_roll])
 
     if optimize_phase:
@@ -768,7 +769,7 @@ def optimized_inner_product(
         peak_time = 0.0 * match_series.times.unit
         peak_index = np.searchsorted(
             match_series.xindex.value, peak_time.value, side='left'
-        )
+        )  # type: ignore[call-overload]
         match_result = _match_series[peak_index]
 
     if return_opt_info:

@@ -13,7 +13,6 @@ from gwpy.types import Array
 import astropy.units as u
 
 if TYPE_CHECKING:
-    from collections import namedtuple
     from gwpy.frequencyseries import FrequencySeries
     from numpy.typing import NDArray
 
@@ -31,7 +30,7 @@ from ..waveform import (
     time_phase_wrapper,
     apply_time_phase_shift,
 )
-from ..types import MatrixWithUnits, FDWFGen
+from ..types import MatrixWithUnits, FDWFGen, DerivInfoBase
 from .calc_utils import fisher_matrix
 
 
@@ -319,12 +318,12 @@ class FisherMatrix:
         return self.fisher.__getattribute__(name)
 
     @property
-    def deriv_info(self) -> dict[str, namedtuple]:
+    def deriv_info(self) -> dict[str, DerivInfoBase]:
         """
         Collection of information about derivatives that have been
         calculated (just the `info` from each derivative class.)
 
-        :type:`dict`
+        :type: `dict[str, ~gw_signal_tools.types.DerivInfoBase]`
         """
         try:
             self._deriv_info
@@ -333,23 +332,13 @@ class FisherMatrix:
 
         return self._deriv_info
 
-    # @deriv_info.setter
-    # def deriv_info(self, deriv_info: dict[str, dict[str, Any]]) -> None:
-    #     derivs, infos = {}, {}
-    #     for param, deriv_info_item in deriv_info.items():
-    #         # derivs[param], infos[param] = deriv_info_item
-    #         derivs[param] = deriv_info_item['deriv']
-    #         infos[param] = deriv_info_item['info']
-    #     self._derivs = derivs
-    #     self._deriv_info = infos
-
     @property
     def derivs(self) -> dict[str, FrequencySeries]:
         """
         Collection of derivatives that have been calculated for each
         parameter.
 
-        :type:`dict`
+        :type: `dict[str, ~gwpy.frequencyseries.FrequencySeries]`
         """
         try:
             self._derivs

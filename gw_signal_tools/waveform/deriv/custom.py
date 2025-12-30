@@ -761,7 +761,7 @@ class WaveformDerivativeGWSignaltools(WaveformDerivativeBase):
         """Derivative formula that was used."""
         final_convergence_val: float | None = None
         """Final value of the convergence criterion."""
-        final_set_of_step_sizes: list[float] | NDArray[np.float64] | None = None
+        final_set_of_step_sizes: list[float] | NDArray | None = None
         """Final set of step sizes that were used for the derivative."""
         final_step_size: float | None = None
         """Final step size used for the derivative."""

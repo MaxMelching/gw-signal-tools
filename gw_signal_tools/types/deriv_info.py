@@ -1,4 +1,4 @@
-from typing import Protocol  # , TypeVar
+# from typing import Protocol, NamedTuple, TypeVar
 
 
 __doc__ = """File for custom type definitions."""
@@ -6,17 +6,12 @@ __doc__ = """File for custom type definitions."""
 __all__ = ('DerivInfoBase',)
 
 
-# # DerivInfoBase = TypeVar('DerivInfoBase', bound=tuple)
-# # DerivInfoBase = TypeVar('DerivInfoBase', bound=WaveformDerivativeBase.DerivInfo)
-# DerivInfoBase = TypeVar('DerivInfoBase', bound=NamedTuple)
-
-
 # class DerivInfoBase(NamedTuple):
-class DerivInfoBase(Protocol):
+# class DerivInfoBase(Protocol):
+class DerivInfoBase(tuple):
     """Type stub for derivative information."""
 
-    # pass
+    # is_exact_deriv: bool
+    # """Whether derivative is exact (analytical) or not."""
 
-    # TODO: or are there some fields that we absolutely want to have here?
-    is_exact_deriv: bool = False
-    """Whether derivative is exact (analytical) or not."""
+    pass

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 # -- Local Package Imports
 from .ana_derivs import ana_deriv_map
 from ..inner_product import param_bounds as _param_bounds
-from ...types import WFGen
+from ...types import WFGen, DerivInfoBase
 
 
 __doc__ = """Module for the ``WaveformDerivativeBase`` class."""
@@ -158,7 +158,7 @@ class WaveformDerivativeBase:
         """Base marker for derivative info. Subclasses (should) define their own."""
 
     @property
-    def info(self) -> DerivInfo:
+    def info(self) -> DerivInfoBase:
         f"""
         Information about the calculated derivative, given as a
         namedtuple. All fields from this namedtuple are also accessible
@@ -168,15 +168,17 @@ class WaveformDerivativeBase:
         return self._info
 
     @info.setter
-    def info(self, info: DerivInfo | dict[str, Any] | tuple) -> None:
-        if isinstance(info, dict):
-            info = self.__class__.DerivInfo(**info)
-        elif not isinstance(info, self.DerivInfo):
+    def info(self, info: DerivInfoBase | dict[str, Any] | tuple) -> None:
+        if isinstance(info, self.DerivInfo):
+            self._info = info
+        elif isinstance(info, dict):
+            self._info = self.__class__.DerivInfo(**info)
+        elif isinstance(info, tuple) and not isinstance(info, self.DerivInfo):
+            self._info = self.__class__.DerivInfo(*info)
+        else:
             raise TypeError(
-                f'`info` must be a dict or an instance of {self.DerivInfo.__name__}.'
+                f'`info` must be a ``dict`` or an instance of ``{self.DerivInfo.__name__}``.'
             )
-
-        self._info = info
 
     def __getattr__(self, name: str) -> Any:
         # -- Allow access to info fields as instance attributes.

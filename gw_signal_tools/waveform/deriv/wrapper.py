@@ -70,9 +70,11 @@ class WaveformDerivative:
     # -- Idea: one can easily add entries here for custom derivative routines.
     # -- Instances created after creation will have those entries.
 
-    def __new__(
+    def __new__(  # type: ignore
         cls, *args, deriv_routine='numdifftools', **kw_args
-    ) -> WaveformDerivativeBase:  # type: ignore[misc] - Common for constructors
+    ) -> WaveformDerivativeBase:
+        # -- Explanation of ignore: Python typing and constructors do not
+        # -- get along well. Thus ignoring is common for constructors.
         if isinstance(deriv_routine, str):
             try:
                 deriv_routine_class = cls.deriv_routine_class_map[deriv_routine]

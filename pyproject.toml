@@ -110,6 +110,7 @@ module = [
   'astropy.*',
   'gwpy.*',
   'lalsimulation.*',
+  'numdifftools.*',
   'scipy.*'
 ]
 

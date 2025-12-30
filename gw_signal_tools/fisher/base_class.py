@@ -141,10 +141,10 @@ class FisherMatrix:
         **metadata,
     ) -> None:
         """Initialize a ``FisherMatrix``."""
-        self.point = point
-        self.wf_generator = wf_generator
-        self.params_to_vary = params_to_vary
-        self.metadata = self.default_metadata | metadata
+        self._point = point
+        self._wf_generator = wf_generator
+        self._params_to_vary_handler(params_to_vary)
+        self._metadata = self.default_metadata | metadata
 
         # -- Arguments for inner product may be given, extract
         self._inner_prod_kwargs = {}
@@ -157,23 +157,24 @@ class FisherMatrix:
         if direct_computation:
             self._calc_fisher()
 
-    # @property
-    # def point(self) -> dict[str, u.Quantity]:
-    #     return self._point
+    @property
+    def point(self) -> dict[str, u.Quantity]:
+        """
+        Point in parameter space at which the Fisher matrix is calculated.
 
-    # @point.setter
-    # def point(self, wf_params: dict[str, u.Quantity]) -> None:
-    #     # Do some parameter checks?
-
-    #     self._point = wf_params
+        :type: `dict[str, ~astropy.units.Quantity]`
+        """
+        return self._point
 
     @property
     def wf_generator(self) -> FDWFGen:
-        return self._wf_generator
+        """
+        Function that generates the waveform/strain from which elements
+        of the Fisher matrix are calculated.
 
-    @wf_generator.setter
-    def wf_generator(self, wf_gen: FDWFGen) -> None:
-        self._wf_generator = wf_gen
+        :type: `~gw_signal_tools.types.FDWFGen`
+        """
+        return self._wf_generator
 
     @property
     def params_to_vary(self) -> list[str]:
@@ -184,8 +185,8 @@ class FisherMatrix:
         """
         return self._params_to_vary
 
-    @params_to_vary.setter
-    def params_to_vary(self, params: str | list[str]) -> None:
+    def _params_to_vary_handler(self, params: str | list[str]) -> None:
+        """Helper function that sets properties given `params_to_vary` input."""
         if isinstance(params, str):
             _params = [params]
         else:
@@ -218,6 +219,16 @@ class FisherMatrix:
         """
         return self._nparams
 
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """
+        Metadata associated with this Fisher matrix. Contains all
+        settings relevant for derivative calculation.
+
+        :type: `dict[str, Any]`
+        """
+        return self._metadata
+
     def _check_cond(self) -> None:
         """Calculate condition number and throw warning if it is too high."""
         if (cond_numb := self.cond('fro')) > 1e15:  # pragma: no cover
@@ -230,7 +241,7 @@ class FisherMatrix:
             )
 
     def _calc_fisher(self) -> None:
-        """Calculate the Fisher matrix for this instance."""
+        """Helper function that calculates the Fisher matrix for this instance."""
         self._fisher, deriv_info = fisher_matrix(
             point=self.point,
             params_to_vary=self.params_to_vary,
@@ -524,7 +535,7 @@ class FisherMatrix:
             out._deriv_info.pop(param, None)
             out._derivs.pop(param, None)
         # -- To update indices, we have to set params_to_vary again
-        out.params_to_vary = out.params_to_vary
+        out._params_to_vary_handler(out.params_to_vary)
 
         # -- Perform projection
         fisher_val = self.value
@@ -834,7 +845,7 @@ class FisherMatrix:
                 # -- allowed as parameters!
 
                 opt_fisher = self.copy()  # Preferred over update_attrs, copies fisher
-                opt_fisher.point = opt_wf_params  # Add time, phase shifts
+                opt_fisher._point = opt_wf_params  # Add time, phase shifts
 
                 # -- The corresponding shifts still have to be applied
                 # -- to the derivatives. Works because

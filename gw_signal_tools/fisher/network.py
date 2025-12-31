@@ -374,7 +374,6 @@ class FisherMatrixNetwork(FisherMatrix):
         optimize: bool | str | list[str] = True,
         optimize_fisher: str | list[str] | None = None,
         return_diagnostics: bool | str = False,
-        is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         if isinstance(optimize, str):
@@ -416,7 +415,6 @@ class FisherMatrixNetwork(FisherMatrix):
                     return_diagnostics=(
                         'deriv_info' if not return_diagnostics else return_diagnostics
                     ),
-                    is_true_point=is_true_point,
                     **inner_prod_kwargs,
                 )
 

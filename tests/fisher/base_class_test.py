@@ -392,9 +392,7 @@ def test_sys_bias(params):
 
     fisher.systematic_bias(phenomd_generator, params, return_diagnostics='deriv_info')
 
-    fisher.systematic_bias(
-        phenomd_generator, optimize=True, return_diagnostics=True, is_true_point=True
-    )
+    fisher.systematic_bias(phenomd_generator, optimize=True, return_diagnostics=True)
 
     fisher.systematic_bias(phenomd_generator, optimize=['time', 'phase'])
 
@@ -434,12 +432,10 @@ def test_return_diagnostic():
     )
 
     for bool1 in [True, False]:
-        for bool2 in [True, False]:
-            fisher.systematic_bias(
-                phenomd_generator,
-                return_diagnostics=bool1,
-                is_true_point=bool2,
-            )
+        fisher.systematic_bias(
+            phenomd_generator,
+            return_diagnostics=bool1,
+        )
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,7 @@ from gwpy.frequencyseries import FrequencySeries
 from gwpy.timeseries import TimeSeries
 
 
-__doc__ = """File for custom type definitions."""
+__doc__ = """File for custom type definitions related to gwsignal."""
 
 __all__ = (
     'FDWFGen',

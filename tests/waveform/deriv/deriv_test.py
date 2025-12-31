@@ -149,9 +149,19 @@ def test_info_setting(deriv_routine):
         full_deriv.non_existent_attribute
 
     with pytest.raises(
-        TypeError, match='`info` must be a dict or an instance of DerivInfo.'
+        TypeError, match='`info` must be a ``dict`` or an instance of ``DerivInfo``.'
     ):
         full_deriv.info = 'Not a dict or namedtuple'
+
+    full_deriv.info = {'is_exact_deriv': True}
+    assert full_deriv.info.is_exact_deriv is True
+
+    full_deriv.info = full_deriv.DerivInfo(is_exact_deriv=True)
+    assert full_deriv.info.is_exact_deriv is True
+
+    if deriv_routine == 'numdifftools':
+        full_deriv.info = (None, None, None, None, True)
+        assert full_deriv.info.is_exact_deriv is True
 
 
 # %% -- Characterizing gwsignaltools derivative -------------------------------

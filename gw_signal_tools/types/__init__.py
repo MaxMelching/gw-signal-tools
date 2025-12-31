@@ -1,4 +1,5 @@
 # -- Make all important functions/classes from module available here
+from .deriv_info import *
 from .detector import *
 from .gwsignal_types import *
 from .hash_dict import *

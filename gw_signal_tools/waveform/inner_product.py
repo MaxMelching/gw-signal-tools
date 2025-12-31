@@ -200,23 +200,17 @@ def inner_product(
         specific way of generating the input waveforms/data or by
         a proper call to a function like
         `~gwsignal_tools.waveform.signal_at_index` that yields signals
-        at specific frequencies, right before this function. Providing
-        a similar functionality inside this function turned out to be
-        very error-prone, particularly the interplay of evaluating at
-        the frequencies and managing when to interpolate, in combination
-        with having to distinguish equal/unequal sampling. Hence,
-        we have resorted to keeping just `signal_interpolation`.
+        at specific frequencies, right before this function.
 
         In principle, one could just resort to
         `inner_product_calculation`, `optimized_inner_product` to get
         the same results, without having to go through `inner_product`.
         However, this would mean convenient wrappers such as `norm` or
-        `overlap` would have to redefined, which serves as justification
-        for this argument.
-
-        Additionally, this argument is compatible with giving different
-        `f_range` arguments, i.e. restricting is still supported (this
-        would have to be done manually for `inner_product_computation`).
+        `overlap` have to be redefined, which serves as justification
+        for this argument. Additionally, by making it an argument, we
+        can still make use of convenient features such as the `f_range`
+        argument, i.e. restricting is still supported (this would have
+        to be done manually for `inner_product_computation`).
     f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
@@ -231,7 +225,7 @@ def inner_product(
         generation. For this reason, giving :code:`f_range` may be very
         important.
     df : float or ~astropy.units.Quantity, optional, default = None
-        Distance df between samples in frequency domain to use in
+        Distance between samples in frequency domain to use during
         integration.
         If None, it is set to 0.0625 Hz (or whatever frequency unit is
         used in the signals), which is the default df of frequency
@@ -560,8 +554,8 @@ def inner_product_computation(
 ) -> u.Quantity:
     """
     Lower level function for inner product calculation. Only accepts
-    signals at identical frequency ranges and then carries out the
-    actual integral calcutation.
+    signals sampled on identical frequencies and then carries out the
+    actual integral calculation.
 
     Parameters
     ----------
@@ -653,7 +647,7 @@ def optimized_inner_product(
     actual integral calculation via an IFFT.
 
     In contrast to :code:`inner_product_computation`, this function
-    optimizes the inner product over time and phase shifts.
+    can optimize the inner product over time and/or phase shifts.
 
     Parameters
     ----------
@@ -819,7 +813,6 @@ def optimized_inner_product(
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
 
     match_series = cast(u.Quantity, np.roll(match_series, shift=number_to_roll))
-    # match_series = TimeSeries(np.roll(match_series, shift=number_to_roll))
     match_series.shift(-match_series.times[number_to_roll])
 
     if optimize_phase:

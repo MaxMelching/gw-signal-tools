@@ -102,7 +102,7 @@ def fisher_matrix(
     return_info: Literal[False] = ...,
     pass_inn_prod_kwargs_to_deriv: bool = ...,
     **deriv_and_inner_prod_kwargs,
-) -> MatrixWithUnits: ...
+) -> MatrixWithUnits: ...  # pragma: no cover - overloads
 
 
 @overload
@@ -115,7 +115,9 @@ def fisher_matrix(
     return_info: Literal[True],  # = ...,
     pass_inn_prod_kwargs_to_deriv: bool = ...,
     **deriv_and_inner_prod_kwargs,
-) -> tuple[MatrixWithUnits, dict[str, dict[str, FrequencySeries | DerivInfoBase]]]: ...
+) -> tuple[
+    MatrixWithUnits, dict[str, dict[str, FrequencySeries | DerivInfoBase]]
+]: ...  # pragma: no cover - overloads
 
 
 def fisher_matrix(

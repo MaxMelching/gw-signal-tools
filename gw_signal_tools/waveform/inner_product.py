@@ -118,7 +118,7 @@ def inner_product(
     optimize_phase: bool = ...,
     min_dt_prec: Optional[float] = ...,
     return_opt_info: Literal[False] = ...,
-) -> u.Quantity: ...
+) -> u.Quantity: ...  # pragma: no cover - overloads
 
 
 @overload
@@ -138,7 +138,7 @@ def inner_product(
 ) -> tuple[
     u.Quantity,
     dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
-]: ...
+]: ...  # pragma: no cover - overloads
 
 
 def inner_product(
@@ -611,7 +611,7 @@ def optimized_inner_product(
     *,
     min_dt_prec: Optional[float] = ...,
     return_opt_info: Literal[False] = ...,
-) -> u.Quantity: ...
+) -> u.Quantity: ...  # pragma: no cover - overloads
 
 
 @overload
@@ -627,7 +627,7 @@ def optimized_inner_product(
 ) -> tuple[
     u.Quantity,
     dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
-]: ...
+]: ...  # pragma: no cover - overloads
 
 
 def optimized_inner_product(
@@ -864,7 +864,7 @@ def norm(
     *args,
     return_opt_info: Literal[False] = ...,
     **kwargs,
-) -> u.Quantity: ...
+) -> u.Quantity: ...  # pragma: no cover - overloads
 
 
 @overload
@@ -876,7 +876,7 @@ def norm(
 ) -> tuple[
     u.Quantity,
     dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
-]: ...
+]: ...  # pragma: no cover - overloads
 
 
 def norm(
@@ -934,7 +934,7 @@ def overlap(
     *args,
     return_opt_info: Literal[False] = ...,
     **kwargs,
-) -> u.Quantity: ...
+) -> u.Quantity: ...  # pragma: no cover - overloads
 
 
 @overload
@@ -947,7 +947,7 @@ def overlap(
 ) -> tuple[
     u.Quantity,
     dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
-]: ...
+]: ...  # pragma: no cover - overloads
 
 
 def overlap(

@@ -1,5 +1,6 @@
 # -- Standard Lib Imports
 from typing import Optional, Literal, Final, overload, cast
+from collections.abc import Sequence
 from inspect import signature
 
 # -- Third Party Imports
@@ -43,7 +44,7 @@ __all__ = (
 
 
 def _determine_x_range(
-    x_range: tuple[u.Quantity, u.Quantity] | list[u.Quantity] | None, *s
+    x_range: Sequence[u.Quantity] | None, *s
 ) -> tuple[u.Quantity, u.Quantity]:
     """Inner product helper to determine the range of x-values."""
     x_unit = s[0].xunit
@@ -62,16 +63,12 @@ def _determine_x_range(
 
         # -- Check if both lower and upper are given or one of them is None
         if x_range[0] is not None:
-            x_lower_new = _q_convert(
-                x_range[0], x_unit, 'f_range[0]', 'signal.frequencies'
-            )
+            x_lower_new = _q_convert(x_range[0], x_unit, 'x_range[0]', 'signal.xindex')
         else:
             x_lower_new = x_lower
 
         if x_range[1] is not None:
-            x_upper_new = _q_convert(
-                x_range[1], x_unit, 'f_range[1]', 'signal.frequencies'
-            )
+            x_upper_new = _q_convert(x_range[1], x_unit, 'x_range[1]', 'signal.xindex')
         else:
             x_upper_new = x_upper
 
@@ -111,7 +108,7 @@ def inner_product(
     *,
     psd: Optional[FrequencySeries] = ...,
     signal_interpolation: bool = ...,
-    f_range: Optional[list[float] | list[u.Quantity]] = ...,
+    f_range: Optional[Sequence[float | u.Quantity]] = ...,
     df: Optional[float | u.Quantity] = ...,
     optimize_time_and_phase: bool = ...,
     optimize_time: bool = ...,
@@ -128,7 +125,7 @@ def inner_product(
     *,
     psd: Optional[FrequencySeries] = ...,
     signal_interpolation: bool = ...,
-    f_range: Optional[list[float] | list[u.Quantity]] = ...,
+    f_range: Optional[Sequence[float | u.Quantity]] = ...,
     df: Optional[float | u.Quantity] = ...,
     optimize_time_and_phase: bool = ...,
     optimize_time: bool = ...,
@@ -146,7 +143,7 @@ def inner_product(
     signal2: TimeSeries | FrequencySeries,
     psd: Optional[FrequencySeries] = None,
     signal_interpolation: bool = True,
-    f_range: Optional[list[float] | list[u.Quantity]] = None,
+    f_range: Optional[Sequence[float | u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
     optimize_time: bool = False,
@@ -211,7 +208,7 @@ def inner_product(
         can still make use of convenient features such as the `f_range`
         argument, i.e. restricting is still supported (this would have
         to be done manually for `inner_product_computation`).
-    f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
+    f_range : Sequence[float or ~astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
         input signals.

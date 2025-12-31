@@ -173,7 +173,7 @@ class WaveformDerivativeBase:
             self._info = info
         elif isinstance(info, dict):
             self._info = self.__class__.DerivInfo(**info)
-        elif isinstance(info, tuple) and not isinstance(info, self.DerivInfo):
+        elif isinstance(info, tuple):
             self._info = self.__class__.DerivInfo(*info)
         else:
             raise TypeError(

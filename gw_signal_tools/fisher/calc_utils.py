@@ -125,7 +125,6 @@ def fisher_matrix(
     params_to_vary: str | list[str],
     wf_generator: FDWFGen,
     deriv_routine: str | Callable,
-    *,
     return_info: bool = False,
     pass_inn_prod_kwargs_to_deriv: bool = False,
     **deriv_and_inner_prod_kwargs,

@@ -1,7 +1,7 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Needed for "if TYPE_CHECKING" block
 import warnings
-from typing import Optional, Callable
+from typing import Optional, Callable, overload, Literal
 
 # -- Third Party Imports
 import numpy as np
@@ -92,11 +92,38 @@ def num_diff(  # TODO: move this to deriv file?
     return signal_deriv
 
 
+@overload
 def fisher_matrix(
     point: dict[str, u.Quantity],
     params_to_vary: str | list[str],
     wf_generator: FDWFGen,
     deriv_routine: str | Callable,
+    *,
+    return_info: Literal[False] = ...,
+    pass_inn_prod_kwargs_to_deriv: bool = ...,
+    **deriv_and_inner_prod_kwargs,
+) -> MatrixWithUnits: ...
+
+
+@overload
+def fisher_matrix(
+    point: dict[str, u.Quantity],
+    params_to_vary: str | list[str],
+    wf_generator: FDWFGen,
+    deriv_routine: str | Callable,
+    *,
+    return_info: Literal[True],  # = ...,
+    pass_inn_prod_kwargs_to_deriv: bool = ...,
+    **deriv_and_inner_prod_kwargs,
+) -> tuple[MatrixWithUnits, dict[str, dict[str, FrequencySeries | DerivInfoBase]]]: ...
+
+
+def fisher_matrix(
+    point: dict[str, u.Quantity],
+    params_to_vary: str | list[str],
+    wf_generator: FDWFGen,
+    deriv_routine: str | Callable,
+    *,
     return_info: bool = False,
     pass_inn_prod_kwargs_to_deriv: bool = False,
     **deriv_and_inner_prod_kwargs,

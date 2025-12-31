@@ -1,5 +1,5 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal, Final, cast
+from typing import Optional, Literal, Final, overload, cast
 from inspect import signature
 
 # -- Third Party Imports
@@ -102,6 +102,43 @@ def _determine_x_range(
             )
 
     return x_lower, x_upper
+
+
+@overload
+def inner_product(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *,
+    psd: Optional[FrequencySeries] = ...,
+    signal_interpolation: bool = ...,
+    f_range: Optional[list[float] | list[u.Quantity]] = ...,
+    df: Optional[float | u.Quantity] = ...,
+    optimize_time_and_phase: bool = ...,
+    optimize_time: bool = ...,
+    optimize_phase: bool = ...,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[False] = ...,
+) -> u.Quantity: ...
+
+
+@overload
+def inner_product(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *,
+    psd: Optional[FrequencySeries] = ...,
+    signal_interpolation: bool = ...,
+    f_range: Optional[list[float] | list[u.Quantity]] = ...,
+    df: Optional[float | u.Quantity] = ...,
+    optimize_time_and_phase: bool = ...,
+    optimize_time: bool = ...,
+    optimize_phase: bool = ...,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[True],
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...
 
 
 def inner_product(
@@ -509,7 +546,8 @@ def inner_product(
             optimize_phase=optimize_phase,
             min_dt_prec=min_dt_prec,
             return_opt_info=return_opt_info,
-        )
+        )  # type: ignore[call-overload]
+        # -- Explanation of ignore: mypy does not understand the overloads
 
 
 # -- The following is needed frequently in other files. Makes most sense
@@ -561,6 +599,35 @@ def inner_product_computation(
         * np.real(simpson(y=signal1 * signal2.conjugate() / psd, x=signal1.frequencies))
         * output_unit
     )
+
+
+@overload
+def optimized_inner_product(
+    signal1: FrequencySeries,
+    signal2: FrequencySeries,
+    psd: FrequencySeries,
+    optimize_time: bool,
+    optimize_phase: bool,
+    *,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[False] = ...,
+) -> u.Quantity: ...
+
+
+@overload
+def optimized_inner_product(
+    signal1: FrequencySeries,
+    signal2: FrequencySeries,
+    psd: FrequencySeries,
+    optimize_time: bool,
+    optimize_phase: bool,
+    *,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[True],
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...
 
 
 def optimized_inner_product(
@@ -791,6 +858,27 @@ def next_power_of_two(x):
     return 1 if x == 0 else int(2 ** np.ceil(np.log2(x)))
 
 
+@overload
+def norm(
+    signal: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[False] = ...,
+    **kwargs,
+) -> u.Quantity: ...
+
+
+@overload
+def norm(
+    signal: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[True],
+    **kwargs,
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...
+
+
 def norm(
     signal: TimeSeries | FrequencySeries, *args, **kwargs
 ) -> (
@@ -837,6 +925,29 @@ def norm(
     else:
         out[1]['match_series'] = np.sqrt(out[1]['match_series'])
         return np.sqrt(out[0]), out[1]
+
+
+@overload
+def overlap(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[False] = ...,
+    **kwargs,
+) -> u.Quantity: ...
+
+
+@overload
+def overlap(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[True],
+    **kwargs,
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...
 
 
 def overlap(

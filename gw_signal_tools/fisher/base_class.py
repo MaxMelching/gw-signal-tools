@@ -664,7 +664,6 @@ class FisherMatrix:
         optimize: bool | str | list[str] = True,
         optimize_fisher: Optional[str | list[str]] = None,
         return_diagnostics: bool | str = False,
-        is_true_point: bool = False,
         **inner_prod_kwargs,
     ) -> MatrixWithUnits | tuple[MatrixWithUnits, dict[str, Any]]:
         r"""
@@ -728,14 +727,6 @@ class FisherMatrix:
             derivative calculation is returned (this is mainly useful
             for the ``FisherMatrixNetwork`` class that builds on
             ``FisherMatrix``).
-        is_true_point : bool, optional, default = False
-            Whether :code:``self.point`` represents the "true", i.e.
-            injected, parameters or not. Default is ``False``, which
-            means the point is assumed to be the maximum-likelihood
-            estimate obtained from :code:``self.wf_generator``. This
-            setting is not relevant for the systematic bias calculation
-            itself, only for the diagnostic tools returned in the
-            optimization info.
         inner_prod_kwargs :
             Key word arguments used for the calculations here, i.e. for
             waveform difference and more. These will be combined with

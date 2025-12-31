@@ -287,10 +287,10 @@ def test_copy():
 
     fisher_copy._fisher = None
     fisher_copy._fisher_inverse = None
-    fisher_copy.point = None
-    fisher_copy.wf_generator = None
+    fisher_copy._point = None
+    fisher_copy._wf_generator = None
     fisher_copy._detectors = None
-    fisher_copy.metadata = None
+    fisher_copy._metadata = None
     fisher_copy._deriv_info = None
     fisher_copy._is_projected = True
 

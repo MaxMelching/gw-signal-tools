@@ -113,7 +113,7 @@ def adjust_x_range(
     fill_val: float | u.Quantity = 0.0,
     fill_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
     copy: bool = True,
-) -> FrequencySeries:
+) -> Series:
     """
     Pad :code:'signal' to xindex values specified by :code:`x_range`,
     while potentially setting its values in the interval

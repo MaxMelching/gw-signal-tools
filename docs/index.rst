@@ -17,13 +17,8 @@ gw-signal-tools
 
    Code Overview <overview>
 
-.. toctree::
-   :maxdepth: 1
-   :caption: Examples
-
-   tutorials/tips.rst
-
 .. nbgallery::
+   :caption: Examples
    :titlesonly:
 
    tutorials/inner_product_tutorial.ipynb

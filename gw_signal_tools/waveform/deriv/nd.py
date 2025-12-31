@@ -253,9 +253,9 @@ class WaveformDerivativeNumdifftools(WaveformDerivativeBase):
         info plus some additional ones.
         """
 
-        error_estimate: Optional[NDArray | Series] = None
+        error_estimate: Optional[Series] = None
         """Estimated error in the derivative."""
-        f_value: Optional[NDArray | u.Quantity] = None
+        f_value: Optional[Series] = None
         """Function value at the evaluation point."""
         final_step: Optional[NDArray] = None
         """Final step size used for the derivative."""

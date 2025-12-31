@@ -316,7 +316,7 @@ class WaveformDerivativeAmplitudePhase(WaveformDerivativeBase):
 
         abs: Optional[WaveformDerivativeNumdifftools.DerivInfo] = None
         """Information about the amplitude derivative."""
-        f_value: Optional[NDArray | u.Quantity] = None
+        f_value: Optional[Series] = None
         """Function value at the evaluation point."""
         is_exact_deriv: bool = False
         """Whether derivative is exact (analytical) or not."""

@@ -29,7 +29,6 @@ maintainers = [
 requires-python = '>=3.9'  # Constrained by lal and certain syntax we use
 dependencies = [
   'gwpy>=3',
-  'lalsuite',
   'matplotlib',
   'numdifftools',
   'numpy',
@@ -68,6 +67,9 @@ dev = [
 ]
 jupyter = [
   'jupyter',
+]
+lal = [
+  'lalsuite',
 ]
 pyseobnr = [
   'pyseobnr',

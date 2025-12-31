@@ -471,10 +471,6 @@ def test_plot():
     plt.close()
 
 
-def test_get_wf_generator():
-    fisher_tot_mass.get_wf_generator('IMRPhenomXPHM')
-
-
 @pytest.mark.parametrize(
     'new_point', [None, wf_params | {'total_mass': 42.0 * u.solMass}]
 )

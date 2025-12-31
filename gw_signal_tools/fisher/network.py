@@ -221,10 +221,9 @@ class FisherMatrixNetwork(FisherMatrix):
             information about value, frequencies and units, which are
             all required for the calculations that are carried out.
 
-            Convenient options are the methods
-            :code:`~gw_signal_tools.waveform.get_wf_generator`
-            or :code:`{type(self).__name__}.get_wf_generator`, which
-            generate a suitable function from a few arguments.
+            A convenient option is to use the method
+            :code:`~gw_signal_tools.waveform.get_wf_generator`, which
+            generates a suitable function from a few arguments.
 
         Returns
         -------

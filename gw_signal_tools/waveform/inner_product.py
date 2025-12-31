@@ -1,5 +1,6 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal, Final
+from typing import Optional, Literal, Final, overload, cast
+from collections.abc import Sequence
 from inspect import signature
 
 # -- Third Party Imports
@@ -43,14 +44,13 @@ __all__ = (
 
 
 def _determine_x_range(
-    x_range: tuple[u.Quantity, u.Quantity] | list[u.Quantity] | None, *s
+    x_range: Sequence[u.Quantity] | None, *s
 ) -> tuple[u.Quantity, u.Quantity]:
     """Inner product helper to determine the range of x-values."""
     x_unit = s[0].xunit
-    x_lower, x_upper = (
-        max([_s.xindex[0] for _s in s]),
-        min([_s.xindex[-1] for _s in s]),
-    )
+
+    x_lower: u.Quantity = max([_s.xindex[0] for _s in s])
+    x_upper: u.Quantity = min([_s.xindex[-1] for _s in s])
 
     # -- If bounds are given, check that they fit the input data
     if x_range is not None:
@@ -63,16 +63,12 @@ def _determine_x_range(
 
         # -- Check if both lower and upper are given or one of them is None
         if x_range[0] is not None:
-            x_lower_new = _q_convert(
-                x_range[0], x_unit, 'f_range[0]', 'signal.frequencies'
-            )
+            x_lower_new = _q_convert(x_range[0], x_unit, 'x_range[0]', 'signal.xindex')
         else:
             x_lower_new = x_lower
 
         if x_range[1] is not None:
-            x_upper_new = _q_convert(
-                x_range[1], x_unit, 'f_range[1]', 'signal.frequencies'
-            )
+            x_upper_new = _q_convert(x_range[1], x_unit, 'x_range[1]', 'signal.xindex')
         else:
             x_upper_new = x_upper
 
@@ -105,12 +101,49 @@ def _determine_x_range(
     return x_lower, x_upper
 
 
+@overload
+def inner_product(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *,
+    psd: Optional[FrequencySeries] = ...,
+    signal_interpolation: bool = ...,
+    f_range: Optional[Sequence[float | u.Quantity]] = ...,
+    df: Optional[float | u.Quantity] = ...,
+    optimize_time_and_phase: bool = ...,
+    optimize_time: bool = ...,
+    optimize_phase: bool = ...,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[False] = ...,
+) -> u.Quantity: ...  # pragma: no cover - overloads
+
+
+@overload
+def inner_product(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *,
+    psd: Optional[FrequencySeries] = ...,
+    signal_interpolation: bool = ...,
+    f_range: Optional[Sequence[float | u.Quantity]] = ...,
+    df: Optional[float | u.Quantity] = ...,
+    optimize_time_and_phase: bool = ...,
+    optimize_time: bool = ...,
+    optimize_phase: bool = ...,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[True],
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...  # pragma: no cover - overloads
+
+
 def inner_product(
     signal1: TimeSeries | FrequencySeries,
     signal2: TimeSeries | FrequencySeries,
     psd: Optional[FrequencySeries] = None,
     signal_interpolation: bool = True,
-    f_range: Optional[list[float] | list[u.Quantity]] = None,
+    f_range: Optional[Sequence[float | u.Quantity]] = None,
     df: Optional[float | u.Quantity] = None,
     optimize_time_and_phase: bool = False,
     optimize_time: bool = False,
@@ -164,24 +197,18 @@ def inner_product(
         specific way of generating the input waveforms/data or by
         a proper call to a function like
         `~gwsignal_tools.waveform.signal_at_index` that yields signals
-        at specific frequencies, right before this function. Providing
-        a similar functionality inside this function turned out to be
-        very error-prone, particularly the interplay of evaluating at
-        the frequencies and managing when to interpolate, in combination
-        with having to distinguish equal/unequal sampling. Hence,
-        we have resorted to keeping just `signal_interpolation`.
+        at specific frequencies, right before this function.
 
         In principle, one could just resort to
         `inner_product_calculation`, `optimized_inner_product` to get
         the same results, without having to go through `inner_product`.
         However, this would mean convenient wrappers such as `norm` or
-        `overlap` would have to redefined, which serves as justification
-        for this argument.
-
-        Additionally, this argument is compatible with giving different
-        `f_range` arguments, i.e. restricting is still supported (this
-        would have to be done manually for `inner_product_computation`).
-    f_range : list[float] or list[~astropy.units.Quantity], optional, default = None
+        `overlap` have to be redefined, which serves as justification
+        for this argument. Additionally, by making it an argument, we
+        can still make use of convenient features such as the `f_range`
+        argument, i.e. restricting is still supported (this would have
+        to be done manually for `inner_product_computation`).
+    f_range : Sequence[float or ~astropy.units.Quantity], optional, default = None
         Frequency range to compute inner product over. Is potentially
         cropped if bounds are greater than frequency range of one of the
         input signals.
@@ -195,7 +222,7 @@ def inner_product(
         generation. For this reason, giving :code:`f_range` may be very
         important.
     df : float or ~astropy.units.Quantity, optional, default = None
-        Distance df between samples in frequency domain to use in
+        Distance between samples in frequency domain to use during
         integration.
         If None, it is set to 0.0625 Hz (or whatever frequency unit is
         used in the signals), which is the default df of frequency
@@ -401,27 +428,28 @@ def inner_product(
                 optimize_phase=optimize_phase,
                 min_dt_prec=min_dt_prec,
                 return_opt_info=return_opt_info,
-            )
+            )  # type: ignore[call-overload]
+            # -- Explanation of ignore: mypy does not understand the overloads
 
     # -- Frequency range needs to be constructed, we need df for that
     if df is None:
         try:
-            df = _q_convert(
+            _df = _q_convert(
                 max(signal1.df, signal2.df), frequ_unit, 'df', 'signal.frequencies'
             )
         except AttributeError:
             # -- No df attribute, i.e. unequal sampled signal(s). Choosing default value.
             if frequ_unit._is_equivalent(u.Hz):
-                df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
+                _df = _q_convert(0.0625 * u.Hz, frequ_unit, 'df', 'signal.frequencies')
             else:
                 # -- We have no idea what frequ_unit is, just set to some number
-                df = 0.0625 * frequ_unit
+                _df = 0.0625 * frequ_unit
                 logger.info(
                     f'Frequency unit `{frequ_unit}` is not recognized, setting '
-                    f'default value of `df = {df}`.'
+                    f'default value of `df = {_df}`.'
                 )
     else:
-        df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
+        _df = _q_convert(df, frequ_unit, 'df', 'signal.frequencies')
 
     # -- Get signals to same frequencies, i.e. make df
     # -- equal (if necessary) and then restrict range
@@ -429,8 +457,8 @@ def inner_product(
         target_range = (
             np.arange(
                 f_lower.to_value(frequ_unit),
-                f_upper.to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
-                step=df.to_value(frequ_unit),
+                f_upper.to_value(frequ_unit) + 0.5 * _df.to_value(frequ_unit),
+                step=_df.to_value(frequ_unit),
             )
             << frequ_unit
         )
@@ -467,13 +495,13 @@ def inner_product(
         target_range = (
             np.arange(
                 eval_range[0].to_value(frequ_unit),
-                eval_range[1].to_value(frequ_unit) + 0.5 * df.to_value(frequ_unit),
-                step=df.to_value(frequ_unit),
+                eval_range[1].to_value(frequ_unit) + 0.5 * _df.to_value(frequ_unit),
+                step=_df.to_value(frequ_unit),
             )
             << frequ_unit
         )
         non_zero_range = (f_lower, f_upper)
-        # non_zero_range = (f_lower - 0.5*df, f_upper + 0.5*df)  # Ensure all signals are non-zero on same range
+        # non_zero_range = (f_lower - 0.5*_df, f_upper + 0.5*_df)  # Ensure all signals are non-zero on same range
         # -- Filling is done UP TO THIS frequency, but we want it included
         # TODO: do we need this?
 
@@ -509,7 +537,8 @@ def inner_product(
             optimize_phase=optimize_phase,
             min_dt_prec=min_dt_prec,
             return_opt_info=return_opt_info,
-        )
+        )  # type: ignore[call-overload]
+        # -- Explanation of ignore: mypy does not understand the overloads
 
 
 # -- The following is needed frequently in other files. Makes most sense
@@ -522,8 +551,8 @@ def inner_product_computation(
 ) -> u.Quantity:
     """
     Lower level function for inner product calculation. Only accepts
-    signals at identical frequency ranges and then carries out the
-    actual integral calcutation.
+    signals sampled on identical frequencies and then carries out the
+    actual integral calculation.
 
     Parameters
     ----------
@@ -563,6 +592,35 @@ def inner_product_computation(
     )
 
 
+@overload
+def optimized_inner_product(
+    signal1: FrequencySeries,
+    signal2: FrequencySeries,
+    psd: FrequencySeries,
+    optimize_time: bool,
+    optimize_phase: bool,
+    *,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[False] = ...,
+) -> u.Quantity: ...  # pragma: no cover - overloads
+
+
+@overload
+def optimized_inner_product(
+    signal1: FrequencySeries,
+    signal2: FrequencySeries,
+    psd: FrequencySeries,
+    optimize_time: bool,
+    optimize_phase: bool,
+    *,
+    min_dt_prec: Optional[float] = ...,
+    return_opt_info: Literal[True],
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...  # pragma: no cover - overloads
+
+
 def optimized_inner_product(
     signal1: FrequencySeries,
     signal2: FrequencySeries,
@@ -586,7 +644,7 @@ def optimized_inner_product(
     actual integral calculation via an IFFT.
 
     In contrast to :code:`inner_product_computation`, this function
-    optimizes the inner product over time and phase shifts.
+    can optimize the inner product over time and/or phase shifts.
 
     Parameters
     ----------
@@ -751,7 +809,7 @@ def optimized_inner_product(
     # -- Handle wrap-around of signal
     number_to_roll = match_series.size // 2  # Arbitrary value, no deep meaning
 
-    match_series = np.roll(match_series, shift=number_to_roll)
+    match_series = cast(u.Quantity, np.roll(match_series, shift=number_to_roll))
     match_series.shift(-match_series.times[number_to_roll])
 
     if optimize_phase:
@@ -768,7 +826,7 @@ def optimized_inner_product(
         peak_time = 0.0 * match_series.times.unit
         peak_index = np.searchsorted(
             match_series.xindex.value, peak_time.value, side='left'
-        )
+        )  # type: ignore[call-overload]
         match_result = _match_series[peak_index]
 
     if return_opt_info:
@@ -788,6 +846,27 @@ def optimized_inner_product(
 def next_power_of_two(x):
     """Calculate next power of two of the input."""
     return 1 if x == 0 else int(2 ** np.ceil(np.log2(x)))
+
+
+@overload
+def norm(
+    signal: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[False] = ...,
+    **kwargs,
+) -> u.Quantity: ...  # pragma: no cover - overloads
+
+
+@overload
+def norm(
+    signal: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[True],
+    **kwargs,
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...  # pragma: no cover - overloads
 
 
 def norm(
@@ -836,6 +915,29 @@ def norm(
     else:
         out[1]['match_series'] = np.sqrt(out[1]['match_series'])
         return np.sqrt(out[0]), out[1]
+
+
+@overload
+def overlap(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[False] = ...,
+    **kwargs,
+) -> u.Quantity: ...  # pragma: no cover - overloads
+
+
+@overload
+def overlap(
+    signal1: TimeSeries | FrequencySeries,
+    signal2: TimeSeries | FrequencySeries,
+    *args,
+    return_opt_info: Literal[True],
+    **kwargs,
+) -> tuple[
+    u.Quantity,
+    dict[Literal['match_series', 'peak_phase', 'peak_time'], u.Quantity | TimeSeries],
+]: ...  # pragma: no cover - overloads
 
 
 def overlap(

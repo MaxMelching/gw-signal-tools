@@ -1,5 +1,5 @@
 # -- Standard Lib Imports
-from typing import Optional, Literal
+from typing import Optional, Literal, Sequence
 
 # -- Third Party Imports
 import numpy as np
@@ -109,11 +109,11 @@ def pad_to_dx(
 
 def adjust_x_range(
     signal: Series,
-    x_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
+    x_range: Optional[Sequence[float | u.Quantity]] = None,
     fill_val: float | u.Quantity = 0.0,
-    fill_range: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
+    fill_range: Optional[Sequence[float | u.Quantity]] = None,
     copy: bool = True,
-) -> FrequencySeries:
+) -> Series:
     """
     Pad :code:'signal' to xindex values specified by :code:`x_range`,
     while potentially setting its values in the interval
@@ -129,19 +129,19 @@ def adjust_x_range(
     ----------
     signal : ~gwpy.types.Series
         Signal to be restricted.
-    x_range : list[float] or list[~astropy.units.Quantity]
-        Two-tuple specifying lower and upper xindex bounds of the
-        returned signal. Based on this value, :code:`signal` will either
-        be padded with :code:`fill_val` or trimmed.
+    x_range : Sequence[float or ~astropy.units.Quantity], optional, default = None
+        Two-member sequence specifying lower and upper xindex bounds of
+        the returned signal. Based on this value, :code:`signal` will
+        either be padded with :code:`fill_val` or trimmed.
 
         Main usecase is preparation for an inverse Fourier
         transformation, where certain frequency ranges are required.
     fill_val : float or ~astropy.units.Quantity, optional, default = 0.0
         Value that will be used to fill :code:`signal` outside of
         :code:`x_range`.
-    fill_range : list[float] or list[~astropy.units.Quantity], optional, default = False
-        Two-tuple specifying lower and upper xindex bounds of the
-        interval outside of which the returned signal is filled with
+    fill_range : Sequence[float or ~astropy.units.Quantity], optional, default = None
+        Two-member sequence specifying lower and upper xindex bounds of
+        the interval outside of which the returned signal is filled with
         :code:`fill_val`.
     copy : bool, optional, default = True
         Determines if the input signal is copied before performing
@@ -336,7 +336,7 @@ def adjust_x_range(
 def fill_x_range(
     signal: Series,
     fill_val: float | u.Quantity,
-    fill_bounds: tuple[float, float] | tuple[u.Quantity, u.Quantity],
+    fill_bounds: Sequence[float | u.Quantity],
     copy: bool = False,
 ) -> Series:
     """
@@ -351,7 +351,7 @@ def fill_x_range(
         Signal to be (potentially) filled.
     fill_val : float or ~astropy.units.Quantity
         Value to fill with.
-    fill_bounds : tuple[float, float] or tuple[~astropy.units.Quantity, ~astropy.units.Quantity]
+    fill_bounds : Sequence[float or ~astropy.units.Quantity]
         Bounds of interval outside of which :code:`signal` is filled.
         Must have length 2, but members can be None to indicate that no
         filling shall be done on the respective end of the interval.
@@ -501,7 +501,7 @@ def signal_at_xindex(
     signal: Series,
     target_xindex: np.ndarray | u.Quantity | Index,
     fill_val: float | u.Quantity = None,
-    fill_bounds: Optional[tuple[float, float] | tuple[u.Quantity, u.Quantity]] = None,
+    fill_bounds: Optional[Sequence[float | u.Quantity]] = None,
     full_metadata: bool = False,
 ) -> FrequencySeries:
     """
@@ -527,7 +527,7 @@ def signal_at_xindex(
 
         If None (the default), the decision is passed on to the function
         that is used for interpolation, i.e. `~numpy.interp`.
-    fill_bounds : ~numpy.array or ~astropy.units.Quantity, optional, default = None
+    fill_bounds : Sequence[float or u.Quantity], optional, default = None
         In case only a certain region inside of
         :code:`target_xindex` is supposed to not (!) be filled with
         :code:`fill_val`, the boundaries of this region can be specified

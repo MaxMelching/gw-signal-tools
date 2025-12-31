@@ -7,11 +7,17 @@ import astropy.units as u
 from gwpy.timeseries import TimeSeries
 from gwpy.frequencyseries import FrequencySeries
 from gwpy.types import Index, Series
-from lalsimulation.gwsignal import (
-    gwsignal_get_waveform_generator,
-    GravitationalWaveGenerator,
-)
-import lalsimulation.gwsignal.core.waveform as wfm
+
+try:
+    from lalsimulation.gwsignal import (
+        gwsignal_get_waveform_generator,
+        GravitationalWaveGenerator,
+    )
+    import lalsimulation.gwsignal.core.waveform as wfm
+
+    LAL_AVAILABLE = True
+except ImportError:
+    LAL_AVAILABLE = False
 
 # -- Local Package Imports
 from ..logging import logger
@@ -605,198 +611,205 @@ def signal_at_xindex(
 
 
 # -- Wrapper functions for strain generation ----------------------------------
-_CORRECT_H_UNIT_TIME: u.Unit = u.strain
-_CORRECT_H_UNIT_FREQU: u.Unit = u.strain * u.s
-# -- Can be set to 1 for easy tests omitting units
+if LAL_AVAILABLE:
+    _CORRECT_H_UNIT_TIME: u.Unit = u.strain
+    _CORRECT_H_UNIT_FREQU: u.Unit = u.strain * u.s
+    # -- Can be set to 1 for easy tests omitting units
 
+    def get_strain(
+        params: dict[str, float | u.Quantity],
+        domain: Literal['time', 'frequency'],
+        generator: GravitationalWaveGenerator,
+        mode: Optional[Literal['plus', 'cross', 'mixed']] = None,
+    ) -> FrequencySeries | TimeSeries:
+        """
+        Wrapper function that allows to generate various types of
+        gravitational wave strain.
 
-def get_strain(
-    params: dict[str, float | u.Quantity],
-    domain: Literal['time', 'frequency'],
-    generator: GravitationalWaveGenerator,
-    mode: Optional[Literal['plus', 'cross', 'mixed']] = None,
-) -> FrequencySeries | TimeSeries:
-    """
-    Wrapper function that allows to generate various types of
-    gravitational wave strain.
+        Parameters
+        ----------
+        params : dict[str, float or ~astropy.units.Quantity]
+            Parameters to use for waveform generation. Is passed straight to
+            :code:`~lalsimulation.gwsignal.core.waveform.GenerateTDWaveform`
+            or :code: `~lalsimulation.gwsignal.core.waveform.
+            GenerateFDWaveform`, depending on the value of :code:`domain`.
 
-    Parameters
-    ----------
-    params : dict[str, float or ~astropy.units.Quantity]
-        Parameters to use for waveform generation. Is passed straight to
-        :code:`~lalsimulation.gwsignal.core.waveform.GenerateTDWaveform`
-        or :code: `~lalsimulation.gwsignal.core.waveform.
-        GenerateFDWaveform`, depending on the value of :code:`domain`.
+            Moreover, extrinsic parameters as accepted by
+            :code:`~lalsimulation.gwsignal.core.gw.
+            GravitationalWavePolarizations.strain` can be passed in the same
+            dictionary. If none of them are given, no projection on a
+            detector is performed and instead, the output is generated based
+            on the given :code:`mode`.
+        domain : Literal['time', 'frequency']
+            Determines domain that waveform is generated in.
+        generator : ~lalsimulation.gwsignal.core.waveform.GravitationalWaveGenerator
+            Instance of :code:`~lalsimulation.gwsignal.core.waveform.
+            GravitationalWaveGenerator` class (or a subclass thereof) that
+            can be called for waveform generation.
+        mode : Literal['plus', 'cross', 'mixed'], optional, default = None
+            If output is not projected on a detector, this argument
+            determines which strain is returned. Can be :code:`'plus'` (only
+            plus polarization is returned), :code:`'cross'` (only cross
+            polarization is returned) or :code:`'mixed'` (combination
+            :math:`h = h_+ - i h_{\\cross}` is returned).
 
-        Moreover, extrinsic parameters as accepted by
-        :code:`~lalsimulation.gwsignal.core.gw.
-        GravitationalWavePolarizations.strain` can be passed in the same
-        dictionary. If none of them are given, no projection on a
-        detector is performed and instead, the output is generated based
-        on the given :code:`mode`.
-    domain : Literal['time', 'frequency']
-        Determines domain that waveform is generated in.
-    generator : ~lalsimulation.gwsignal.core.waveform.GravitationalWaveGenerator
-        Instance of :code:`~lalsimulation.gwsignal.core.waveform.
-        GravitationalWaveGenerator` class (or a subclass thereof) that
-        can be called for waveform generation.
-    mode : Literal['plus', 'cross', 'mixed'], optional, default = None
-        If output is not projected on a detector, this argument
-        determines which strain is returned. Can be :code:`'plus'` (only
-        plus polarization is returned), :code:`'cross'` (only cross
-        polarization is returned) or :code:`'mixed'` (combination
-        :math:`h = h_+ - i h_{\\cross}` is returned).
+        Returns
+        -------
+        ~gwpy.timeseries.TimeSeries or ~gwpy.frequencyseries.FrequencySeries
+            Gravitational wave strain.
+        """
+        # TODO: remove temp_factor once correct version is in lal release
+        if domain == 'time':
+            generator_func = wfm.GenerateTDWaveform
+            temp_factor = _CORRECT_H_UNIT_TIME
+        elif domain == 'frequency':
+            generator_func = wfm.GenerateFDWaveform
+            temp_factor = _CORRECT_H_UNIT_FREQU
+        else:
+            raise ValueError("Invalid domain, select either `'time'` or `'frequency'`.")
 
-    Returns
-    -------
-    ~gwpy.timeseries.TimeSeries or ~gwpy.frequencyseries.FrequencySeries
-        Gravitational wave strain.
-    """
-    # TODO: remove temp_factor once correct version is in lal release
-    if domain == 'time':
-        generator_func = wfm.GenerateTDWaveform
-        temp_factor = _CORRECT_H_UNIT_TIME
-    elif domain == 'frequency':
-        generator_func = wfm.GenerateFDWaveform
-        temp_factor = _CORRECT_H_UNIT_FREQU
-    else:
-        raise ValueError("Invalid domain, select either `'time'` or `'frequency'`.")
+        expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
+        # extr_params_mask = np.isin(params.keys(), expected_extr_params, assume_unique=True)
+        extr_params_mask = [param in params for param in expected_extr_params]
+        if np.any(extr_params_mask):
+            if not np.all(extr_params_mask):
+                raise ValueError(
+                    'Need complete set of extrinsic parameters: '
+                    + f'{expected_extr_params}'
+                )
 
-    expected_extr_params = ['det', 'ra', 'dec', 'psi', 'tgps']
-    # extr_params_mask = np.isin(params.keys(), expected_extr_params, assume_unique=True)
-    extr_params_mask = [param in params for param in expected_extr_params]
-    if np.any(extr_params_mask):
-        if not np.all(extr_params_mask):
-            raise ValueError(
-                'Need complete set of extrinsic parameters: '
-                + f'{expected_extr_params}'
-            )
+            return_detector_output = True
+            intrinsic_params = params.copy()
+            extrinsic_params = {}
 
-        return_detector_output = True
-        intrinsic_params = params.copy()
-        extrinsic_params = {}
+            for param in expected_extr_params:
+                extrinsic_params[param] = intrinsic_params.pop(param)
 
-        for param in expected_extr_params:
-            extrinsic_params[param] = intrinsic_params.pop(param)
+            # TODO: check if copy is less efficient than looping over params
+            # and putting in intrinsic_params or extrinsic_params using .get
+        else:
+            return_detector_output = False
+            intrinsic_params = params
 
-        # TODO: check if copy is less efficient than looping over params
-        # and putting in intrinsic_params or extrinsic_params using .get
-    else:
-        return_detector_output = False
-        intrinsic_params = params
+        if mode is None:
+            mode = 'plus'
+        else:
+            if return_detector_output:
+                logger.info(
+                    '`mode` argument has been set, but is ignored because '
+                    'extrinsic parameters have been passed.'
+                )
 
-    if mode is None:
-        mode = 'plus'
-    else:
         if return_detector_output:
-            logger.info(
-                '`mode` argument has been set, but is ignored because '
-                'extrinsic parameters have been passed.'
+            return (
+                generator_func(intrinsic_params, generator).strain(**extrinsic_params)
+                * temp_factor
             )
+        else:
+            match mode:
+                case 'plus':
+                    return generator_func(intrinsic_params, generator)[0] * temp_factor
+                case 'cross':
+                    return generator_func(intrinsic_params, generator)[1] * temp_factor
+                case 'mixed':
+                    hp, hc = generator_func(intrinsic_params, generator)
 
-    if return_detector_output:
-        return (
-            generator_func(intrinsic_params, generator).strain(**extrinsic_params)
-            * temp_factor
-        )
-    else:
-        match mode:
-            case 'plus':
-                return generator_func(intrinsic_params, generator)[0] * temp_factor
-            case 'cross':
-                return generator_func(intrinsic_params, generator)[1] * temp_factor
-            case 'mixed':
-                hp, hc = generator_func(intrinsic_params, generator)
+                    # -- Note: we choose to construct strain according to
+                    # -- the LALconvention, i.e. as h_+ + i * h_x and not
+                    # -- according to h_+ - i * h_x
 
-                # -- Note: we choose to construct strain according to
-                # -- the LALconvention, i.e. as h_+ + i * h_x and not
-                # -- according to h_+ - i * h_x
+                    if domain == 'time':
+                        return (hp + 1.0j * hc) * temp_factor
+                    else:
+                        # -- Need negative Fourier components as well
+                        return (
+                            FrequencySeries(
+                                np.flip(
+                                    (np.conjugate(hp) + 1.0j * np.conjugate(hc))[1:]
+                                ),
+                                f0=-hp.frequencies[-1],
+                                df=hp.df,
+                            ).append(hp + 1.0j * hc, inplace=True)
+                            * temp_factor
+                        )
+                case _:
+                    raise ValueError('Invalid `mode`.')
 
-                if domain == 'time':
-                    return (hp + 1.0j * hc) * temp_factor
-                else:
-                    # -- Need negative Fourier components as well
-                    return (
-                        FrequencySeries(
-                            np.flip((np.conjugate(hp) + 1.0j * np.conjugate(hc))[1:]),
-                            f0=-hp.frequencies[-1],
-                            df=hp.df,
-                        ).append(hp + 1.0j * hc, inplace=True)
-                        * temp_factor
-                    )
-            case _:
-                raise ValueError('Invalid `mode`.')
+    def get_wf_generator(
+        approximant: str,
+        domain: Literal['frequency', 'time'] = 'frequency',
+        cache: Optional[bool] = None,
+        *args,
+        **kwargs,
+    ) -> WFGen:
+        """
+        Generates a function that can serve as a convenient waveform
+        generator since its only input is a parameter dictionary.
 
+        The returned function fulfils the requirements of the
+        :code:`wf_generator` argument of a ``~gw_signal_tools.fisher.
+        FisherMatrix``.
 
-def get_wf_generator(
-    approximant: str,
-    domain: Literal['frequency', 'time'] = 'frequency',
-    cache: Optional[bool] = None,
-    *args,
-    **kwargs,
-) -> WFGen:
-    """
-    Generates a function that can serve as a convenient waveform
-    generator since its only input is a parameter dictionary.
+        Parameters
+        ----------
+        approximant : str
+            Name of a waveform model that is accepted by the
+            ``~lalsimulation.gwsignal.core.waveform.
+            LALCompactBinaryCoalescenceGenerator`` class.
+        domain : Literal['frequency', 'time'], optional, default = 'frequency'
+            String representing the domain where the Fisher matrix is
+            computed. Accepted values are :code:`'frequency'` and
+            :code:`'time'`.
+        cache : boolean, optional, default = None
+            Parameter that controls whether or not the returned function is
+            capable of waveform caching. If None, the current setting from
+            the `~gw_signal_tools.caching` module is taken. If true, caching
+            is enabled, else it is not.
+        args, kwargs :
+            All other arguments are passed on to `get_strain`.
 
-    The returned function fulfils the requirements of the
-    :code:`wf_generator` argument of a ``~gw_signal_tools.fisher.
-    FisherMatrix``.
+        Returns
+        -------
+        ~gw_signal_tools.types.WFGen
+            Function that takes dicionary of waveform parameters as
+            input and produces a waveform (stored in a GWpy ``TimeSeries``
+            or ``FrequencySeries``). Can, for example, be used as input
+            to :code:`wf_generator` argument during initialization of a
+            ``FisherMatrix``.
 
-    Parameters
-    ----------
-    approximant : str
-        Name of a waveform model that is accepted by the
-        ``~lalsimulation.gwsignal.core.waveform.
-        LALCompactBinaryCoalescenceGenerator`` class.
-    domain : Literal['frequency', 'time'], optional, default = 'frequency'
-        String representing the domain where the Fisher matrix is
-        computed. Accepted values are :code:`'frequency'` and
-        :code:`'time'`.
-    cache : boolean, optional, default = None
-        Parameter that controls whether or not the returned function is
-        capable of waveform caching. If None, the current setting from
-        the `~gw_signal_tools.caching` module is taken. If true, caching
-        is enabled, else it is not.
-    args, kwargs :
-        All other arguments are passed on to `get_strain`.
+        See Also
+        --------
+        gw_signal_tools.waveform.get_strain :
+            Function that is wrapped here. All arguments provided in
+            addition to the mandatory ones are passed to this function
+            (just like :code:`domain` is as well).
+        lalsimulation.gwsignal.gwsignal_get_waveform_generator :
+            Function used to get a generator from :code:`approximant`. This
+            is passed to the :code:`generator` argument of
+            :code:`get_strain`.
+        """
+        generator = gwsignal_get_waveform_generator(approximant)
 
-    Returns
-    -------
-    ~gw_signal_tools.types.WFGen
-        Function that takes dicionary of waveform parameters as
-        input and produces a waveform (stored in a GWpy ``TimeSeries``
-        or ``FrequencySeries``). Can, for example, be used as input
-        to :code:`wf_generator` argument during initialization of a
-        ``FisherMatrix``.
+        def wf_generator(wf_params):
+            return get_strain(wf_params, domain, generator, *args, **kwargs)
 
-    See Also
-    --------
-    gw_signal_tools.waveform.get_strain :
-        Function that is wrapped here. All arguments provided in
-        addition to the mandatory ones are passed to this function
-        (just like :code:`domain` is as well).
-    lalsimulation.gwsignal.gwsignal_get_waveform_generator :
-        Function used to get a generator from :code:`approximant`. This
-        is passed to the :code:`generator` argument of
-        :code:`get_strain`.
-    """
-    generator = gwsignal_get_waveform_generator(approximant)
+        if cache is None:
+            # -- Do whatever current default is
+            from ..caching import cache_func
 
-    def wf_generator(wf_params):
-        return get_strain(wf_params, domain, generator, *args, **kwargs)
+            return cache_func(wf_generator)
+        elif cache:
+            from ..caching import _cache
 
-    if cache is None:
-        # -- Do whatever current default is
-        from ..caching import cache_func
-
-        return cache_func(wf_generator)
-    elif cache:
-        from ..caching import _cache
-
-        return _cache(wf_generator)
-    else:
-        return wf_generator
+            return _cache(wf_generator)
+        else:
+            return wf_generator
+else:
+    logger.info(
+        'LALSimulation not available, waveform generation functions '
+        '(`get_strain`, `get_wf_generator`) in '
+        '`~gw_signal_tools.waveform.utils` are not available.'
+    )
 
 
 def apply_time_phase_shift(

@@ -26,11 +26,10 @@ maintainers = [
 ]
 
 # requires
-requires-python = '==3.11.5'
+requires-python = '>=3.9'  # Constrained by lal and certain syntax we use
 dependencies = [
   'gwpy>=3',
-  'lalsuite',
-  'matplotlib!=3.10.0',  # Causes some weird bug at the moment -> new gwpy release should solve this
+  'matplotlib',
   'numdifftools',
   'numpy',
   'scipy',
@@ -58,16 +57,19 @@ dynamic = [
 
 [project.optional-dependencies]
 dev = [
-  'black',
   'coverage',
   'mypy',
   'pre-commit',
   'pycbc',
   'pytest',
+  'ruff',
   'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
 ]
 jupyter = [
   'jupyter',
+]
+lal = [
+  'lalsuite',
 ]
 pyseobnr = [
   'pyseobnr',

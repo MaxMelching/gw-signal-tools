@@ -1,6 +1,6 @@
 # -- Standard Lib Imports
 from __future__ import annotations  # Enables type hinting own type in a class
-from typing import Optional, Any, Literal, Self, TYPE_CHECKING
+from typing import Optional, Any, Self, TYPE_CHECKING
 
 # from functools import cached_property
 # TODO: use for .fisher and .fisher_inverse?
@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 from ..units import preferred_unit_system
 from ..logging import logger
 from ..waveform import (
-    get_wf_generator,
     inner_product,
     norm,
     overlap,
@@ -463,10 +462,9 @@ class FisherMatrix:
             about value, frequencies and units, which are all required
             for the calculations that are carried out.
 
-            Convenient options are the methods
-            :code:`~gw_signal_tools.waveform.get_wf_generator` or
-            :code:`{type(self).__name__}.get_wf_generator`, which
-            generate a suitable function from a few arguments.
+            A convenient option is to use the method
+            :code:`~gw_signal_tools.waveform.get_wf_generator`, which
+            generates a suitable function from a few arguments.
 
         Returns
         -------
@@ -1082,47 +1080,6 @@ class FisherMatrix:
     # Plans for plotting: make one function plot_uncertainty where
     # color denotes uncertainty in fisher_inverse. And then one general
     # function plot where output is plot of fisher and fisher_inverse
-
-    @staticmethod
-    def get_wf_generator(
-        approximant: str,
-        domain: Literal['frequency', 'time'] = 'frequency',
-        *args,
-        **kwargs,
-    ) -> FDWFGen:
-        """
-        Generates a function that fulfils the requirements of the
-        :code:`wf_generator` argument of a ``FisherMatrix`` by calling
-        :code:`~gw_signal_tools.waveform.get_wf_generator`.
-
-        Parameters
-        ----------
-        approximant : str
-            Name of a waveform model that is accepted by the
-            ``~lalsimulation.gwsignal.core.waveform.
-            LALCompactBinaryCoalescenceGenerator`` class.
-        domain : Literal['frequency', 'time'], optional, default = 'frequency'
-            String representing the domain where the Fisher matrix is
-            computed. Accepted values are :code:`'frequency'` and
-            :code:`'time'`.
-
-        Returns
-        -------
-        ~gw_signal_tools.types.FDWFGen
-            Function that takes dicionary of waveform parameters as
-            input and produces a waveform (stored in a GWPy
-            ``FrequencySeries``). Can, for example, be used as input
-            to :code:`wf_generator` argument during initialization of a
-            ``FisherMatrix``.
-
-        See Also
-        --------
-        gw_signal_tools.waveform.get_strain :
-            Function that is wrapped here. All arguments provided in
-            addition to the mandatory ones are passed to this function
-            (just like `domain` is as well).
-        """
-        return get_wf_generator(approximant, domain, *args, **kwargs)
 
     # -- Some Python class related goodies
     _print_slots = ('params_to_vary',)  #'point',)

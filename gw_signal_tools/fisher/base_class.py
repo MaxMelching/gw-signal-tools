@@ -240,12 +240,16 @@ class FisherMatrix:
             )
 
     def _calc_fisher(self) -> None:
-        """Helper function that calculates the Fisher matrix for this instance."""
+        """Calculate the Fisher matrix for this instance."""
+        self.metadata.pop(
+            'return_info', None
+        )  # Only has class-internal effect, thus we can just pop it
         self._fisher, deriv_info = fisher_matrix(
             point=self.point,
             params_to_vary=self.params_to_vary,
             wf_generator=self.wf_generator,
-            **(self.metadata | {'return_info': True}),
+            return_info=True,
+            **self.metadata,
         )
 
         derivs, infos = {}, {}

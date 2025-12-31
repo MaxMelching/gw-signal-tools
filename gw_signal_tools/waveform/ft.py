@@ -275,7 +275,7 @@ except ImportError:
         """
         if isinstance(signal, TimeSeries):
             index_shift = int(time_shift / signal.dt)
-            _signal = np.roll(signal, -index_shift)
+            _signal: TimeSeries = np.roll(signal, -index_shift)
             _signal.t0 = _signal.t0 + index_shift * _signal.dt  # NOT the same as +=
             # -- Note: we do not add time_shift because of potential
             # -- round-off errors (index_shift*dt is more accurate)

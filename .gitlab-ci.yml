@@ -42,6 +42,11 @@ installation:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_COMMIT_BRANCH
       # when: manual  # Also possible for certain tests
+      changes:
+      - .gitlab-ci.yml
+      - .gitignore  # Problematic files might be ignored
+      - pyproject.toml  # Because test config might be changed
+      - gw_signal_tools/**  # Only run if code changes
 
 
 # -- Verify code is running correctly
@@ -65,10 +70,11 @@ testing:
     - if: $CI_COMMIT_BRANCH
       # when: manual  # Also possible for certain tests
       changes:
+      - .gitlab-ci.yml
+      - .gitignore  # Problematic files might be ignored
+      - pyproject.toml  # Because test config might be changed
       - gw_signal_tools/**  # Only run if code changes
       - tests/**
-      - pyproject.toml  # Because test config might be changed
-      - .gitlab-ci.yml
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed

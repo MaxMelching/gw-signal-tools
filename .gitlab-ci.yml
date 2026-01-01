@@ -29,6 +29,7 @@ stages:
 installation:
   stage: install
   script:
+    - conda install -c conda-forge pygsl_lite  # For pyseobnr
     - pip install --find-links=${PIP_CACHE_DIR} '.[dev,docs,jupyter,lal,pyseobnr]'
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging

@@ -52,9 +52,9 @@ installation:
 # -- Verify code is running correctly
 # testing:
 #   stage: test
-#   dependencies:
-#     - installation
-#   # -- Unfortunately, extends does not actually extend the script, so not really useful for us
+#   needs:
+#     - job: installation
+#       artifacts: true
 #   script:
 #     - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite  # Think it would also find cache without --find-links, but we make sure of that
 #     - python -m pip list installed  # Print all packages for debugging
@@ -99,6 +99,12 @@ build_docs:
   rules:
     # -- Needs to be built for both commits and tags, for checks for former
     # -- and as dependency for latter
+    - changes:
+      - .gitlab-ci.yml
+      - pyproject.toml
+      - README.md  # Is used in docs
+      - docs/**
+      - gw_signal_tools/**  # In case docstrings are changed
 
 
 # -- Deploy docs to pages

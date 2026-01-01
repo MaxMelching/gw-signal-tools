@@ -87,7 +87,6 @@ build_docs:
   needs:
     - job: installation
       artifacts: true
-      optional: true  # In case installation is skipped
   script:
     - apt-get update && apt-get install -y pandoc
     - pip install --find-links=PIP_CACHE_DIR .[dev,docs,lal]

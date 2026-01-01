@@ -10,6 +10,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath('.'))
 sys.path.insert(0, os.path.abspath('../'))
 sys.path.insert(0, os.path.abspath('../gw_signal_tools/'))
@@ -22,7 +23,8 @@ project = 'gw-signal-tools'
 author = 'Max Melching, Frank Ohme'
 copyright = '2024, ' + author
 
-from gw_signal_tools._version import version as VERSION
+from gw_signal_tools._version import version as VERSION  # noqa: E402
+
 release = VERSION
 # release = 'v0.2.0'
 
@@ -39,15 +41,19 @@ extensions = [
     'sphinx.ext.autosectionlabel',  # Enables :ref:`section name`
     'sphinxcontrib.programoutput',
     'numpydoc',
-    'm2r2',  # including markdown files
-    # 'sphinx_mdinclude',  # including markdown files -> then comment m2r2 -> seems to work much better -> but not compatible with nbsphinx...
     'nbsphinx',
-    'nbsphinx_link'
+    'nbsphinx_link',
+    'myst_parser',  # Modern markdown parser - replaces m2r2
 ]
 
 nbsphinx_execute = 'never'
 nbsphinx_allow_errors = True
 
+# Enable markdown files to be processed by myst_parser
+source_suffix = {
+    '.rst': 'restructuredtext',
+    '.md': 'markdown',
+}
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -75,10 +81,9 @@ html_static_path = ['_static']
 
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
-    # ----- Options for TOC sidebar -----
+    # -- Options for TOC sidebar
     'collapse_navigation': False,  # Makes navigation expandable
     'sticky_navigation': True,
     'navigation_depth': 4,
-    'titles_only': False
+    'titles_only': False,
 }

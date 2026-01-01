@@ -9,26 +9,18 @@ gw\_signal\_tools.fisher package
 Submodules
 ----------
 
-gw\_signal\_tools.fisher.fisher module
---------------------------------------
+gw\_signal\_tools.fisher.base\_class module
+-------------------------------------------
 
-.. automodule:: gw_signal_tools.fisher.fisher
+.. automodule:: gw_signal_tools.fisher.base_class
    :members:
    :undoc-members:
    :show-inheritance:
 
-gw\_signal\_tools.fisher.fisher_network module
-----------------------------------------------
+gw\_signal\_tools.fisher.fisher\_calc\_utils module
+---------------------------------------------------
 
-.. automodule:: gw_signal_tools.fisher.fisher_network
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-gw\_signal\_tools.fisher.fisher\_utils module
----------------------------------------------
-
-.. automodule:: gw_signal_tools.fisher.fisher_utils
+.. automodule:: gw_signal_tools.fisher.calc_utils
    :members:
    :undoc-members:
    :show-inheritance:
@@ -37,6 +29,14 @@ gw\_signal\_tools.fisher.distances module
 -----------------------------------------
 
 .. automodule:: gw_signal_tools.fisher.distances
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+gw\_signal\_tools.fisher.fisher\_network module
+-----------------------------------------------
+
+.. automodule:: gw_signal_tools.fisher.network
    :members:
    :undoc-members:
    :show-inheritance:

@@ -65,6 +65,17 @@ dev = [
   'ruff',
   'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
 ]
+docs = [
+  'ipykernel',  # Required for notebook execution
+  'myst-parser',  # Modern replacement for m2r2 - better maintained
+  'nbsphinx>=0.9.0',
+  'nbsphinx-link',
+  'numpydoc',
+  'sphinx>=5.0',
+  'sphinx-rtd-theme',
+  'sphinxcontrib-programoutput',
+  # 'pandoc',  # Required by nbsphinx for markdown conversion -> must be installed separately and not via pip (e.g. via conda, "conda install -c conda-forge pandoc")
+]
 jupyter = [
   'jupyter',
 ]

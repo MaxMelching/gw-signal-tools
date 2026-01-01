@@ -50,9 +50,9 @@ dynamic = [
 
 
 [project.urls]
-"Source Code" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools'
+"Source Code" = 'https://gitlab.com/MaxMelching/gw-signal-tools'
 # "Documentation" = ''  # to be built
-"Bug Tracker" = 'https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/issues'
+"Bug Tracker" = 'https://gitlab.com/MaxMelching/gw-signal-tools/-/issues'
 
 
 [project.optional-dependencies]

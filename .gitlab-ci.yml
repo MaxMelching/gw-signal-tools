@@ -29,8 +29,8 @@ stages:
 installation:
   stage: install
   script:
-    - pip install pygsl_lite  # For pyseobnr
-    - pip install --find-links=${PIP_CACHE_DIR} '.[dev,docs,jupyter,lal,pyseobnr]'
+    # - pip install pygsl_lite  # For pyseobnr
+    - pip install --find-links=${PIP_CACHE_DIR} '.[dev,docs,jupyter,lal']  #,pyseobnr]'
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:

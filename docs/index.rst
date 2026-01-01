@@ -6,9 +6,6 @@
 Welcome to the gw-signal-tools documentation!
 =============================================
 
-gw-signal-tools
----------------
-
 .. toctree::
    :maxdepth: 1
    :caption: Contents
@@ -29,7 +26,6 @@ gw-signal-tools
    tutorials/fisher_tests.ipynb
    tutorials/units.ipynb
    tutorials/caching.ipynb
-   tutorials/performance_tests.ipynb
    tutorials/ft_doc.ipynb
 
 .. toctree::

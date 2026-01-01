@@ -109,7 +109,7 @@ gw_signal_tools = ["plot_stylesheet.sty"]
 write_to = 'gw_signal_tools/_version.py'
 version_scheme = 'no-guess-dev'
 local_scheme = 'dirty-tag'
-fallback_version = 'unknown'  # what is done if no version found -> or ''?
+fallback_version = 'v0.0.0'  # what is done if no version found -> or ''?
 
 
 # Syntax from https://mypy.readthedocs.io/en/stable/config_file.html#using-a-pyproject-toml-file

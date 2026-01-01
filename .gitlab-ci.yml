@@ -1,5 +1,6 @@
 # -- Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
 image: python:3.11.5  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
+# TODO: update to more recent python
 
 # -- General CI setups
 variables:
@@ -29,7 +30,7 @@ stages:
 installation:
   stage: install
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} '.[dev, jupyter, pyseobnr]'
+    - pip install --find-links=${PIP_CACHE_DIR} '.[dev,docs,jupyter,lal,pyseobnr]'
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
@@ -51,20 +52,23 @@ testing:
     - installation
   # -- Unfortunately, extends does not actually extend the script, so not really useful for us
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} .[dev]  # Think it would also find cache without --find-links, but we make sure of that
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev,lal]  # Think it would also find cache without --find-links, but we make sure of that
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
     # -- Previous lines just repeat what installation does, now testing
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     - coverage report
     - coverage html
-    # - mv htmlcov/ public/  # Huh, cannot acces this because no GitLab pages??
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'  # From https://gitlab.aei.uni-hannover.de/help/ci/testing/code_coverage.md#view-code-coverage-results-in-the-mr
   rules:
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_COMMIT_BRANCH
       # when: manual  # Also possible for certain tests
+    - changes:
+      - gw_signal_tools/**  # Only run if code changes
+      - tests/**
+      - pyproject.toml  # Because test config might be changed
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed

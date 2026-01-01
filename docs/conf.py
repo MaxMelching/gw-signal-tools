@@ -81,8 +81,7 @@ html_static_path = ['_static']
 
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
-    # ----- Options for TOC sidebar -----
+    # -- Options for TOC sidebar
     'collapse_navigation': False,  # Makes navigation expandable
     'sticky_navigation': True,
     'navigation_depth': 4,

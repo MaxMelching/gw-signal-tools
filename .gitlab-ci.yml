@@ -38,14 +38,22 @@ installation:
       # -- Unfortunately, the virtual environment is too large to be kept as an
       # -- artifact. Thus we cannot simply activate it again in testing job.
   rules:
+    # -- Remember: rules are evaluated top to bottom, first match applies
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
-    - if: $CI_COMMIT_BRANCH
-      # when: manual  # Also possible for certain tests
+    - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
+      - .gitignore  # Problematic files might have been ignored
       - .gitlab-ci.yml
-      - .gitignore  # Problematic files might be ignored
-      - pyproject.toml  # Because test config might be changed
+      - pyproject.toml  # Because dependencies might be changed
+      - gw_signal_tools/**  # Only run if code changes
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
+    - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
+      changes:
+      - .gitignore  # Problematic files might have been ignored
+      - .gitlab-ci.yml
+      - pyproject.toml  # Because dependencies might be changed
       - gw_signal_tools/**  # Only run if code changes
 
 
@@ -87,6 +95,7 @@ build_docs:
   needs:
     - job: installation
       artifacts: true
+      optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
   script:
     - apt-get update && apt-get install -y pandoc
     - pip install --find-links=PIP_CACHE_DIR .[dev,docs,lal]
@@ -97,11 +106,24 @@ build_docs:
     paths:
       - docs/_build/html/
   rules:
-    # -- Needs to be built for both commits and tags, for checks for former
-    # -- and as dependency for latter
-    - changes:
+    # -- Remember: rules are evaluated top to bottom, first match applies
+    - if: $CI_COMMIT_TAG
+      when: always  # Because it serves as dependency for deploy job
+    - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
+      changes:
+      - .gitignore  # Problematic files might have been ignored
       - .gitlab-ci.yml
-      - pyproject.toml
+      - pyproject.toml  # Because some config might be changed
+      - README.md  # Is used in docs
+      - docs/**
+      - gw_signal_tools/**  # In case docstrings are changed
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
+    - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
+      changes:
+      - .gitignore  # Problematic files might have been ignored
+      - .gitlab-ci.yml
+      - pyproject.toml  # Because some config might be changed
       - README.md  # Is used in docs
       - docs/**
       - gw_signal_tools/**  # In case docstrings are changed

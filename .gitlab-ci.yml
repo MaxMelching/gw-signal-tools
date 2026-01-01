@@ -1,6 +1,5 @@
 # -- Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
-image: python:3.11.5  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
-# TODO: update to more recent python
+image: python:3  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
 # -- General CI setups
 variables:
@@ -65,10 +64,11 @@ testing:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_COMMIT_BRANCH
       # when: manual  # Also possible for certain tests
-    - changes:
+      changes:
       - gw_signal_tools/**  # Only run if code changes
       - tests/**
       - pyproject.toml  # Because test config might be changed
+      - .gitlab-ci.yml
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed

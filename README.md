@@ -2,7 +2,7 @@
 [![coverage report](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/badges/main/coverage.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/commits/main)
 [![Latest Release](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/badges/release.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/releases)
 
-# gw_signal_tools
+# gw-signal-tools
 
 ## Description
 
@@ -10,20 +10,16 @@ Repository with files surrounding computations with waveforms from lal.
 
 ## Installation
 
-Since there is no lal-version for Python 3.12 yet, Python 3.11 is required
-to install this package.
+First of all, install the Python version of your choice (as long as it is >= 3.9).
 
-TODO: it is available now!!
-
-After that, clone the repo to some destination and then navigate
-there and run
+After that, clone the repo to some destination and then navigate there and run
 
 ```shell
 pip install .
 ```
 
-to install it as a Python package (adding `-e` after `install` enables editable
-mode). This syntax is convenient because it allows to install options via
+to install it as a Python package (adding `-e` after `install` enables editable mode).
+This syntax is convenient because it allows to install options via
 
 ```shell
 pip install .[option]
@@ -43,12 +39,11 @@ or (recommended if you have a SSH key pair) running
 pip install git+ssh://git@gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
 ```
 
-The last two commands also allow to install arbitrary versions of the package
-by adding, for example, `@v0.0.1` at the end of the prompt.
+The last two commands also allow to install arbitrary versions of the package by adding, for example, `@v0.0.1` at the end of the prompt.
 
 ## Project Status
 
-In progress.
+By now, most of the code should be in good shape, i.e. no big API changes are expected/planned at the moment.
 
 ## Change Log
 

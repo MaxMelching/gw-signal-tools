@@ -29,8 +29,7 @@ stages:
 installation:
   stage: install
   script:
-    # - pip install pygsl_lite  # For pyseobnr
-    - pip install --find-links=${PIP_CACHE_DIR} '.[dev,docs,jupyter,lal']  #,pyseobnr]'
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev,docs] jupyter lalsuite
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
@@ -52,7 +51,7 @@ testing:
     - installation
   # -- Unfortunately, extends does not actually extend the script, so not really useful for us
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} .[dev,lal]  # Think it would also find cache without --find-links, but we make sure of that
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite  # Think it would also find cache without --find-links, but we make sure of that
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
     # -- Previous lines just repeat what installation does, now testing

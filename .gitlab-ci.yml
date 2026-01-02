@@ -56,18 +56,20 @@ installation:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because dependencies might be changed
-        - gw_signal_tools/**  # Only run if code changes
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because dependencies might be changed
+          - gw_signal_tools/**  # Only run if code changes
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because dependencies might be changed
-        - gw_signal_tools/**  # Only run if code changes
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because dependencies might be changed
+          - gw_signal_tools/**  # Only run if code changes
 
 
 # -- Verify code is running correctly
@@ -92,20 +94,22 @@ testing:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because test config might be changed
-        - gw_signal_tools/**  # Only run if code changes
-        - tests/**
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because test config might be changed
+          - gw_signal_tools/**  # Only run if code changes
+          - tests/**
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because test config might be changed
-        - gw_signal_tools/**  # Only run if code changes
-        - tests/**
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because test config might be changed
+          - gw_signal_tools/**  # Only run if code changes
+          - tests/**
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
@@ -133,22 +137,24 @@ build_docs:
       when: always  # Because it serves as dependency for deploy job
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because some config might be changed
-        - README.md  # Is used in docs
-        - docs/**
-        - gw_signal_tools/**  # In case docstrings are changed
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because some config might be changed
+          - README.md  # Is used in docs
+          - docs/**
+          - gw_signal_tools/**  # In case docstrings are changed
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-        - .gitignore  # Problematic files might have been ignored
-        - .gitlab-ci.yml
-        - pyproject.toml  # Because some config might be changed
-        - README.md  # Is used in docs
-        - docs/**
-        - gw_signal_tools/**  # In case docstrings are changed
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because some config might be changed
+          - README.md  # Is used in docs
+          - docs/**
+          - gw_signal_tools/**  # In case docstrings are changed
 
 
 # -- Deploy docs to pages

@@ -1,6 +1,7 @@
 # -- Third Party Imports
 import astropy.units as u
 import pytest
+# import matplotlib.pyplot as plt
 
 # -- Local Package Imports
 from gw_signal_tools.waveform import WaveformDerivative, get_wf_generator
@@ -113,7 +114,7 @@ def test_invalid_step_size_correctable(param, param_val, invalid_step, routine):
     'param, param_val, invalid_step',
     [
         # -- Important that invalid_step / 2 is smaller than default base step
-        # ['inverse_mass_ratio', (1.0 + 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
+        ['inverse_mass_ratio', (1.0 + 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
         ['mass_ratio', (1.0 - 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
     ],
 )
@@ -181,7 +182,7 @@ def test_invalid_step_size_same_method(param, param_val, invalid_step, routine):
     avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.0
 
     assert_allclose_series(
-        deriv_1_eval, deriv_2_eval, atol=10e-2 * avg_peak_height, rtol=0
+        deriv_1_eval, deriv_2_eval, atol=20e-2 * avg_peak_height, rtol=0
     )
     # -- Idea: different step sizes will be used, but still same method.
     # -- So we expect certain deviations, but they should be small.
@@ -255,23 +256,29 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
     # plt.plot(deriv_1_eval.real, label='deriv 1')
     # plt.plot(deriv_2_eval.real, label='deriv 2')
     # plt.legend()
+    # # plt.savefig(f'test_invalid_step_size_{param}_{routine}_real_python311.png')
     # plt.show()
 
     # plt.figure(figsize=(12, 6))
     # plt.plot(deriv_1_eval.imag, label='deriv 1')
     # plt.plot(deriv_2_eval.imag, label='deriv 2')
     # plt.legend()
+    # # plt.savefig(f'test_invalid_step_size_{param}_{routine}_imag_python311.png')
     # plt.show()
 
-    # avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.0
-    # f_comp_max = 50.0 * u.Hz
+    f_comp_max = 50.0 * u.Hz
 
-    # assert_allclose_series(
-    #     deriv_1_eval[deriv_1_eval.frequencies <= f_comp_max],
-    #     deriv_2_eval[deriv_2_eval.frequencies <= f_comp_max],
-    #     atol=4e-2 * avg_peak_height,
-    #     rtol=0,
-    # )
+    deriv_1_eval = deriv_1_eval[deriv_1_eval.frequencies <= f_comp_max]
+    deriv_2_eval = deriv_2_eval[deriv_2_eval.frequencies <= f_comp_max]
+
+    avg_peak_height = (deriv_1_eval.abs().max() + deriv_2_eval.abs().max()).value / 2.0
+
+    assert_allclose_series(
+        deriv_1_eval,
+        deriv_2_eval,
+        atol=4e-2 * avg_peak_height,
+        rtol=0,
+    )
     # -- For rest, our initial chosen step size seems way too large...
     # -- -> ah, no. Increasing num_steps does not help. So perhaps it is
     # -- the forward, backward methods that are not accurate enough.

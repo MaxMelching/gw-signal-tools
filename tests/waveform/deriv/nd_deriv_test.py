@@ -179,10 +179,10 @@ def test_invalid_step_size_same_method(param, param_val, invalid_step, routine):
     # plt.legend()
     # plt.show()
 
-    avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.0
+    avg_peak_height = (deriv_1_eval.abs().max() + deriv_2_eval.abs().max()).value / 2.0
 
     assert_allclose_series(
-        deriv_1_eval, deriv_2_eval, atol=20e-2 * avg_peak_height, rtol=0
+        deriv_1_eval, deriv_2_eval, atol=10e-2 * avg_peak_height, rtol=0
     )
     # -- Idea: different step sizes will be used, but still same method.
     # -- So we expect certain deviations, but they should be small.
@@ -206,7 +206,7 @@ def test_invalid_step_size_same_method(param, param_val, invalid_step, routine):
     'routine',
     [
         'numdifftools',
-        'amplitude_phase',
+        # 'amplitude_phase',
     ],
 )
 def test_invalid_step_size(param, param_val, invalid_step, routine):

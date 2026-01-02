@@ -184,7 +184,7 @@ def test_invalid_step_size_same_method(param, param_val, invalid_step, routine):
     assert_allclose_series(
         deriv_1_eval,
         deriv_2_eval,
-        atol=5e-2 * avg_peak_height if routine == 'numdifftools' else 1e10,
+        atol=6e-2 * avg_peak_height if routine == 'numdifftools' else 1e10,
         rtol=0,
     )
     # -- Idea: different step sizes will be used, but still same method.

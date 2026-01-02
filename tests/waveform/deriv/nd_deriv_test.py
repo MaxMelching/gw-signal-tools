@@ -238,6 +238,9 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
         deriv_routine=routine,
     )
 
+    deriv_1_eval = deriv_1()  # noqa: F841 - important to change routine
+    deriv_2_eval = deriv_2()  # noqa: F841 - important to change routine
+
     if routine == 'numdifftools':
         assert deriv_1.method != deriv_2.method
         assert deriv_2.method == 'central'
@@ -247,9 +250,6 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
 
         assert deriv_1.phase_deriv.method != deriv_2.phase_deriv.method
         assert deriv_2.phase_deriv.method == 'central'
-
-    # deriv_1_eval = deriv_1()
-    # deriv_2_eval = deriv_2()
 
     # plt.figure(figsize=(12, 6))
     # plt.plot(deriv_1_eval.real, label='deriv 1')

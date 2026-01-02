@@ -1,5 +1,5 @@
 # -- Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
-image: python:3.13  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
+image: python:3  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
 # -- General CI setups
 variables:

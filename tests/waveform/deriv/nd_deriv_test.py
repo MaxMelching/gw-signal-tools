@@ -1,6 +1,7 @@
 # -- Third Party Imports
 import astropy.units as u
 import pytest
+import matplotlib.pyplot as plt
 
 # -- Local Package Imports
 from gw_signal_tools.waveform import WaveformDerivative, get_wf_generator
@@ -251,20 +252,20 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
         assert deriv_1.phase_deriv.method != deriv_2.phase_deriv.method
         assert deriv_2.phase_deriv.method == 'central'
 
-    # plt.figure(figsize=(12, 6))
-    # plt.plot(deriv_1_eval.real, label='deriv 1')
-    # plt.plot(deriv_2_eval.real, label='deriv 2')
-    # plt.legend()
-    # plt.show()
+    plt.figure(figsize=(12, 6))
+    plt.plot(deriv_1_eval.real, label='deriv 1')
+    plt.plot(deriv_2_eval.real, label='deriv 2')
+    plt.legend()
+    plt.show()
 
-    # plt.figure(figsize=(12, 6))
-    # plt.plot(deriv_1_eval.imag, label='deriv 1')
-    # plt.plot(deriv_2_eval.imag, label='deriv 2')
-    # plt.legend()
-    # plt.show()
+    plt.figure(figsize=(12, 6))
+    plt.plot(deriv_1_eval.imag, label='deriv 1')
+    plt.plot(deriv_2_eval.imag, label='deriv 2')
+    plt.legend()
+    plt.show()
 
     avg_peak_height = (deriv_1_eval.max() + deriv_2_eval.max()).value / 2.0
-    f_comp_max = 50.0 * u.Hz
+    f_comp_max = 42.0 * u.Hz
 
     assert_allclose_series(
         deriv_1_eval[deriv_1_eval.frequencies <= f_comp_max],

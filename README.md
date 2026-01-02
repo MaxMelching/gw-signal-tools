@@ -1,6 +1,6 @@
-[![pipeline status](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/badges/main/pipeline.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/commits/main)
-[![coverage report](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/badges/main/coverage.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/commits/main)
-[![Latest Release](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/badges/release.svg)](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/releases)
+[![pipeline status](https://gitlab.com/MaxMelching/gw-signal-tools/badges/main/pipeline.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/commits/main)
+[![coverage report](https://gitlab.com/MaxMelching/gw-signal-tools/badges/main/coverage.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/commits/main)
+[![Latest Release](https://gitlab.com/MaxMelching/gw-signal-tools/-/badges/release.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/releases)
 
 # gw-signal-tools
 
@@ -30,13 +30,13 @@ Valid options for this package are `jupyter`, `dev`.
 Another possibility without the extra cloning step is to run
 
 ```shell
-pip install git+https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
+pip install git+https://gitlab.com/MaxMelching/gw-signal-tools.git
 ```
 
 or (recommended if you have a SSH key pair) running
 
 ```shell
-pip install git+ssh://git@gitlab.aei.uni-hannover.de/fohme/gw-signal-tools.git
+pip install git+ssh://git@gitlab.com/MaxMelching/gw-signal-tools.git
 ```
 
 The last two commands also allow to install arbitrary versions of the package by adding, for example, `@v0.0.1` at the end of the prompt.
@@ -47,7 +47,7 @@ By now, most of the code should be in good shape, i.e. no big API changes are ex
 
 ## Change Log
 
-Click [here](https://gitlab.aei.uni-hannover.de/fohme/gw-signal-tools/-/releases).
+Click [here](https://gitlab.com/MaxMelching/gw-signal-tools/-/releases).
 
 ## Documentation
 

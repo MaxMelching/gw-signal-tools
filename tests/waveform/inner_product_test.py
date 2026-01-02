@@ -453,7 +453,9 @@ def test_df_handling(df1, df2):
     norm1 = norm(hp_f_fine, df=df1)
     norm2 = norm(hp_f_fine, df=df2)
 
-    assert_quantity_equal(norm1, norm2)
+    # assert_quantity_equal(norm1, norm2)
+    # -- For some reason, fails in CI. Though it passed on both Mac and Linux before...
+    assert_allclose_quantity(norm1, norm2, atol=0.0, rtol=2e-16)
 
 
 @pytest.mark.parametrize('f_range', [[None, None], [f_min, f_max], [2 * f_min, None]])

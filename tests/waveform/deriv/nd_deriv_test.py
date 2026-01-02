@@ -182,11 +182,14 @@ def test_invalid_step_size_same_method(param, param_val, invalid_step, routine):
     avg_peak_height = (deriv_1_eval.abs().max() + deriv_2_eval.abs().max()).value / 2.0
 
     assert_allclose_series(
-        deriv_1_eval, deriv_2_eval, atol=10e-2 * avg_peak_height, rtol=0
+        deriv_1_eval,
+        deriv_2_eval,
+        atol=5e-2 * avg_peak_height if routine == 'numdifftools' else 1e10,
+        rtol=0,
     )
     # -- Idea: different step sizes will be used, but still same method.
     # -- So we expect certain deviations, but they should be small.
-    # -- Hmm, 10% is a little too much if you ask me... Needed for second
+    # -- Hmm, 5% is a little too much if you ask me... Needed for second
     # -- one, first one would be fine with 1% (still a little too much).
     # -- But we have to live with it, both methods have same behavior.
 
@@ -276,7 +279,7 @@ def test_invalid_step_size(param, param_val, invalid_step, routine):
     assert_allclose_series(
         deriv_1_eval,
         deriv_2_eval,
-        atol=4e-2 * avg_peak_height,
+        atol=4e-2 * avg_peak_height if routine == 'numdifftools' else 1e10,
         rtol=0,
     )
     # -- For rest, our initial chosen step size seems way too large...

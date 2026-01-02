@@ -2,6 +2,12 @@
 image: python:3.13  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
 # -- General CI setups
+stages:
+  - install
+  - test
+  - docs
+  - deploy
+
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
@@ -17,12 +23,19 @@ before_script:  # Enabling virtual environment is recommended
   - python -m pip install --upgrade pip
 # Also possible: use extends. If venv not needed for every script, for example
 
-
-stages:
-  - install
-  - test
-  - docs
-  - deploy
+default:  # From https://gitlab.com/gwpy/gwpy/-/blob/main/.gitlab-ci.yml?ref_type=heads
+  # all jobs are, by default, interruptible
+  interruptible: true
+  # retry all jobs at most twice when gitlab-ci fails to start the job properly
+  # see https://docs.gitlab.com/ee/ci/yaml/#retry
+  retry:
+    max: 2
+    when:
+      - job_execution_timeout
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  # no job should take more than an hour
+  timeout: 1h
 
 
 # -- Test installation of repo
@@ -43,18 +56,18 @@ installation:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because dependencies might be changed
-      - gw_signal_tools/**  # Only run if code changes
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because dependencies might be changed
+        - gw_signal_tools/**  # Only run if code changes
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because dependencies might be changed
-      - gw_signal_tools/**  # Only run if code changes
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because dependencies might be changed
+        - gw_signal_tools/**  # Only run if code changes
 
 
 # -- Verify code is running correctly
@@ -63,6 +76,7 @@ testing:
   needs:
     - job: installation
       artifacts: true
+      optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
   script:
     - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite  # Think it would also find cache without --find-links, but we make sure of that
     - python -m pip list installed  # Print all packages for debugging
@@ -78,20 +92,20 @@ testing:
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because test config might be changed
-      - gw_signal_tools/**  # Only run if code changes
-      - tests/**
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because test config might be changed
+        - gw_signal_tools/**  # Only run if code changes
+        - tests/**
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because test config might be changed
-      - gw_signal_tools/**  # Only run if code changes
-      - tests/**
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because test config might be changed
+        - gw_signal_tools/**  # Only run if code changes
+        - tests/**
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
@@ -119,22 +133,22 @@ build_docs:
       when: always  # Because it serves as dependency for deploy job
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because some config might be changed
-      - README.md  # Is used in docs
-      - docs/**
-      - gw_signal_tools/**  # In case docstrings are changed
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because some config might be changed
+        - README.md  # Is used in docs
+        - docs/**
+        - gw_signal_tools/**  # In case docstrings are changed
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
       changes:
-      - .gitignore  # Problematic files might have been ignored
-      - .gitlab-ci.yml
-      - pyproject.toml  # Because some config might be changed
-      - README.md  # Is used in docs
-      - docs/**
-      - gw_signal_tools/**  # In case docstrings are changed
+        - .gitignore  # Problematic files might have been ignored
+        - .gitlab-ci.yml
+        - pyproject.toml  # Because some config might be changed
+        - README.md  # Is used in docs
+        - docs/**
+        - gw_signal_tools/**  # In case docstrings are changed
 
 
 # -- Deploy docs to pages

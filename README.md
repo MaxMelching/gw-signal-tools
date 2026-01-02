@@ -51,4 +51,4 @@ Click [here](https://gitlab.com/MaxMelching/gw-signal-tools/-/releases).
 
 ## Documentation
 
-Has no domain yet, but is in progress.
+Available [here](https://gw-signal-tools-cd0a41.gitlab.io/).

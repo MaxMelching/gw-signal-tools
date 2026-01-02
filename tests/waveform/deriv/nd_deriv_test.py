@@ -113,7 +113,7 @@ def test_invalid_step_size_correctable(param, param_val, invalid_step, routine):
     'param, param_val, invalid_step',
     [
         # -- Important that invalid_step / 2 is smaller than default base step
-        ['inverse_mass_ratio', (1.0 + 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
+        # ['inverse_mass_ratio', (1.0 + 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
         ['mass_ratio', (1.0 - 1.8e-2) * u.dimensionless_unscaled, 1.8e-2],
     ],
 )

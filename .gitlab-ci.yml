@@ -1,7 +1,13 @@
 # -- Inspired by https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
-image: python:3.11.5  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
+image: python:3.13  # TODO: maybe pull some igwn container? Should have all required things installed, for example gsl
 
 # -- General CI setups
+stages:
+  - install
+  - test
+  - docs
+  - deploy
+
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
 
@@ -17,19 +23,26 @@ before_script:  # Enabling virtual environment is recommended
   - python -m pip install --upgrade pip
 # Also possible: use extends. If venv not needed for every script, for example
 
-
-stages:
-  - install
-  - test
-  - docs
-  - deploy
+default:  # From https://gitlab.com/gwpy/gwpy/-/blob/main/.gitlab-ci.yml?ref_type=heads
+  # all jobs are, by default, interruptible
+  interruptible: true
+  # retry all jobs at most twice when gitlab-ci fails to start the job properly
+  # see https://docs.gitlab.com/ee/ci/yaml/#retry
+  retry:
+    max: 2
+    when:
+      - job_execution_timeout
+      - runner_system_failure
+      - stuck_or_timeout_failure
+  # no job should take more than an hour
+  timeout: 1h
 
 
 # -- Test installation of repo
 installation:
   stage: install
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} '.[dev, jupyter, pyseobnr]'
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev,docs] jupyter lalsuite
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   artifacts:
@@ -38,34 +51,124 @@ installation:
       # -- Unfortunately, the virtual environment is too large to be kept as an
       # -- artifact. Thus we cannot simply activate it again in testing job.
   rules:
+    # -- Remember: rules are evaluated top to bottom, first match applies
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
-    - if: $CI_COMMIT_BRANCH
-      # when: manual  # Also possible for certain tests
+    - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because dependencies might be changed
+          - gw_signal_tools/**  # Only run if code changes
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
+    - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because dependencies might be changed
+          - gw_signal_tools/**  # Only run if code changes
 
 
 # -- Verify code is running correctly
 testing:
   stage: test
-  dependencies:
-    - installation
-  # -- Unfortunately, extends does not actually extend the script, so not really useful for us
+  needs:
+    - job: installation
+      artifacts: true
+      optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} .[dev]  # Think it would also find cache without --find-links, but we make sure of that
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite  # Think it would also find cache without --find-links, but we make sure of that
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
     # -- Previous lines just repeat what installation does, now testing
     - coverage run -m pytest  # --pyargs gw_signal_tools  # In case location is changed in the future
     - coverage report
     - coverage html
-    # - mv htmlcov/ public/  # Huh, cannot acces this because no GitLab pages??
   coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'  # From https://gitlab.aei.uni-hannover.de/help/ci/testing/code_coverage.md#view-code-coverage-results-in-the-mr
   rules:
+    # -- Remember: rules are evaluated top to bottom, first match applies
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
-    - if: $CI_COMMIT_BRANCH
-      # when: manual  # Also possible for certain tests
+    - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because test config might be changed
+          - gw_signal_tools/**  # Only run if code changes
+          - tests/**
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
+    - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because test config might be changed
+          - gw_signal_tools/**  # Only run if code changes
+          - tests/**
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
-      # - public
+
+
+# -- Build docs in repo
+build_docs:
+  stage: docs
+  needs:
+    - job: installation
+      artifacts: true
+      optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
+  script:
+    - apt-get update && apt-get install -y pandoc
+    - pip install --find-links=PIP_CACHE_DIR .[dev,docs,lal]
+    - cd docs
+    - make clean
+    - make html
+  artifacts:
+    paths:
+      - docs/_build/html/
+  rules:
+    # -- Remember: rules are evaluated top to bottom, first match applies
+    - if: $CI_COMMIT_TAG
+      when: always  # Because it serves as dependency for deploy job
+    - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because some config might be changed
+          - README.md  # Is used in docs
+          - docs/**
+          - gw_signal_tools/**  # In case docstrings are changed
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
+    - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
+      changes:
+        paths:
+          - .gitignore  # Problematic files might have been ignored
+          - .gitlab-ci.yml
+          - pyproject.toml  # Because some config might be changed
+          - README.md  # Is used in docs
+          - docs/**
+          - gw_signal_tools/**  # In case docstrings are changed
+
+
+# -- Deploy docs to pages
+pages:
+  stage: deploy
+  needs:
+    - job: build_docs
+      artifacts: true
+  script:
+    - cd docs ; mv _build/html/ ../public/
+  artifacts:
+    paths:
+    - public
+  rules:
+    # -- Only executed when tags (new versions) are pushed
+    - if: $CI_COMMIT_TAG
+      when: always

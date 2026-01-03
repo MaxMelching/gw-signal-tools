@@ -58,9 +58,10 @@ dynamic = [
 [project.optional-dependencies]
 dev = [
   'coverage',
+  'lalsuite',  # Used in tests
   'mypy',
   'pre-commit',
-  'pycbc',
+  'pycbc',  # Used in tests
   'pytest',
   'ruff',
   'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
@@ -72,7 +73,7 @@ docs = [
   'nbsphinx-link',
   'numpydoc',
   'sphinx>=5.0',
-  'sphinx-rtd-theme',
+  'sphinx-rtd-theme<3',  # For version displaying
   'sphinxcontrib-programoutput',
   # 'pandoc',  # Required by nbsphinx for markdown conversion -> must be installed separately and not via pip (e.g. via conda, "conda install -c conda-forge pandoc")
 ]

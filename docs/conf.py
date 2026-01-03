@@ -19,14 +19,14 @@ sys.path.insert(0, os.path.abspath('../gw_signal_tools/'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'gw-signal-tools'
-author = 'Max Melching, Frank Ohme'
-copyright = '2024, ' + author
-
+import datetime  # noqa: E402
 from gw_signal_tools._version import version as VERSION  # noqa: E402
 
-release = VERSION
-# release = 'v0.2.0'
+project = 'gw-signal-tools'
+author = 'Max Melching, Frank Ohme'
+copyright = f'{datetime.datetime.now().year}, {author}'
+
+release = version = VERSION
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -81,6 +81,7 @@ html_static_path = ['_static']
 
 html_theme_options = {
     'logo_only': False,
+    'display_version': True,  # Show version in the sidebar
     # -- Options for TOC sidebar
     'collapse_navigation': False,  # Makes navigation expandable
     'sticky_navigation': True,

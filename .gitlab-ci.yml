@@ -55,12 +55,13 @@ installation:
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
-      changes:
-        paths:
-          - .gitignore  # Problematic files might have been ignored
-          - .gitlab-ci.yml
-          - pyproject.toml  # Because dependencies might be changed
-          - gw_signal_tools/**  # Only run if code changes
+      # changes:
+      #   paths:
+      #     - .gitignore  # Problematic files might have been ignored
+      #     - .gitlab-ci.yml
+      #     - pyproject.toml  # Because dependencies might be changed
+      #     - gw_signal_tools/**  # Only run if code changes
+      #   compare_to: 'HEAD~1'  # By default, MR changes are compared to target branch, but we want to compare to last commit in source branch
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
@@ -92,14 +93,17 @@ testing:
     # -- Remember: rules are evaluated top to bottom, first match applies
     - if: $CI_COMMIT_TAG
       when: never  # So that it is not executed when tags are pushed (they only point to commits, avoid duplicate tests)
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      # Always run tests on default branch for coverage badge
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
-      changes:
-        paths:
-          - .gitignore  # Problematic files might have been ignored
-          - .gitlab-ci.yml
-          - pyproject.toml  # Because test config might be changed
-          - gw_signal_tools/**  # Only run if code changes
-          - tests/**
+      # changes:
+      #   paths:
+      #     - .gitignore  # Problematic files might have been ignored
+      #     - .gitlab-ci.yml
+      #     - pyproject.toml  # Because test config might be changed
+      #     - gw_signal_tools/**  # Only run if code changes
+      #     - tests/**
+      #   compare_to: 'HEAD~1'  # By default, MR changes are compared to target branch, but we want to compare to last commit in source branch
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
@@ -113,6 +117,8 @@ testing:
   artifacts:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
+
+# TODO: we may have to run tests every time, otherwise no coverage info for badge there
 
 
 # -- Build docs in repo
@@ -136,14 +142,14 @@ build_docs:
     - if: $CI_COMMIT_TAG
       when: always  # Because it serves as dependency for deploy job
     - if: $CI_MERGE_REQUEST_IID  # Always run on MRs
-      changes:
-        paths:
-          - .gitignore  # Problematic files might have been ignored
-          - .gitlab-ci.yml
-          - pyproject.toml  # Because some config might be changed
-          - README.md  # Is used in docs
-          - docs/**
-          - gw_signal_tools/**  # In case docstrings are changed
+      # changes:
+      #   paths:
+      #     - .gitignore  # Problematic files might have been ignored
+      #     - .gitlab-ci.yml
+      #     - pyproject.toml  # Because some config might be changed
+      #     - docs/**
+      #     # - gw_signal_tools/**  # In case docstrings are changed
+      #   compare_to: 'HEAD~1'  # By default, MR changes are compared to target branch, but we want to compare to last commit in source branch
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never  # Skip branch pipeline if MR exists to avoid duplicate runs
     - if: $CI_COMMIT_BRANCH  # Run on branch if no MR
@@ -152,9 +158,8 @@ build_docs:
           - .gitignore  # Problematic files might have been ignored
           - .gitlab-ci.yml
           - pyproject.toml  # Because some config might be changed
-          - README.md  # Is used in docs
           - docs/**
-          - gw_signal_tools/**  # In case docstrings are changed
+          # - gw_signal_tools/**  # In case docstrings are changed
 
 
 # -- Deploy docs to pages

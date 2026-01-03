@@ -1,0 +1,21 @@
+name: Mirror from GitLab
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'     # Weekly on Sunday at midnight
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Add this to allow pushing
+    steps:
+      - name: Mirror repository
+        env:
+          SOURCE_REPO: 'https://gitlab.com/MaxMelching/gw-signal-tools.git'
+          # For private GitLab repos, use: https://oauth2:${{ secrets.GITLAB_TOKEN }}@gitlab.com/namespace/repo.git
+        run: |
+          git clone --mirror "$SOURCE_REPO" mirror-repo
+          cd mirror-repo
+          git push --mirror https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git

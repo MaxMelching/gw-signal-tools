@@ -56,6 +56,31 @@ dynamic = [
 
 
 [project.optional-dependencies]
+all = [
+  'coverage',
+  'ipykernel',  # Required for notebook execution
+  'lalsuite',  # Used in tests
+  'mypy',
+  'myst-parser',  # Modern replacement for m2r2 - better maintained
+  'nbsphinx>=0.9.0',
+  'nbsphinx-link',
+  'numpydoc',
+  # 'pandoc',  # Required by nbsphinx for markdown conversion -> must be installed separately and not via pip (e.g. via conda, "conda install -c conda-forge pandoc")
+  'pre-commit',
+  'pycbc',  # Used in tests
+  'pytest',
+  'ruff',
+  'setuptools_scm',  # Enables version test via 'python -m setuptools_scm'
+  'sphinx>=5.0',
+  'sphinx-rtd-theme<3',  # For version displaying
+  'sphinxcontrib-programoutput',
+  #
+]
+code = [
+  'mypy',
+  'pre-commit',
+  'ruff',
+]
 dev = [
   'coverage',
   'lalsuite',  # Used in tests
@@ -72,10 +97,16 @@ docs = [
   'nbsphinx>=0.9.0',
   'nbsphinx-link',
   'numpydoc',
+  # 'pandoc',  # Required by nbsphinx for markdown conversion -> must be installed separately and not via pip (e.g. via conda, "conda install -c conda-forge pandoc")
   'sphinx>=5.0',
   'sphinx-rtd-theme<3',  # For version displaying
   'sphinxcontrib-programoutput',
-  # 'pandoc',  # Required by nbsphinx for markdown conversion -> must be installed separately and not via pip (e.g. via conda, "conda install -c conda-forge pandoc")
+]
+tests = [
+  'coverage',
+  'lalsuite',  # Used in tests
+  'pycbc',  # Used in tests
+  'pytest',
 ]
 
 

@@ -42,7 +42,7 @@ default:  # From https://gitlab.com/gwpy/gwpy/-/blob/main/.gitlab-ci.yml?ref_typ
 installation:
   stage: install
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} .[dev,docs] jupyter lalsuite
+    - pip install --find-links=${PIP_CACHE_DIR} .[all] jupyter lalsuite
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
   rules:
@@ -69,7 +69,7 @@ testing:
       artifacts: true
       optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
   script:
-    - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite  # Think it would also find cache without --find-links, but we make sure of that
+    - pip install --find-links=${PIP_CACHE_DIR} .[dev] lalsuite
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
     # -- Previous lines just repeat what installation does, now testing
@@ -98,8 +98,6 @@ testing:
     paths:
       - htmlcov/*  # Maybe move them to public folder? So that they can be viewed
 
-# TODO: we may have to run tests every time, otherwise no coverage info for badge there
-
 
 # -- Build docs in repo
 build_docs:
@@ -110,7 +108,7 @@ build_docs:
       optional: true  # So that it does not fail if installation is skipped (relevant if e.g. only something in docs folder is changed)
   script:
     - apt-get update && apt-get install -y pandoc
-    - pip install --find-links=PIP_CACHE_DIR .[dev,docs,lal]
+    - pip install --find-links=${PIP_CACHE_DIR} .[docs]
     - cd docs
     - make clean
     - make html

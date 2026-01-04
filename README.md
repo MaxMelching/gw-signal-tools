@@ -23,14 +23,14 @@ After that, clone the repo to some destination and then navigate there and run
 pip install .
 ```
 
-to install it as a Python package (adding `-e` after `install` enables editable mode).
+to install it as a Python package (adding `-e` before the `.` enables editable mode).
 This syntax is convenient because it allows to install options via
 
 ```shell
-pip install .[option]
+pip install .[<option>]
 ```
 
-Valid options for this package are `dev` and `docs`.
+Valid options for this package are `all`, `code`, `dev`, `docs`, `test`.
 
 Another possibility without the extra cloning step is to run
 

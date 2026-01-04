@@ -2,7 +2,7 @@
 [![coverage report](https://gitlab.com/MaxMelching/gw-signal-tools/badges/main/coverage.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/commits/main)
 [![Latest Release](https://gitlab.com/MaxMelching/gw-signal-tools/-/badges/release.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://MaxMelching.gitlab.io/gw-signal-tools)<!-- (https://gw-signal-tools-cd0a41.gitlab.io/) -->
 <!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXX) -->
 <!-- [![PyPI](https://img.shields.io/pypi/v/gw-signal-tools.svg)](https://pypi.org/project/gw-signal-tools/) -->

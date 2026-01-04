@@ -12,7 +12,7 @@ requires = [
 build-backend = 'setuptools.build_meta'
 
 [project]
-name = 'gw_signal_tools'
+name = 'gw-signal-tools'
 description = 'Tools for GW Data Analysis'
 readme = 'README.md'
 # readme = {file = "README.md", content-type = "text/markdown"}
@@ -26,7 +26,7 @@ maintainers = [
 ]
 
 # requires
-requires-python = '>=3.9'  # Constrained by lal and certain syntax we use
+requires-python = '>=3.11'  # Constrained by lal and certain syntax we use
 dependencies = [
   'gwpy>=3',
   'matplotlib',

@@ -45,9 +45,10 @@ installation:
     - pip install --find-links=${PIP_CACHE_DIR} .[dev,docs] jupyter lalsuite
     - python -m pip list installed  # Print all packages for debugging
     - python -m setuptools_scm  # Print package version for debugging
-  artifacts:
-    paths:
-      - build/*
+  # artifacts:
+  #   paths:
+  #     - build/*
+  #   expire_in: 1 hour  # Keep it short since it's huge
       # -- Unfortunately, the virtual environment is too large to be kept as an
       # -- artifact. Thus we cannot simply activate it again in testing job.
   rules:

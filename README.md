@@ -15,7 +15,7 @@ Repository with files surrounding computations with waveforms from lal.
 
 ## Installation
 
-First of all, install the Python version of your choice (as long as it is >= 3.9).
+First of all, install the supported Python version of your choice.
 
 After that, clone the repo to some destination and then navigate there and run
 

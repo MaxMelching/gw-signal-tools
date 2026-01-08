@@ -21,5 +21,8 @@ __all__ = (
 # TODO: should we define GWParams?
 
 FDWFGen: TypeAlias = Callable[[dict[str, u.Quantity]], FrequencySeries]
+"""Frequency-domain gwsignal waveform generator."""
 TDWFGen: TypeAlias = Callable[[dict[str, u.Quantity]], TimeSeries]
+"""Time-domain gwsignal waveform generator."""
 WFGen: TypeAlias = Union[FDWFGen, TDWFGen]
+"""General gwsignal waveform generator, either frequency or time domain."""

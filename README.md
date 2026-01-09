@@ -3,7 +3,7 @@
 [![Latest Release](https://gitlab.com/MaxMelching/gw-signal-tools/-/badges/release.svg)](https://gitlab.com/MaxMelching/gw-signal-tools/-/releases)
 [![License](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org)
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://MaxMelching.gitlab.io/gw-signal-tools)<!-- (https://gw-signal-tools-cd0a41.gitlab.io/) -->
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg)](https://MaxMelching.gitlab.io/gw-signal-tools)
 <!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXX) -->
 <!-- [![PyPI](https://img.shields.io/pypi/v/gw-signal-tools.svg)](https://pypi.org/project/gw-signal-tools/) -->
 
@@ -11,7 +11,9 @@
 
 ## Description
 
-Repository with files surrounding computations with waveforms from lal.
+Repository with tools centered around computations with gravitational waveforms as generated, e.g., from the LAL waveforms interface `gwsignal`.
+This includes the commonly used noise-weighted inner product, an optimization routine for said inner product, and most notable an implementation of Fisher matrices (with functions to calculate biases etc).
+For details on the usage of each of those tools, please refer to the documentation at [MaxMelching.gitlab.io/gw-signal-tools](https://MaxMelching.gitlab.io/gw-signal-tools).
 
 ## Installation
 

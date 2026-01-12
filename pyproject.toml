@@ -121,7 +121,7 @@ include = [
 
 [tool.setuptools.package-data]
 # gw_signal_tools = ["*.txt", "*.sty"]  # I think we should be more specific
-gw_signal_tools = ["plot_stylesheet.sty"]
+gw_signal_tools = ["plot_stylesheet.sty", "py.typed"]
 "gw_signal_tools.PSDs" = ["*.txt"]
 
 
